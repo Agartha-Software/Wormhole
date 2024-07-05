@@ -205,4 +205,18 @@ impl Provider {
             .unwrap();
         file.write_all(&content).unwrap();
     }
+
+    pub fn recpt_rename(&mut self, old: std::path::PathBuf, new: std::path::PathBuf) {
+        let old_mirror_path = std::path::Path::new(&self.local_source).join(&old);
+
+        let new_mirror_path = std::path::Path::new(&self.local_source).join(&new);
+        fs::rename(old_mirror_path, new_mirror_path).unwrap();
+
+        let old_path_str = old.to_str().unwrap();
+
+        let ino = *self.index.iter().find(|(t, n)| n.1 == old_path_str).unwrap().0;
+        self.index.get_mut(&ino).unwrap().1 = new.to_str().unwrap().to_owned();
+
+
+    }
 }

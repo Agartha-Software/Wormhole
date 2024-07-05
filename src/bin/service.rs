@@ -119,6 +119,10 @@ async fn local_watchdog(
                         let mut provider = provider.lock().unwrap();
                         provider.new_folder(folder.ino, folder.path);
                     },
+                    NetworkMessage::Rename(old_path, new_path) => {
+                        let mut provider = provider.lock().unwrap();
+                        provider.recpt_rename(old_path, new_path);
+                    }
                     _ => todo!(),
                 };
             }
