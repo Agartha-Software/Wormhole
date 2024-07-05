@@ -7,12 +7,19 @@ pub enum NetworkMessage {
     File(File),
     Meta(MetaData),
     NewFolder,
-    RequestFile(std::path::PathBuf),
+    RequestFile(Path),
     Binary(Vec<u8>),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct File {
-    pub path: std::path::PathBuf,
+    pub pod: String,
+    pub path: String,
     pub file: Vec<u8>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Path {
+    pub pod: String,
+    pub file: String,
 }

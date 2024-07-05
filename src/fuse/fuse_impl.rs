@@ -12,6 +12,7 @@ use std::time::{Duration, UNIX_EPOCH};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::network::message::NetworkMessage;
+use crate::network::server::State;
 use crate::providers::{FsIndex, Provider};
 
 // NOTE - placeholders
@@ -261,6 +262,7 @@ impl Filesystem for FuseController {
 }
 
 pub fn mount_fuse(
+    state: &Arc<State>,
     mountpoint: &str,
     tx: UnboundedSender<NetworkMessage>,
 ) -> (BackgroundSession, Arc<Mutex<Provider>>) {
@@ -270,6 +272,7 @@ pub fn mount_fuse(
         next_inode: (index.len() + 2) as u64,
         index,
         tx,
+        state: state.clone()
     }));
     let ctrl = FuseController {
         provider: provider.clone(),

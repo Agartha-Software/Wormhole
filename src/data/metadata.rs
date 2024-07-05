@@ -4,19 +4,19 @@ use std::os::unix::fs::MetadataExt;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaData {
-    name: std::path::PathBuf,
+    name: String,
     // checksum: Sha256,
     mtime: std::time::SystemTime,
     size: u64,
-    owners: Vec<bool>,
+    owners: Vec<String>,
 }
 
 
 impl MetaData {
-    pub fn read(path: &std::path::Path) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn read(path: &String) -> Result<Self, Box<dyn std::error::Error>> {
         let stat =  std::fs::metadata(path)?;
         Ok(Self {
-            name: path.to_path_buf(),
+            name: path.clone(),
             // checksum: Sha256::new().input(file),
             size: stat.size(),
             owners: vec!(),

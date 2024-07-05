@@ -17,24 +17,13 @@ use tokio::{
 use wormhole::{
     config,
     data::metadata::MetaData,
-    network::forward::{forward_read_to_sender, forward_receiver_to_write},
+    network::{forward::{forward_read_to_sender, forward_receiver_to_write}, message, server::State},
     providers::Provider,
 };
 use wormhole::{fuse::fuse_impl::mount_fuse, network::peer_ipc::PeerIPC};
 
 use wormhole::network::{message::NetworkMessage, server::Server};
 
-struct Pod {
-    network: config::Network,
-    directory: Arc<std::fs::DirEntry>,
-    // fuser: !,
-}
-
-#[derive(Default)]
-struct State {
-    pub peers: RwLock<Vec<PeerIPC>>,
-    pub pods: RwLock<HashMap<std::path::PathBuf, Pod>>,
-}
 
 // async fn publish(pod_path: &std::path::Path, change_path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
 //     let nw = WormHole::config::Network::read(pod_path.join(".wormhole").join("network.toml"))?;
@@ -56,32 +45,6 @@ struct State {
 //     Ok(())
 // }
 
-async fn publish_meta<'a>(
-    state: &'a Arc<State>,
-    pod_path: &std::path::Path,
-    file_path: &std::path::Path,
-) -> Result<(), Box<dyn std::error::Error + 'a>> {
-    let pods = state.pods.read()?;
-    let nw = &pods
-        .get(pod_path)
-        .ok_or(std::io::Error::other("pod not registered"))?
-        .network;
-    let file = std::fs::read(file_path)?;
-    let change = NetworkMessage::Meta(MetaData::read(file_path)?);
-    for peer in &nw.peers {
-        let lock = state.peers.read()?;
-        if let Some(found) = lock.iter().find(|p| p.address == *peer) {
-            found.sender.send(change.clone()).await;
-        } else {
-            drop(lock);
-            let mut lock = state.peers.write()?;
-            let peer_ipc = PeerIPC::connect(peer.clone());
-            peer_ipc.sender.send(change.clone()).await;
-            lock.push(peer_ipc);
-        }
-    }
-    Ok(())
-}
 
 // async fn storage_watchdog() -> Result<(), Box<dyn std::error::Error>> {
 // =
@@ -153,7 +116,7 @@ async fn remote_watchdog(
 async fn main() {
     env_logger::init();
 
-    let mut state = State::default();
+    let mut state = Arc::new(State::default());
 
     let own_addr = env::args().nth(1).unwrap_or("127.0.0.1:8080".to_string());
     let other_addr = env::args()
@@ -163,7 +126,7 @@ async fn main() {
 
     let (peer_tx, peer_rx) = mpsc::unbounded_channel();
     let (user_tx, mut user_rx) = mpsc::unbounded_channel();
-    let (_session, provider) = mount_fuse(&folder, user_tx.clone());
+    let (_session, provider) = mount_fuse(&state, &folder, user_tx.clone());
 
     tokio::spawn(local_watchdog(user_tx, peer_rx, provider));
 

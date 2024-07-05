@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
 };
 
 use tokio::{
@@ -8,7 +8,9 @@ use tokio::{
     sync::mpsc::UnboundedReceiver,
 };
 
-use super::message::NetworkMessage;
+use crate::{config, data::metadata::MetaData};
+
+use super::{message::NetworkMessage, peer_ipc::PeerIPC};
 
 pub type Tx = UnboundedReceiver<NetworkMessage>;
 pub type PeerMap = Arc<Mutex<HashMap<SocketAddr, Tx>>>;
@@ -25,4 +27,19 @@ impl Server {
             state: PeerMap::new(Mutex::new(HashMap::new())),
         }
     }
+}
+
+pub struct Pod {
+    pub network: config::Network,
+    pub directory: openat::Dir,
+    pub path: std::path::PathBuf,
+    pub name: String,
+    pub metas: HashMap<String, MetaData>
+    // fuser: !,
+}
+
+#[derive(Default)]
+pub struct State {
+    pub peers: RwLock<Vec<PeerIPC>>,
+    pub pods: RwLock<HashMap<String, Pod>>,
 }
