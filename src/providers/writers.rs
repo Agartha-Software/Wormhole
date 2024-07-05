@@ -120,8 +120,25 @@ impl Provider {
         newparent_ino: u64,
         newname: &OsStr,
     ) -> Option<()> {
-        // pas clair de quand c'est appelé, si ça l'est sur des dossiers
-        // non vides, go ignorer et pas tester à la démo
+        let old_mirror_path  =
+            PathBuf::from(self.mirror_path_from_inode(parent_ino).unwrap()).join(name);
+
+        let new_mirror_path =
+            PathBuf::from(self.mirror_path_from_inode(newparent_ino).unwrap()).join(newname);
+
+        fs::rename(old_mirror_path, new_mirror_path).unwrap();
+
+
+        let old_path = PathBuf::from(&self.index[&parent_ino].1).join(name);
+        let new_path = PathBuf::from(&self.index[&newparent_ino].1).join(newname);
+
+        let old_path_str = old_path.to_str().unwrap();
+
+        let ino = *self.index.iter().find(|(t, n)| n.1 == old_path_str).unwrap().0;
+        self.index.get_mut(&ino).unwrap().1 = new_path.to_str().unwrap().to_owned();
+
+        self.tx.send(NetworkMessage::Rename(old_path, new_path)).unwrap();
+
         Some(())
     }
 

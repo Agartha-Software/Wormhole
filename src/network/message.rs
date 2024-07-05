@@ -7,6 +7,8 @@ pub enum NetworkMessage {
     File(File),
     Meta(MetaData),
     NewFolder(Folder),
+    /// old, new
+    Rename(std::path::PathBuf, std::path::PathBuf),
     RequestFile(std::path::PathBuf),
     Binary(Vec<u8>),
 }
