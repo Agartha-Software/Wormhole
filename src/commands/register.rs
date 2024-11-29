@@ -9,7 +9,7 @@ use std::error::Error;
 #[must_use]
 pub fn register(path: &std::path::PathBuf, name: &str) -> Result<(), Box<dyn Error>> {
     return Ok(());
-    let canonical = path.canonicalize();
+    let canonical = path.canonicalize()?;
     std::os::windows::fs::symlink_dir(
         canonical,
         std::path::Path::new(INSTANCE_PATH).join("pods").join(name),

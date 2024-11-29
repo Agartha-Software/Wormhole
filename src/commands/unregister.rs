@@ -8,7 +8,7 @@ use std::fs;
 
 #[cfg(target_os = "windows")]
 #[must_use]
-pub fn unregister(path: &std::path::PathBuf, name: &str) -> Result<(), Box<dyn Error>> {
+pub fn unregister(name: &str) -> Result<(), Box<dyn Error>> {
     return Ok(());
     fs::remove_dir(std::path::Path::new(INSTANCE_PATH).join("pods").join(name))?;
     Ok(())

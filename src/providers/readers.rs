@@ -3,13 +3,14 @@
  * (actually reading mirror folder, but network one day)
  */
 
-use fuser::FileAttr;
+
 use log::debug;
 use log::info;
 use std::ffi::OsStr;
 use std::io;
 use std::io::Read;
 use std::path::Path;
+use super::{FileType, FileAttr};
 
 use super::Provider;
 use super::TEMPLATE_FILE_ATTR;
@@ -24,7 +25,7 @@ impl Provider {
         match self.mirror_path_from_inode(ino) {
             Ok(path) => {
                 info!("mirror path from inode is {:?}", path);
-                let mut file = self.metal_handle.open_file(&path)?;
+                let mut file = self.folder_handle.open_file(&path)?;
                 let mut buf: Vec<u8> = vec![];
                 file.read_to_end(&mut buf)?;
                 Ok(buf)
@@ -81,7 +82,7 @@ impl Provider {
 
     // returns a small amount of data for a file (asked for readdir)
     // -> (ino, type, name)
-    fn file_small_meta(&self, ino: u64) -> io::Result<(u64, fuser::FileType, String)> {
+    fn file_small_meta(&self, ino: u64) -> io::Result<(u64, FileType, String)> {
         println!("file_small_meta called on ino {}", ino); // DEBUG
         match self.index.get(&ino) {
             Some((file_type, file_path)) => {
@@ -98,7 +99,7 @@ impl Provider {
     }
 
     // used directly in FuseControler's readdir function
-    pub fn fs_readdir(&self, parent_ino: u64) -> io::Result<Vec<(u64, fuser::FileType, String)>> {
+    pub fn fs_readdir(&self, parent_ino: u64) -> io::Result<Vec<(u64, FileType, String)>> {
         println!("fs_readdir called on ino {}", parent_ino); // DEBUG
         match self.list_files(parent_ino) {
             Ok(list) => Ok(list
@@ -110,15 +111,15 @@ impl Provider {
     }
 
     // use real fs metadata and traduct part of it to the fuse FileAttr metadata
-    fn modify_metadata_template(data: openat::Metadata, ino: u64) -> FileAttr {
+    fn modify_metadata_template(data: std::fs::Metadata, ino: u64) -> FileAttr {
         let mut attr = TEMPLATE_FILE_ATTR;
         attr.ino = ino;
         attr.kind = if data.is_dir() {
-            fuser::FileType::Directory
+            FileType::Directory
         } else if data.is_file() {
-            fuser::FileType::RegularFile
+            FileType::RegularFile
         } else {
-            fuser::FileType::CharDevice // random to detect unsupported
+            FileType::Other // random to detect unsupported
         };
         attr.size = data.len();
         attr
@@ -130,7 +131,7 @@ impl Provider {
         match self.mirror_path_from_inode(ino) {
             Ok(path) => {
                 println!("....GET METADATA FOR PATH MIRROR {:?}", path);
-                match self.metal_handle.metadata(&path) {
+                match self.folder_handle.metadata(&path) {
                     Ok(data) => Ok(Self::modify_metadata_template(data, ino)),
                     Err(e) => Err(e),
                 }

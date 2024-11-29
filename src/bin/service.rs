@@ -29,7 +29,9 @@ use wormhole::network::{
     peers_operations::{all_peers_broadcast, peer_startup},
     watchdogs::{incoming_connections_watchdog, local_cli_watchdog, network_file_actions},
 };
-use wormhole::{fuse::fuse_impl::mount_fuse, network::peer_ipc::PeerIPC};
+#[cfg(target_os = "linux")]
+use wormhole::fuse::fuse_impl::mount_fuse;
+use wormhole::network::peer_ipc::PeerIPC;
 
 use wormhole::network::server::Server;
 
@@ -62,7 +64,10 @@ async fn main() {
 
     let (nfa_tx, nfa_rx) = mpsc::unbounded_channel();
     let (local_fuse_tx, local_fuse_rx) = mpsc::unbounded_channel();
+    #[cfg(target_os = "linux")]
     let (_session, provider) = mount_fuse(&source, &mount, local_fuse_tx.clone());
+    #[cfg(target_os = "windows")]
+    let (_session, provider) = (!unreachable!(), !unreachable!());
 
     let local_cli_handle = tokio::spawn(local_cli_watchdog());
     let nfa_handle = tokio::spawn(network_file_actions(nfa_rx, provider));

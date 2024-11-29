@@ -1,10 +1,7 @@
-use fuser::{FileAttr, FileType};
+use super::{FileAttr, FileType};
 use libc::{O_WRONLY, S_IREAD, S_IWRITE};
 use std::{
-    ffi::OsStr,
-    io::{self, Write},
-    os::unix::fs::FileExt,
-    path::PathBuf,
+    ffi::OsStr, io::{self, Write}, os::windows::fs::FileExt, path::PathBuf
 };
 
 use crate::network::message::{self, Folder, NetworkMessage};
@@ -20,7 +17,7 @@ impl Provider {
         let new_path = self.mirror_path_from_inode(parent_ino)?.join(name);
         println!("MKFILE FUNCTION2");
         println!("Creating file at {}", new_path.display()); // DEBUG
-        match self.metal_handle.new_file(&new_path, 0o644) {
+        match self.folder_handle.new_file(&new_path, 0o644) {
             Ok(_) => (),
             Err(e) => {
                 println!("ERROR is {}", e);
@@ -55,7 +52,7 @@ impl Provider {
         let new_path = PathBuf::from(self.mirror_path_from_inode(parent_ino).unwrap()).join(name);
 
         // bare metal dir creation (on the mirror)
-        self.metal_handle.create_dir(&new_path, 0o755)?; // REVIEW look more in c mode_t value
+        self.folder_handle.create_dir(&new_path, 0o755)?; // REVIEW look more in c mode_t value
         println!("creating dir at {}", new_path.display()); // DEBUG
 
         // adding path to the wormhole index
@@ -84,7 +81,7 @@ impl Provider {
         let file = self.file_from_parent_ino_and_name(parent_ino, name)?;
 
         self.mirror_path_from_inode(file.0)
-            .and_then(|file_path| self.metal_handle.remove_file(&file_path))
+            .and_then(|file_path| self.folder_handle.remove_file(&file_path))
             .map(|_| {
                 self.tx.send(NetworkMessage::Remove(file.0)).unwrap();
                 self.index.remove(&file.0);
@@ -120,7 +117,12 @@ impl Provider {
         match self.index.get(&ino) {
             Some((FileType::RegularFile, _)) => {
                 let path = self.mirror_path_from_inode(ino)?;
-                let wrfile = self.metal_handle.write_file(&path, S_IWRITE | S_IREAD)?;
+                let wrfile = self.folder_handle.write_file(&path, S_IWRITE | S_IREAD)?;
+                #[cfg(target_os = "windows")]
+                wrfile
+                    .seek_write(data, offset.try_into().unwrap())
+                    .expect("can't write file");
+                #[cfg(target_os = "linux")]
                 wrfile
                     .write_all_at(data, offset.try_into().unwrap())
                     .expect("can't write file");
@@ -140,7 +142,7 @@ impl Provider {
     pub fn new_folder(&mut self, ino: u64, path: PathBuf) {
         let real_path = PathBuf::from(self.local_source.clone()).join(&path);
         println!("Provider make new folder at: {:?}", real_path);
-        self.metal_handle
+        self.folder_handle
             .create_dir(&real_path, S_IWRITE | S_IREAD)
             .expect("unable to create folder");
         // fs::create_dir(&real_path).unwrap();
@@ -151,7 +153,7 @@ impl Provider {
         println!("Provider make new file at ORIGINAL PATH: {:?}", path);
         // let real_path = PathBuf::from(self.local_source.clone()).join(&path);
         // println!("Provider make new file at: {:?}", real_path);
-        self.metal_handle
+        self.folder_handle
             .new_file(&path, S_IWRITE | S_IREAD)
             .expect("unable to create file");
         self.index.insert(ino, (FileType::RegularFile, path));
@@ -165,7 +167,7 @@ impl Provider {
         println!("Provider remove object at: {:?}", path);
         match file_type {
             FileType::Directory => todo!(),
-            FileType::RegularFile => self.metal_handle.remove_file(path).unwrap(),
+            FileType::RegularFile => self.folder_handle.remove_file(path).unwrap(),
             _ => todo!(),
         }
         self.index.remove(&ino);
@@ -176,7 +178,7 @@ impl Provider {
         // let real_path = PathBuf::from(self.local_source.clone()).join(&path);
         println!("Provider write to file at: {:?}", path);
         let mut file = self
-            .metal_handle
+            .folder_handle
             .write_file(path, S_IWRITE | S_IREAD)
             .expect("can't write file");
         file.write_all(&content).unwrap();

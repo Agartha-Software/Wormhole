@@ -1,12 +1,11 @@
 use std::{
-    io,
-    path::{Component, Path, PathBuf},
+    io, path::{Component, Path, PathBuf}
 };
 
-use fuser::{FileAttr, FileType};
+// use fuser::{FileAttr, FileType};
 use std::ffi::OsStr;
 
-use super::Provider;
+use super::{FileAttr, Provider, FileType};
 
 impl Provider {
     // find the path of the real file in the original folder
@@ -59,7 +58,7 @@ impl Provider {
         &self,
         parent_ino: u64,
         name: &OsStr,
-    ) -> io::Result<(u64, fuser::FileType, String)> {
+    ) -> io::Result<(u64, FileType, String)> {
         match self.fs_readdir(parent_ino) {
             Ok(list) => {
                 if let Some(file) = list.into_iter().find(|(_, e_type, e_name)| {
