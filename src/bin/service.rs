@@ -42,38 +42,44 @@ pub enum MsgType {
     Decrement,
 }
 struct Test {
-    pub number: u64,
+    pub number: Arc<Mutex<u64>>,
 }
 
 impl Test {
-    pub async fn increment(nb: &mut u64) {
+    pub async fn increment(&self) {
         tokio::time::sleep(Duration::from_millis(1000)).await;
-        *nb += 1;
+        {
+            let mut guard = self.number.lock().unwrap();
+            *guard += 1;
+        }
     }
 
-    pub async fn decrement(nb: &mut u64) {
+    pub async fn decrement(&self) {
         tokio::time::sleep(Duration::from_millis(1000)).await;
-        *nb -= 1;
+        {
+            let mut guard = self.number.lock().unwrap();
+            *guard += 1;
+        }
     }
 
     pub async fn airport_loop(
+        &self,
         mut rx1: UnboundedReceiver<MsgType>,
         mut rx2: UnboundedReceiver<MsgType>,
-        nb: &mut u64,
     ) {
         loop {
             tokio::select! {
-                _a = rx1.recv() => Self::increment(nb).await,
-                _a = rx2.recv() => Self::decrement(nb).await,
+                _a = rx1.recv() => self.increment().await,
+                _a = rx2.recv() => self.decrement().await,
             }
         }
     }
     pub async fn airport(
-        &mut self,
-        mut rx1: UnboundedReceiver<MsgType>,
-        mut rx2: UnboundedReceiver<MsgType>,
+        &self,
+        rx1: UnboundedReceiver<MsgType>,
+        rx2: UnboundedReceiver<MsgType>,
     ) -> JoinHandle<()> {
-        tokio::spawn(Self::airport_loop(rx1, rx2, &mut self.number))
+        tokio::spawn(self.airport_loop(rx1, rx2))
     }
 }
 
@@ -81,7 +87,7 @@ impl Test {
 async fn main() {
     let (increment_tx, increment_rx) = mpsc::unbounded_channel::<MsgType>();
     let (decrement_tx, decrement_rx) = mpsc::unbounded_channel::<MsgType>();
-    let mut test = Test { number: 10 };
+    let mut test = Test { number: Arc::new(Mutex::new(10)) };
 }
 
 /*
