@@ -21,9 +21,13 @@ use std::{
     env,
     path::PathBuf,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
-use tokio::sync::mpsc::{self};
+use tokio::{
+    sync::mpsc::{self, UnboundedReceiver},
+    task::JoinHandle,
+};
 
 use wormhole::network::{
     peers_operations::{all_peers_broadcast, peer_startup},
@@ -33,8 +37,54 @@ use wormhole::{fuse::fuse_impl::mount_fuse, network::peer_ipc::PeerIPC};
 
 use wormhole::network::server::Server;
 
+pub enum MsgType {
+    Increment,
+    Decrement,
+}
+struct Test {
+    pub number: u64,
+}
+
+impl Test {
+    pub async fn increment(nb: &mut u64) {
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+        *nb += 1;
+    }
+
+    pub async fn decrement(nb: &mut u64) {
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+        *nb -= 1;
+    }
+
+    pub async fn airport_loop(
+        mut rx1: UnboundedReceiver<MsgType>,
+        mut rx2: UnboundedReceiver<MsgType>,
+        nb: &mut u64,
+    ) {
+        loop {
+            tokio::select! {
+                _a = rx1.recv() => Self::increment(nb).await,
+                _a = rx2.recv() => Self::decrement(nb).await,
+            }
+        }
+    }
+    pub async fn airport(
+        &mut self,
+        mut rx1: UnboundedReceiver<MsgType>,
+        mut rx2: UnboundedReceiver<MsgType>,
+    ) -> JoinHandle<()> {
+        tokio::spawn(Self::airport_loop(rx1, rx2, &mut self.number))
+    }
+}
+
 #[tokio::main]
 async fn main() {
+    let (increment_tx, increment_rx) = mpsc::unbounded_channel::<MsgType>();
+    let (decrement_tx, decrement_rx) = mpsc::unbounded_channel::<MsgType>();
+    let mut test = Test { number: 10 };
+}
+
+/*
     env_logger::init();
 
     // DOC - arguments: own_address other_addr1 other_addr2 mount_to source
@@ -97,4 +147,7 @@ async fn main() {
     nfa_handle.abort();
     peers_broadcast_handle.abort();
     println!("stopped");
+
 }
+
+*/
