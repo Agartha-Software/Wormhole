@@ -42,44 +42,45 @@ pub enum MsgType {
     Decrement,
 }
 struct Test {
-    pub number: Arc<Mutex<u64>>,
+    pub number: Arc<Mutex<i32>>,
+    pub thread: JoinHandle<()>,
 }
 
 impl Test {
-    pub async fn increment(&self) {
+    pub async fn increment(nb: &Arc<Mutex<i32>>) {
         tokio::time::sleep(Duration::from_millis(1000)).await;
         {
-            let mut guard = self.number.lock().unwrap();
+            let mut guard = nb.lock().unwrap();
             *guard += 1;
         }
     }
 
-    pub async fn decrement(&self) {
+    pub async fn decrement(nb: &Arc<Mutex<i32>>) {
         tokio::time::sleep(Duration::from_millis(1000)).await;
         {
-            let mut guard = self.number.lock().unwrap();
+            let mut guard = nb.lock().unwrap();
             *guard += 1;
         }
     }
 
     pub async fn airport_loop(
-        &self,
         mut rx1: UnboundedReceiver<MsgType>,
         mut rx2: UnboundedReceiver<MsgType>,
+        nb: Arc<Mutex<i32>>,
     ) {
         loop {
             tokio::select! {
-                _a = rx1.recv() => self.increment().await,
-                _a = rx2.recv() => self.decrement().await,
+                _a = rx1.recv() => Self::increment(&nb).await,
+                _a = rx2.recv() => Self::decrement(&nb).await,
             }
         }
     }
-    pub async fn airport(
-        &self,
-        rx1: UnboundedReceiver<MsgType>,
-        rx2: UnboundedReceiver<MsgType>,
-    ) -> JoinHandle<()> {
-        tokio::spawn(self.airport_loop(rx1, rx2))
+    pub fn airport(rx1: UnboundedReceiver<MsgType>, rx2: UnboundedReceiver<MsgType>) -> Self {
+        let nb = Arc::new(Mutex::new(0));
+        Test {
+            number: nb.clone(),
+            thread: tokio::spawn(Self::airport_loop(rx1, rx2, nb)),
+        }
     }
 }
 
@@ -87,7 +88,7 @@ impl Test {
 async fn main() {
     let (increment_tx, increment_rx) = mpsc::unbounded_channel::<MsgType>();
     let (decrement_tx, decrement_rx) = mpsc::unbounded_channel::<MsgType>();
-    let mut test = Test { number: Arc::new(Mutex::new(10)) };
+    let test = Test::airport(increment_rx, decrement_rx);
 }
 
 /*
