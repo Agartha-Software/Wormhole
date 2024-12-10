@@ -5,9 +5,9 @@ use std::{
 // use fuser::{FileAttr, FileType};
 use std::ffi::OsStr;
 
-use super::{FileAttr, Provider, FileType};
+use super::{handle::FolderHandle, FileAttr, FileType, Provider};
 
-impl Provider {
+impl<T: FolderHandle + Send> Provider<T> {
     // find the path of the real file in the original folder
     pub fn mirror_path_from_inode(&self, ino: u64) -> io::Result<PathBuf> {
         println!("mirror path from inode");

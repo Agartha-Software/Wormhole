@@ -7,7 +7,7 @@ use crate::network::message::NetworkMessage;
 use handle::FolderHandle;
 
 mod helpers;
-mod handle;
+pub mod handle;
 pub mod readers;
 pub mod writers;
 
@@ -61,11 +61,11 @@ pub type FsIndex = HashMap<u64, (FileType, PathBuf)>;
 // data to the fuse lib
 // For now this is given to the fuse controler on creation and we do NOT have
 // ownership during the runtime.
-pub struct Provider {
+pub struct Provider<HandleType: FolderHandle + Send> {
     pub next_inode: u64,
     pub index: FsIndex,
     pub local_source: PathBuf,
-    pub folder_handle: Box<dyn FolderHandle + Send>,
+    pub folder_handle: Box<HandleType>,
     pub tx: UnboundedSender<NetworkMessage>,
 }
 
@@ -88,4 +88,4 @@ const TEMPLATE_FILE_ATTR: FileAttr = FileAttr {
     blksize: 512,
 };
 
-impl Provider {}
+impl<T: FolderHandle + Send> Provider<T> {}
