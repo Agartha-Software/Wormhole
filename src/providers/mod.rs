@@ -14,6 +14,7 @@ use crate::network::message::{Address, ToNetworkMessage};
 
 mod helpers;
 pub mod readers;
+pub mod whpath;
 pub mod writers;
 
 /// Ino is represented by an u64

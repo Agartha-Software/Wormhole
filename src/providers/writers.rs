@@ -84,7 +84,7 @@ impl Provider {
     }
 
     pub fn rmfile(&mut self, parent_ino: Ino, name: &OsStr) -> io::Result<()> {
-        let (ino, _) = self.file_from_parent_ino_and_name(parent_ino, name)?;
+        let (ino, _) = self.filesystem_from_parent_ino_and_name(parent_ino, name)?;
 
         self.mirror_path_from_inode(ino)
             .and_then(|file_path| self.metal_handle.remove_file(&file_path))
@@ -98,12 +98,29 @@ impl Provider {
             })
     }
 
-    pub fn rmdir(&mut self, parent_ino: Ino, name: &OsStr) -> Option<()> {
-        let _ = name;
-        let _ = parent_ino;
-        // should only be called on empty folders
-        // if 404, not empty or file -> None
-        Some(())
+    pub fn rmdir(&mut self, parent_ino: u64, name: &OsStr) -> io::Result<()> {
+        let (ino, _) = self.filesystem_from_parent_ino_and_name(parent_ino, name)?;
+        match self.fs_readdir(ino) {
+            Ok(files_system) => {
+                if files_system.len() > 0 {
+                    return Err(io::Error::new(io::ErrorKind::Other, "Folder not empty"));
+                }
+                self.mirror_path_from_inode(ino)
+                    .and_then(|file_path| self.metal_handle.remove_dir(&file_path))
+                    .map(|_| {
+                        self.tx
+                            .send(ToNetworkMessage::BroadcastMessage(MessageContent::Remove(
+                                ino,
+                            )))
+                            .unwrap();
+                        self.index.remove(&ino);
+                    })
+            },
+            Err(e) => {
+                println!("ERROR DURING THE FS_READDIR IN RMDIR");
+                Err(e)
+            },
+        }
     }
 
     pub fn rename(

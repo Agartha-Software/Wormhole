@@ -105,7 +105,7 @@ impl Provider {
      * For cases such as unlink, that gives an inode and a name
      * returns a result of (inode, FileType, name)
      */
-    pub fn file_from_parent_ino_and_name(
+    pub fn filesystem_from_parent_ino_and_name(
         &self,
         parent_ino: u64,
         name: &OsStr,

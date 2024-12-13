@@ -242,7 +242,7 @@ impl Filesystem for FuseController {
     fn rmdir(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
         // should be only called on empty dirs ?
         let mut provider = self.provider.lock().unwrap();
-        if let Some(()) = provider.rmdir(parent, name) {
+        if let Ok(()) = provider.rmdir(parent, name) {
             reply.ok()
         } else {
             reply.error(ENOENT)
