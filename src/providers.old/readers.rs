@@ -11,14 +11,14 @@ use std::io;
 use std::io::Read;
 
 use super::FsEntry;
-use super::{Ino, Provider, TEMPLATE_FILE_ATTR};
+use super::{InodeIndex, Provider, TEMPLATE_FILE_ATTR};
 
 // should maybe be restructured, but
 // those are the functions made freely by us following our needs
 // and they are directly used by the fuse lib
 impl Provider {
     // Used directly in the FuseControler read function
-    pub fn read(&self, ino: Ino) -> io::Result<Vec<u8>> {
+    pub fn read(&self, ino: InodeIndex) -> io::Result<Vec<u8>> {
         println!("read called on ino {}", ino); // DEBUG
         match self.mirror_path_from_inode(ino) {
             Ok(path) => {
@@ -34,7 +34,7 @@ impl Provider {
 
     // list files inodes in the parent folder
     // List from hashmap and not from disk
-    fn list_files(&self, parent_ino: Ino) -> io::Result<Vec<u64>> {
+    fn list_files(&self, parent_ino: InodeIndex) -> io::Result<Vec<u64>> {
         println!("list files called on ino {}", parent_ino); // DEBUG
         match self.index.get(&parent_ino) {
             Some(entry) => {
@@ -82,7 +82,7 @@ impl Provider {
     }
 
     // used directly in FuseControler's readdir function
-    pub fn fs_readdir(&self, parent_ino: Ino) -> io::Result<Vec<(Ino, &FsEntry)>> {
+    pub fn fs_readdir(&self, parent_ino: InodeIndex) -> io::Result<Vec<(InodeIndex, &FsEntry)>> {
         println!("fs_readdir called on ino {}", parent_ino); // DEBUG
         match self.list_files(parent_ino) {
             Ok(list) => Ok(list
@@ -97,7 +97,7 @@ impl Provider {
     }
 
     // use real fs metadata and traduct part of it to the fuse FileAttr metadata
-    fn modify_metadata_template(data: openat::Metadata, ino: Ino) -> FileAttr {
+    fn modify_metadata_template(data: openat::Metadata, ino: InodeIndex) -> FileAttr {
         let mut attr = TEMPLATE_FILE_ATTR;
         attr.ino = ino;
         attr.kind = if data.is_dir() {
@@ -112,7 +112,7 @@ impl Provider {
     }
 
     // get the metadata of a file from it's inode
-    pub fn get_metadata(&self, ino: Ino) -> io::Result<FileAttr> {
+    pub fn get_metadata(&self, ino: InodeIndex) -> io::Result<FileAttr> {
         println!("get_metadata called on ino {}", ino); // DEBUG
         match self.mirror_path_from_inode(ino) {
             Ok(path) => {
@@ -129,7 +129,7 @@ impl Provider {
         }
     }
 
-    pub fn fs_lookup(&self, parent_ino: Ino, file_name: &OsStr) -> io::Result<FileAttr> {
+    pub fn fs_lookup(&self, parent_ino: InodeIndex, file_name: &OsStr) -> io::Result<FileAttr> {
         println!(
             "fs_lookup called on ino {} and file name {:#?}",
             parent_ino, file_name

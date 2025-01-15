@@ -14,7 +14,7 @@ pub mod config;
 pub mod data;
 pub mod fuse;
 pub mod network;
-pub mod providers;
+pub mod pods;
 
 #[cfg(target_os = "windows")]
 pub const INSTANCE_PATH: &str = "%APPDATA%/local/wormhole";

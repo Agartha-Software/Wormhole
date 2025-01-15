@@ -7,12 +7,15 @@ use std::{
     path::PathBuf,
 };
 
-use crate::network::message::{self, Folder, MessageContent, ToNetworkMessage};
+use crate::{
+    network::message::{self, File, Folder, MessageContent, ToNetworkMessage},
+    providers,
+};
 
-use super::{FsEntry, Ino, Provider, TEMPLATE_FILE_ATTR};
+use super::{FsEntry, InodeIndex, Provider, TEMPLATE_FILE_ATTR};
 
 impl Provider {
-    pub fn mkfile(&mut self, parent_ino: Ino, name: &OsStr) -> io::Result<FileAttr> {
+    pub fn mkfile(&mut self, parent_ino: InodeIndex, name: &OsStr) -> io::Result<FileAttr> {
         println!("MKFILE FUNCTION");
         self.check_file_type(parent_ino, FileType::Directory)?;
         println!("MKFILE FUNCTION1");
@@ -50,7 +53,7 @@ impl Provider {
         Ok(new_attr)
     }
 
-    pub fn mkdir(&mut self, parent_ino: Ino, name: &OsStr) -> io::Result<FileAttr> {
+    pub fn mkdir(&mut self, parent_ino: InodeIndex, name: &OsStr) -> io::Result<FileAttr> {
         self.check_file_type(parent_ino, FileType::Directory)?;
         // generation of the real path (of the mirror)
         let new_path = PathBuf::from(self.mirror_path_from_inode(parent_ino).unwrap()).join(name);
@@ -83,8 +86,8 @@ impl Provider {
         Ok(new_attr)
     }
 
-    pub fn rmfile(&mut self, parent_ino: Ino, name: &OsStr) -> io::Result<()> {
-        let (ino, _) = self.file_from_parent_ino_and_name(parent_ino, name)?;
+    pub fn rmfile(&mut self, parent_ino: InodeIndex, name: &OsStr) -> io::Result<()> {
+        let (ino, _) = self.filesystem_from_parent_ino_and_name(parent_ino, name)?;
 
         self.mirror_path_from_inode(ino)
             .and_then(|file_path| self.metal_handle.remove_file(&file_path))
@@ -98,19 +101,36 @@ impl Provider {
             })
     }
 
-    pub fn rmdir(&mut self, parent_ino: Ino, name: &OsStr) -> Option<()> {
-        let _ = name;
-        let _ = parent_ino;
-        // should only be called on empty folders
-        // if 404, not empty or file -> None
-        Some(())
+    pub fn rmdir(&mut self, parent_ino: u64, name: &OsStr) -> io::Result<()> {
+        let (ino, _) = self.filesystem_from_parent_ino_and_name(parent_ino, name)?;
+        match self.fs_readdir(ino) {
+            Ok(files_system) => {
+                if files_system.len() > 0 {
+                    return Err(io::Error::new(io::ErrorKind::Other, "Folder not empty"));
+                }
+                self.mirror_path_from_inode(ino)
+                    .and_then(|file_path| self.metal_handle.remove_dir(&file_path))
+                    .map(|_| {
+                        self.tx
+                            .send(ToNetworkMessage::BroadcastMessage(MessageContent::Remove(
+                                ino,
+                            )))
+                            .unwrap();
+                        self.index.remove(&ino);
+                    })
+            }
+            Err(e) => {
+                println!("ERROR DURING THE FS_READDIR IN RMDIR");
+                Err(e)
+            }
+        }
     }
 
     pub fn rename(
         &mut self,
-        parent_ino: Ino,
+        parent_ino: InodeIndex,
         name: &OsStr,
-        newparent_ino: Ino,
+        newparent_ino: InodeIndex,
         newname: &OsStr,
     ) -> Option<()> {
         let _ = newname;
@@ -123,7 +143,7 @@ impl Provider {
     }
 
     // returns the writed size
-    pub fn write(&self, ino: Ino, offset: i64, data: &[u8]) -> io::Result<u32> {
+    pub fn write(&self, ino: InodeIndex, offset: i64, data: &[u8]) -> io::Result<u32> {
         match self.index.get(&ino) {
             Some(FsEntry::File(path, _)) => {
                 //let path = self.mirror_path_from_inode(ino)?; // Absolute path
@@ -147,7 +167,7 @@ impl Provider {
 
     // RECEPTION
     // REVIEW - not yet refactored nor properly error handled
-    pub fn new_folder(&mut self, ino: Ino, path: PathBuf) {
+    pub fn new_folder(&mut self, ino: InodeIndex, path: PathBuf) {
         let real_path = PathBuf::from(self.local_source.clone()).join(&path);
         println!("Provider make new folder at: {:?}", real_path);
         self.metal_handle
@@ -157,7 +177,7 @@ impl Provider {
         self.index.insert(ino, FsEntry::Directory(path));
     }
 
-    pub fn new_file(&mut self, ino: Ino, path: PathBuf) {
+    pub fn new_file(&mut self, ino: InodeIndex, path: PathBuf) {
         println!("Provider make new file at ORIGINAL PATH: {:?}", path);
         // let real_path = PathBuf::from(self.local_source.clone()).join(&path);
         // println!("Provider make new file at: {:?}", real_path);
@@ -169,7 +189,7 @@ impl Provider {
         println!("created created created");
     }
 
-    pub fn recpt_remove(&mut self, ino: Ino) {
+    pub fn recpt_remove(&mut self, ino: InodeIndex) {
         // let real_path = PathBuf::from(self.local_source.clone()).join(&path);
         match self.index.get(&ino).unwrap() {
             FsEntry::Directory(path) => self.metal_handle.remove_dir(path).unwrap(),
@@ -178,7 +198,7 @@ impl Provider {
         self.index.remove(&ino);
     }
 
-    pub fn recpt_write(&mut self, ino: Ino, content: Vec<u8>) {
+    pub fn recpt_write(&mut self, ino: InodeIndex, content: Vec<u8>) {
         if let FsEntry::File(path, _) = self.index.get(&ino).unwrap() {
             println!("Provider write to file at: {:?}", path);
             let mut file = self
@@ -191,7 +211,7 @@ impl Provider {
         }
     }
 
-    // pub fn recpt_rename(&mut self, ino: Ino, newparent_ino: Ino, newname: &OsStr) {
+    // pub fn recpt_rename(&mut self, ino: InodeIndex, newparent_ino: InodeIndex, newname: &OsStr) {
     //     let (_, path) = self.index.get(&ino).unwrap();
     //     let real_path = PathBuf::from(self.local_source.clone()).join(&path);
     //     let real_path = PathBuf::from(self.local_source.clone()).join(&path);

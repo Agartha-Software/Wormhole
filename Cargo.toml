@@ -22,7 +22,7 @@ fuser = { version = "0.15.1", features = ["serializable"] }
 libc = "0.2.155"
 pkg-config = "0.3.30"
 walkdir = "2.5.0"
-serde = { version = "1.0.203", features = ["derive"] }
+serde = { version = "1.0.203", features = ["derive", "rc"] }
 toml = "0.8.14"
 log = "0.4.22"
 tokio = { version = "1.38.0", default-features = false, features = ["io-std", "macros", "net", "rt-multi-thread", "time", "sync"] }
@@ -35,6 +35,7 @@ tokio-stream = "0.1.16"
 openat = "0.1.21"
 predicates = "3.1.2"
 serde_with = "3.11.0"
+parking_lot = "0.12.3"
 
 [dev-dependencies]
 assert_fs = "1.1.2"
