@@ -1,6 +1,5 @@
 use std::{io, sync::Arc};
 
-use futures_util::future::join;
 use log::{debug, info};
 use parking_lot::RwLock;
 use tokio::sync::mpsc;
@@ -12,7 +11,7 @@ use crate::{
 };
 
 use super::{
-    arbo::{index_folder, Arbo}, background_worker::{background_worker_airport, BackgroundMission}, disk_manager::DiskManager, fs_interface::FsInterface, network_interface::NetworkInterface, whpath::WhPath
+    arbo::{index_folder, Arbo}, disk_manager::DiskManager, fs_interface::FsInterface, network_interface::NetworkInterface, whpath::WhPath
 };
 
 // TODO

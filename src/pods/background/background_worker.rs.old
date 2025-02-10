@@ -1,0 +1,73 @@
+use std::{collections::HashMap, sync::Arc};
+
+use tokio::{
+    sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
+    task::JoinHandle,
+};
+
+use crate::pods::{fs_interface::FsInterface, network_interface::NetworkInterface};
+
+use super::redundancy::RedundancyMission;
+
+
+const GLOBAL_MISSION_TIMEOUT: usize = 5; // seconds passed waiting for other to answer
+
+
+
+enum GlobalMission {
+    Redundancy(RedundancyMission)
+}
+struct BackgroundMission {
+    id: u64,
+    mission: GlobalMission,
+}
+
+pub async fn background_worker_airport(
+    mut reception: UnboundedReceiver<BackgroundMission>,
+    fsi: Arc<FsInterface>,
+    nwi: Arc<NetworkInterface>,
+) {
+    let mut global_missions: HashMap<u64, (JoinHandle<()>, UnboundedSender<GlobalMission>)> =
+        HashMap::new();
+
+    loop {
+        let mission = match reception.recv().await {
+            Some(message) => message,
+            None => continue,
+        };
+
+        match mission {
+            BackgroundMission::End => break,
+            BackgroundMission::GlobalMission(mission) => {
+                if global_missions.contains_key(&mission.id) {
+                    
+                } else {
+                    let (mission_tx, mission_rx) = mpsc::unbounded_channel();
+
+                    match mission.mission {
+                        GlobalMissionData::AddRedundancy(_, _) => {
+                            global_missions.insert(
+                                mission.id,
+                                (
+                                    tokio::spawn(add_redundancy(mission, mission_rx)),
+                                    mission_tx,
+                                ),
+                            );
+                        }
+                        GlobalMissionData::RemoveRedundancy(_, _) => {
+                            global_missions.insert(
+                                mission.id,
+                                (
+                                    tokio::spawn(remove_redundancy(mission, mission_rx)),
+                                    mission_tx,
+                                ),
+                            );
+                        }
+                    }
+                }
+            }
+
+            _ => (), //TODO
+        }
+    }
+}

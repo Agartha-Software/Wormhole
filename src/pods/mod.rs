@@ -4,4 +4,4 @@ pub mod disk_manager;
 pub mod fs_interface;
 pub mod network_interface;
 pub mod whpath;
-pub mod background_worker;
+pub mod background;

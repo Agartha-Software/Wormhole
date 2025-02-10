@@ -3,7 +3,7 @@ use serde_with::serde_as;
 
 use crate::{
     data::metadata::MetaData,
-    pods::arbo::{Arbo, ArboIndex, Inode, InodeId},
+    pods::{arbo::{Arbo, ArboIndex, Inode, InodeId}, background::redundancy::RedundancyMission},
 };
 
 /// Message Content
@@ -21,6 +21,7 @@ pub enum MessageContent {
     RequestFs,
     EditHosts(InodeId, Vec<Address>),
     FsAnswer(FileSystemSerialized),
+    Redundancy(RedundancyMission),
 }
 
 pub type Address = String;
