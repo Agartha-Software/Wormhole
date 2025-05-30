@@ -14,6 +14,7 @@ pub enum Callback {
     PullFs,
 }
 
+#[derive(Debug)]
 pub struct Callbacks {
     pub callbacks: RwLock<HashMap<Callback, broadcast::Sender<bool>>>,
 }

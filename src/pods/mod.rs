@@ -1,5 +1,5 @@
 pub mod arbo;
-pub mod declarations;
+pub mod pod;
 #[cfg(target_os = "linux")]
 #[path = "./disk_manager.rs"]
 pub mod disk_manager;

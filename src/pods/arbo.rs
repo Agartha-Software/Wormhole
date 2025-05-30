@@ -176,6 +176,15 @@ impl Arbo {
         self.entries.clone()
     }
 
+    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, InodeId, Inode> {
+        self.entries.iter()
+    }
+
+    // Use only if you know what you're doing, as those modifications won't be propagated to the network
+    pub fn inodes_mut(&mut self) -> std::collections::hash_map::ValuesMut<'_, InodeId, Inode> {
+        self.entries.values_mut()
+    }
+
     #[must_use]
     pub fn read_lock<'a>(
         arbo: &'a Arc<RwLock<Arbo>>,
@@ -224,6 +233,23 @@ impl Arbo {
         arbo.try_write_for(LOCK_TIMEOUT).ok_or(WhError::WouldBlock {
             called_from: called_from.to_owned(),
         })
+    }
+
+    pub fn files_hosted_only_by<'a>(
+        &'a self,
+        host: &'a Address,
+    ) -> impl Iterator<Item = &Inode> + use<'a> {
+        self.iter()
+            .filter_map(move |(_, inode)| match &inode.entry {
+                FsEntry::Directory(_) => None,
+                FsEntry::File(hosts) => {
+                    if hosts.len() == 1 && hosts.contains(&host) {
+                        Some(inode)
+                    } else {
+                        None
+                    }
+                }
+            })
     }
 
     #[must_use]
@@ -546,7 +572,11 @@ impl Arbo {
 
         inode.entry = match &inode.entry {
             FsEntry::File(_) => FsEntry::File(hosts),
-            _ => panic!("Can't edit hosts on folder"),
+            _ => {
+                return Err(WhError::InodeIsADirectory {
+                    detail: "n_set_inode_hosts".to_owned(),
+                })
+            }
         };
         Ok(())
     }
@@ -568,6 +598,25 @@ impl Arbo {
                 io::ErrorKind::Other,
                 "can't edit hosts on folder",
             ))
+        }
+    }
+
+    /// Add hosts to an inode
+    ///
+    /// Only works on inodes pointing files (no folders)
+    /// Ignore already existing hosts to avoid duplicates
+    pub fn n_add_inode_hosts(&mut self, ino: InodeId, mut new_hosts: Vec<Address>) -> WhResult<()> {
+        let inode = self.n_get_inode_mut(ino)?;
+
+        if let FsEntry::File(hosts) = &mut inode.entry {
+            hosts.append(&mut new_hosts);
+            hosts.sort();
+            hosts.dedup();
+            Ok(())
+        } else {
+            Err(WhError::InodeIsADirectory {
+                detail: "update_remote_hosts".to_owned(),
+            })
         }
     }
 
@@ -629,11 +678,22 @@ impl Arbo {
 
 // !SECTION
 
-///
-/// Reserved Inodes:
-/// 1 - "/"
-/// 2 - ".global_config.toml"
-/// 3 - ".local_config.toml"
+/// Reserved files names
+pub const GLOBAL_CONFIG_INO: u64 = 2;
+pub const GLOBAL_CONFIG_FNAME: &str = ".global_config.toml";
+pub const LOCAL_CONFIG_INO: u64 = 3;
+pub const LOCAL_CONFIG_FNAME: &str = ".local_config.toml";
+pub const ARBO_FILE_INO: u64 = 4;
+pub const ARBO_FILE_FNAME: &str = ".arbo";
+
+/// If arbo can be read and deserialized from parent_folder/[ARBO_FILE_NAME] returns Some(Arbo)
+fn recover_serialized_arbo(parent_folder: &WhPath) -> Option<Arbo> {
+    // error handling is silent on purpose as it will be recoded with the new error system
+    // If an error happens, will just proceed like the arbo was not on disk
+    // In the future, we should maybe warn and keep a copy, avoiding the user from losing data
+    bincode::deserialize(&fs::read(parent_folder.join(ARBO_FILE_FNAME).to_string()).ok()?).ok()
+}
+
 fn index_folder_recursive(
     arbo: &mut Arbo,
     parent: InodeId,
@@ -649,8 +709,9 @@ fn index_folder_recursive(
         let meta = entry.metadata()?;
 
         let used_ino = match (fname.as_str(), parent) {
-            (".global_config.toml", 1) => 2u64,
-            (".local_config.toml", 1) => 3u64,
+            (GLOBAL_CONFIG_FNAME, 1) => GLOBAL_CONFIG_INO,
+            (LOCAL_CONFIG_FNAME, 1) => LOCAL_CONFIG_INO,
+            (ARBO_FILE_FNAME, 1) => ARBO_FILE_INO,
             _ => {
                 let used = *ino;
                 *ino += 1;
@@ -678,13 +739,22 @@ fn index_folder_recursive(
     Ok(())
 }
 
-pub fn index_folder(path: &WhPath, host: &String) -> io::Result<(Arbo, InodeId)> {
-    let mut arbo = Arbo::new();
-    let mut ino: u64 = 11; // NOTE - will be the first registered inode after root
+pub fn generate_arbo(path: &WhPath, host: &String) -> io::Result<(Arbo, InodeId)> {
+    if let Some(arbo) = recover_serialized_arbo(path) {
+        let ino: u64 = *arbo
+            .entries
+            .keys()
+            .reduce(|acc, i| std::cmp::max(acc, i))
+            .unwrap_or(&11);
+        Ok((arbo, ino))
+    } else {
+        let mut arbo = Arbo::new();
+        let mut ino: u64 = 11; // NOTE - will be the first registered inode after root
 
-    #[cfg(target_os = "linux")]
-    index_folder_recursive(&mut arbo, ROOT, &mut ino, path, host)?;
-    Ok((arbo, ino))
+        #[cfg(target_os = "linux")]
+        index_folder_recursive(&mut arbo, ROOT, &mut ino, path, host)?;
+        Ok((arbo, ino))
+    }
 }
 
 /* NOTE

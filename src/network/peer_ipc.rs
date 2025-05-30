@@ -13,6 +13,7 @@ use crate::network::forward::{forward_read_to_sender, forward_receiver_to_write}
 
 use super::message::{Address, FromNetworkMessage, MessageAndStatus};
 
+#[derive(Debug)]
 pub struct PeerIPC {
     pub address: Address,
     pub thread: tokio::task::JoinHandle<()>,
@@ -102,5 +103,12 @@ impl PeerIPC {
         .into_iter()
         .flatten()
         .collect()
+    }
+}
+
+impl Drop for PeerIPC {
+    fn drop(&mut self) {
+        log::debug!("Dropping PeerIPC {}", self.address);
+        self.thread.abort();
     }
 }

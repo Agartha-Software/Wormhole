@@ -3,111 +3,78 @@
 // AgarthaSoftware - 2024
 
 use clap::Parser;
-use wormhole::commands;
+use std::{env, path::PathBuf};
+use wormhole::commands::{self, cli_commands::Cli};
 
-#[derive(Parser)] // requires `derive` feature
-#[command(name = "wormhole")]
-#[command(bin_name = "wormhole")]
-enum Cli {
-    /// make a pod and join a network
-    Join(JoinArgs),
-    /// make a pod and create a new network (template)
-    Template(TemplateArg),
-    /// mount a pod based on config files
-    Mount,
-    /// remove a pod from its network
-    Remove(RemoveArgs),
-    /// inspect a pod with its configuration, connections, etc
-    Inspect,
+fn get_config_path() -> PathBuf {
+    let config_dir =
+        env::var("WORMHOLE_CONFIG_DIR").unwrap_or_else(|_| ".config/wormhole".to_string());
+    PathBuf::from(config_dir).join("config.toml")
 }
 
-#[derive(clap::Args)]
-#[command(version, about, long_about = None)]
-struct PodArgs {
-    /// Change to DIRECTORY before doing anything
-    #[arg(long, short = 'C')]
-    path: Option<std::path::PathBuf>,
-}
+/// Parse argument and recover the ip connection to the service or use 127.0.0.1:8081
+fn get_args(args: Vec<String>) -> (String, Vec<String>) {
+    let ip: String;
+    let cli_args: Vec<String>;
 
-#[derive(clap::Args)]
-#[command(version, about, long_about = None)]
-struct JoinArgs {
-    /// network url as <address of node to join from> + ':' + <network name>'
-    #[arg()]
-    url: String,
-    /// additional hosts to try to join from as a backup
-    #[arg()]
-    additional_hosts: Option<Vec<String>>,
-    /// Change to DIRECTORY before doing anything
-    #[arg(long, short = 'C')]
-    path: Option<std::path::PathBuf>,
-}
-
-#[derive(clap::Args)]
-#[command(version, about, long_about = None)]
-struct TemplateArg {
-    /// name of the network to create
-    #[arg()]
-    name: Option<String>,
-    /// Change to DIRECTORY before doing anything
-    #[arg(long, short = 'C')]
-    path: Option<std::path::PathBuf>,
-}
-
-#[derive(clap::Args)]
-#[command(version, about, long_about = None)]
-struct RemoveArgs {
-    /// name of the network to create
-    #[arg(short = 'x', group = "mode")]
-    take: bool,
-    #[arg(short = 'c', group = "mode")]
-    clone: bool,
-    #[arg(short = 'd', group = "mode")]
-    delete: bool,
-    /// Change to DIRECTORY before doing anything
-    #[arg(long, short = 'C')]
-    path: Option<std::path::PathBuf>,
+    if let Some(first_arg) = args.get(1) {
+        if first_arg.contains(':') {
+            ip = first_arg.clone();
+            cli_args = args.into_iter().skip(1).collect();
+        } else {
+            ip = "127.0.0.1:8081".to_string();
+            cli_args = args;
+        }
+    } else {
+        ip = "127.0.0.1:8081".to_string();
+        cli_args = vec![];
+    }
+    return (ip, cli_args);
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    match Cli::parse() {
-        Cli::Join(args) => {
-            println!("joining {}", args.url);
-            println!("({:?})", args.additional_hosts);
-            commands::join(
-                &args.path.unwrap_or(".".into()),
-                args.url,
-                args.additional_hosts.unwrap_or(vec![]),
-            )?;
-        }
+    env_logger::init();
+
+    // Récupérer tous les arguments
+    let args: Vec<String> = env::args().collect();
+    let (ip, cli_args) = get_args(args);
+    let ip = ip.as_str();
+    println!("Starting cli on {}", ip);
+    println!("cli args: {:?}", cli_args);
+
+    match Cli::parse_from(cli_args) {
+        Cli::Start(args) => commands::cli::start(ip, args)?,
+        Cli::Stop(args) => commands::cli::stop(ip, args)?,
         Cli::Template(args) => {
-            println!(
-                "creating network {:?}",
-                args.name.clone().unwrap_or("default".into())
-            );
-            commands::templates(
-                &args.path.unwrap_or(".".into()),
-                &args.name.unwrap_or("default".into()),
-            )?;
+            println!("creating network {:?}", args.name.clone());
+            commands::cli::templates(&args.path, &args.name)?;
+        }
+        Cli::New(args) => {
+            println!("creating pod");
+            commands::cli::new(ip, args)?;
         }
         Cli::Remove(args) => {
             println!("removing pod");
-            let mode = match (args.clone, args.delete, args.take) {
-                (true, false, false) => commands::Mode::Clone,
-                (false, true, false) => commands::Mode::Clean,
-                (false, false, true) => commands::Mode::Take,
-                (false, false, false) => commands::Mode::Simple,
-                _ => unreachable!("multiple exclusive options"),
-            };
-            commands::remove(&args.path.unwrap_or(".".into()), mode)?;
-        }
-        Cli::Mount => {
-            println!("mounting pod");
-            todo!("mount");
+            commands::cli::remove(ip, args)?;
         }
         Cli::Inspect => {
-            println!("inspecting pod");
+            log::warn!("inspecting pod");
             todo!("inspect");
+        }
+        Cli::GetHosts(args) => {
+            commands::cli::get_hosts(ip, args)?;
+        }
+        Cli::Apply(args) => {
+            log::warn!("reloading pod");
+            commands::cli::apply(ip, args)?;
+        }
+        Cli::Restore(args) => {
+            println!("retore a specifique file config");
+            commands::cli::restore(ip, args)?;
+        }
+        Cli::Interrupt => {
+            log::warn!("do interrupt command");
+            todo!("interrupt");
         }
     }
     Ok(())

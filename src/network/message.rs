@@ -19,6 +19,7 @@ pub enum MessageContent {
     Inode(Inode),
     RequestFile(InodeId, Address),
     PullAnswer(InodeId, Vec<u8>),
+    RedundancyFile(InodeId, Vec<u8>),
     Rename(InodeId, InodeId, String, String), //Parent, New Parent, Name, New Name
     EditHosts(InodeId, Vec<Address>),
     RevokeFile(InodeId, Address, Metadata),
@@ -28,8 +29,9 @@ pub enum MessageContent {
     SetXAttr(InodeId, String, Vec<u8>),
     RemoveXAttr(InodeId, String),
     RequestFs,
-    RequestPull(InodeId),
-    FsAnswer(FileSystemSerialized, Vec<Address>),
+    Disconnect(Address),
+    // Arbo, peers, .global_config
+    FsAnswer(FileSystemSerialized, Vec<Address>, Vec<u8>),
 }
 
 impl fmt::Display for MessageContent {
@@ -49,8 +51,9 @@ impl fmt::Display for MessageContent {
             MessageContent::SetXAttr(_, _, _) => "SetXAttr",
             MessageContent::RemoveXAttr(_, _) => "RemoveXAttr",
             MessageContent::RequestFs => "RequestFs",
-            MessageContent::RequestPull(_) => "RequestPull",
-            MessageContent::FsAnswer(_, _) => "FsAnswer",
+            MessageContent::FsAnswer(_, _, _) => "FsAnswer",
+            MessageContent::RedundancyFile(_, _) => "RedundancyFile",
+            MessageContent::Disconnect(_) => "Disconnect",
         };
         write!(f, "{}", name)
     }
@@ -66,6 +69,12 @@ pub type Address = String;
 pub struct FromNetworkMessage {
     pub origin: Address,
     pub content: MessageContent,
+}
+
+/// Message going to the redundancy worker
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum RedundancyMessage {
+    ApplyTo(InodeId),
 }
 
 /// Message Going To Network

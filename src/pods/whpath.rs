@@ -1,7 +1,8 @@
 use std::ffi::OsStr;
 use std::{fmt, path::Path};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PathType {
     Absolute,
     Relative,
@@ -9,7 +10,7 @@ pub enum PathType {
     Empty,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WhPath {
     pub inner: String,
     pub kind: PathType,
@@ -89,8 +90,11 @@ impl WhPath {
         }
     }
 
-    //TODO - Faire un join pour de WhPath
-    //NOTE - join deux paths dans l'ordre indiqué, résoud le conflit si le second commence avec ./ ou / ou rien
+    /// Add a segment to the current WhPath. If the segment starts with a `/` or `./` or `../`, the leading slash is removed.
+    /// If the current WhPath is empty, the segment is added as is.
+    /// If the current WhPath is not empty, the segment is added after adding a slash at the end of the current WhPath.
+    /// # Examples
+    ///
     pub fn push<T>(&mut self, segment: &T) -> &Self
     where
         T: JoinPath + ?Sized,
@@ -101,8 +105,12 @@ impl WhPath {
         self
     }
 
-    //TODO - Faire un join pour de WhPath
-    //NOTE - join deux paths dans l'ordre indiqué, résoud le conflit si le second commence avec ./ ou / ou rien
+    /// Join the current path with a new segment. If the segment starts with a `/` or `./` or `../`, the leading slash is removed.
+    /// If the current path is empty, the segment is added as is.
+    /// If the current path is not empty, the segment is added after adding a slash at the end of the current path.
+    /// If the segment is hidden (`is_hidden()` return true), the segment is added as is, without adding a slash.
+    /// # Examples
+    ///
     pub fn join<T>(&self, segment: &T) -> Self
     where
         T: JoinPath + ?Sized,
@@ -110,6 +118,7 @@ impl WhPath {
         let mut pth = self.clone();
 
         pth.add_last_slash();
+
         let seg = Self::remove_leading_slash(segment.as_str());
         pth.inner = format!("{}{}", pth.inner, seg);
         pth
@@ -278,15 +287,26 @@ impl WhPath {
     ///!SECTION - Est-ce qu'il faudra modifier pour Windows en rajoutant le '\' ??
     ///!SECTION- A modifier pour prendre en compte les fichiers cachés ?
     fn remove_leading_slash(segment: &str) -> &str {
+        let mut j = 0;
         let mut i = 0;
-        for c in segment.chars() {
-            if c == '.' || c == '/' {
-                i += 1;
+        let chars: Vec<char> = segment.chars().collect();
+        while i < chars.len() {
+            if chars[i] == '.' {
+                if i + 1 < chars.len() && (chars[i + 1] == '/' || chars[i + 1] == '.') {
+                    i += 1;
+                    j += 2;
+                } else {
+                    break;
+                }
+            } else if chars[i] == '/' {
+                j += 1;
             } else {
                 break;
             }
+            i += 1;
         }
-        return &segment[i..];
+        println!("j: {}", j);
+        return &segment[j..];
     }
 
     // !SECTION - Est-ce qu'il faudra modifier pour Windows en rajoutant le '\' ??
@@ -356,7 +376,7 @@ mod tests {
         assert_eq!(WhPath::remove_leading_slash("./bar"), "bar");
         assert_eq!(WhPath::remove_leading_slash("/bar"), "bar");
         assert_eq!(WhPath::remove_leading_slash(""), "");
-        assert_eq!(WhPath::remove_leading_slash(".bar"), "bar");
+        assert_eq!(WhPath::remove_leading_slash(".bar"), ".bar");
     }
 
     #[test]

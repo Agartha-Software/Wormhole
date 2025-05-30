@@ -20,6 +20,8 @@
             pkgs.rustfmt
             pkgs.pkg-config
             pkgs.fuse3
+            pkgs.docker
+            pkgs.docker-compose
           ];
           RUST_SRC_PATH =
             "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
