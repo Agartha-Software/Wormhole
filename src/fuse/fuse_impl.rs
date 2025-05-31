@@ -639,6 +639,7 @@ pub fn mount_fuse(
         MountOption::RW,
         // MountOption::DefaultPermissions,
         MountOption::FSName("wormhole".to_string()),
+        MountOption::CUSTOM("nonempty".to_string())
     ];
     let ctrl = FuseController { fs_interface };
 

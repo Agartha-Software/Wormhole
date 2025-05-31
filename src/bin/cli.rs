@@ -4,7 +4,10 @@
 
 use clap::Parser;
 use std::{env, path::PathBuf};
-use wormhole::commands::{self, cli_commands::Cli};
+use wormhole::{
+    commands::{self, cli_commands::Cli},
+    error::CliResult,
+};
 
 fn get_config_path() -> PathBuf {
     let config_dir =
@@ -32,7 +35,7 @@ fn get_args(args: Vec<String>) -> (String, Vec<String>) {
     return (ip, cli_args);
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> CliResult<()> {
     env_logger::init();
 
     // Récupérer tous les arguments
@@ -42,40 +45,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Starting cli on {}", ip);
     println!("cli args: {:?}", cli_args);
 
-    match Cli::parse_from(cli_args) {
-        Cli::Start(args) => commands::cli::start(ip, args)?,
-        Cli::Stop(args) => commands::cli::stop(ip, args)?,
+    let status = match Cli::parse_from(cli_args) {
+        Cli::Start(args) => commands::cli::start(ip, args),
+        Cli::Stop(args) => commands::cli::stop(ip, args),
         Cli::Template(args) => {
             println!("creating network {:?}", args.name.clone());
-            commands::cli::templates(&args.path, &args.name)?;
+            commands::cli::templates(&args.path, &args.name)
         }
         Cli::New(args) => {
             println!("creating pod");
-            commands::cli::new(ip, args)?;
+            commands::cli::new(ip, args)
         }
         Cli::Remove(args) => {
             println!("removing pod");
-            commands::cli::remove(ip, args)?;
+            commands::cli::remove(ip, args)
         }
         Cli::Inspect => {
             log::warn!("inspecting pod");
             todo!("inspect");
         }
-        Cli::GetHosts(args) => {
-            commands::cli::get_hosts(ip, args)?;
-        }
+        Cli::GetHosts(args) => commands::cli::get_hosts(ip, args),
         Cli::Apply(args) => {
             log::warn!("reloading pod");
-            commands::cli::apply(ip, args)?;
+            commands::cli::apply(ip, args)
         }
         Cli::Restore(args) => {
-            println!("retore a specifique file config");
-            commands::cli::restore(ip, args)?;
+            println!("retore a specific file config");
+            commands::cli::restore(ip, args)
         }
         Cli::Interrupt => {
-            log::warn!("do interrupt command");
+            log::warn!("interrupt command");
             todo!("interrupt");
         }
-    }
-    Ok(())
+    };
+    if let Err(e) = &status {
+        log::error!("CLI: error reported: {e}");
+    } else {
+        log::info!("CLI: no error reported")
+    };
+    status
 }

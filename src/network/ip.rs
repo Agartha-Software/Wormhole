@@ -17,6 +17,10 @@ impl IpP {
         octets[3] = value;
         self.addr = Ipv4Addr::from(octets);
     }
+
+    pub fn get_ip_last(&self) -> u8 {
+        self.addr.octets()[3]
+    }
 }
 
 impl TryFrom<&String> for IpP {
@@ -32,6 +36,15 @@ impl TryFrom<&String> for IpP {
             })
         } else {
             Err("IpP: TryFrom: Invalid ip provided")
+        }
+    }
+}
+
+impl Clone for IpP {
+    fn clone(&self) -> Self {
+        Self {
+            addr: self.addr,
+            port: self.port,
         }
     }
 }

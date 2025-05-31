@@ -305,7 +305,6 @@ impl WhPath {
             }
             i += 1;
         }
-        println!("j: {}", j);
         return &segment[j..];
     }
 
