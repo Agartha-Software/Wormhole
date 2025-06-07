@@ -584,11 +584,7 @@ impl Arbo {
 
         inode.entry = match &inode.entry {
             FsEntry::File(_) => FsEntry::File(hosts),
-            _ => {
-                return Err(WhError::InodeIsADirectory {
-                    detail: "n_set_inode_hosts".to_owned(),
-                })
-            }
+            _ => return Err(WhError::InodeIsADirectory),
         };
         Ok(())
     }
@@ -626,9 +622,7 @@ impl Arbo {
             hosts.dedup();
             Ok(())
         } else {
-            Err(WhError::InodeIsADirectory {
-                detail: "update_remote_hosts".to_owned(),
-            })
+            Err(WhError::InodeIsADirectory)
         }
     }
 

@@ -39,6 +39,11 @@ impl Into<SimpleFileType> for &FsEntry {
     }
 }
 
+custom_error::custom_error! {pub ReceptRedundancy
+    WhError{source: WhError} = "{source}",
+    LocalRedundandcyFailed { io: std::io::Error } = "Local redundandcy failed: {io}",
+}
+
 /// Provides functions to allow primitive handlers like Fuse & WinFSP to
 /// interract with wormhole
 impl FsInterface {
@@ -145,17 +150,14 @@ impl FsInterface {
         }
     }
 
-    pub fn recept_redundancy(&self, id: InodeId, binary: Vec<u8>) -> WhResult<()> {
+    pub fn recept_redundancy(&self, id: InodeId, binary: Vec<u8>) -> Result<(), ReceptRedundancy> {
         let path = Arbo::read_lock(&self.arbo, "recept_binary")
             .expect("recept_binary: can't read lock arbo")
             .n_get_path_from_inode_id(id)?;
 
         self.disk
             .write_file(&path, &binary, 0)
-            .map_err(|e| WhError::DiskError {
-                detail: format!("recept_redundancy: can't write file ({id})"),
-                err: e,
-            })
+            .map_err(|e| ReceptRedundancy::LocalRedundandcyFailed { io: e })
             .inspect_err(|e| log::error!("{e}"))?;
         // TODO -> in case of failure, other hosts still think this one is valid. Should send error report to the redundancy manager
 
@@ -169,6 +171,7 @@ impl FsInterface {
             .inspect_err(|e| {
                 log::error!("Can't update (local) hosts for redundancy pulled file ({id}): {e}")
             })
+            .map_err(|err| ReceptRedundancy::WhError { source: err })
     }
 
     pub fn recept_binary(&self, id: InodeId, binary: Vec<u8>) -> io::Result<()> {

@@ -314,9 +314,7 @@ impl NetworkInterface {
             }
             Ok(())
         } else {
-            Err(WhError::InodeIsADirectory {
-                detail: "update_remote_hosts".to_owned(),
-            })
+            Err(WhError::InodeIsADirectory)
         }
     }
 

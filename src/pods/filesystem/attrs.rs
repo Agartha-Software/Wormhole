@@ -51,9 +51,7 @@ impl FsInterface {
             match &inode.entry {
                 FsEntry::Directory(_) if meta.size != inode.meta.size => {
                     return Err(AcknoledgeSetAttrError::WhError {
-                        source: WhError::InodeIsADirectory {
-                            detail: "acknowledge_metadata".to_string(),
-                        },
+                        source: WhError::InodeIsADirectory,
                     });
                 }
                 FsEntry::Directory(_) => {
