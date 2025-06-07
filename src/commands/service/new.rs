@@ -58,9 +58,6 @@ async fn pod_value(args: &PodArgs) -> CliResult<(GlobalConfig, LocalConfig, Arc<
     if local_config.general.address != args.ip {
         local_config.general.address = args.ip.clone();
     }
-    if let Err(_) = local_config.write(&local_path) {
-        return Err(CliError::InvalidConfig { file: local_path });
-    }
     let server: Arc<Server> = Arc::new(Server::setup(&local_config.general.address).await?);
 
     let global_path = args.path.clone().join(GLOBAL_CONFIG_FNAME).inner;

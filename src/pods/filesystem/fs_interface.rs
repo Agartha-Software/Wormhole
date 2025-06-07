@@ -138,7 +138,6 @@ impl FsInterface {
             FsEntry::Directory(_) => self
                 .disk
                 .new_dir(&new_path, inode.meta.perm)
-                .map(|_| ())
                 .map_err(|io| MakeInodeError::LocalCreationFailed { io }),
             // TODO - remove when merge is handled because new file should create folder
             // FsEntry::Directory(_) => {}
@@ -146,10 +145,13 @@ impl FsInterface {
     }
 
     pub fn recept_redundancy(&self, id: InodeId, binary: Vec<u8>) -> WhResult<()> {
-        let path = Arbo::read_lock(&self.arbo, "recept_binary")
-            .expect("recept_binary: can't read lock arbo")
-            .n_get_path_from_inode_id(id)?;
+        let mut arbo = Arbo::write_lock(&self.arbo, "recept_binary")
+            .expect("recept_binary: can't read lock arbo");
+        let (path, perms) = arbo
+            .n_get_path_from_inode_id(id)
+            .and_then(|path| arbo.n_get_inode(id).map(|inode| (path, inode.meta.perm)))?;
 
+        let _created = self.disk.new_file(&path, perms);
         self.disk
             .write_file(&path, &binary, 0)
             .map_err(|e| WhError::DiskError {
@@ -164,11 +166,9 @@ impl FsInterface {
                 .general
                 .address
                 .clone();
-        Arbo::n_write_lock(&self.arbo, "recept_redundancy")?
-            .n_add_inode_hosts(id, vec![address])
-            .inspect_err(|e| {
-                log::error!("Can't update (local) hosts for redundancy pulled file ({id}): {e}")
-            })
+        arbo.n_add_inode_hosts(id, vec![address]).inspect_err(|e| {
+            log::error!("Can't update (local) hosts for redundancy pulled file ({id}): {e}")
+        })
     }
 
     pub fn recept_binary(&self, id: InodeId, binary: Vec<u8>) -> io::Result<()> {
@@ -180,8 +180,7 @@ impl FsInterface {
                 .clone();
         let arbo = Arbo::read_lock(&self.arbo, "recept_binary")
             .expect("recept_binary: can't read lock arbo");
-        let (path, perms) = match Arbo::read_lock(&self.arbo, "recept_binary")
-            .expect("recept_binary: can't read lock arbo")
+        let (path, perms) = match arbo
             .n_get_path_from_inode_id(id)
             .and_then(|path| arbo.n_get_inode(id).map(|inode| (path, inode.meta.perm)))
         {
@@ -277,20 +276,31 @@ impl FsInterface {
     // SECTION remote -> read
     pub fn send_filesystem(&self, to: Address) -> io::Result<()> {
         let arbo = Arbo::read_lock(&self.arbo, "fs_interface::send_filesystem")?;
-        let global_config_file_size = arbo.get_inode(GLOBAL_CONFIG_INO)?.meta.size;
-        let global_config_path = arbo
-            .get_path_from_inode_id(GLOBAL_CONFIG_INO)?
-            .set_relative();
+        let global_config_file_size = arbo
+            .get_inode(GLOBAL_CONFIG_INO)
+            .map(|inode| inode.meta.size)
+            .ok();
+        let global_config_path = if global_config_file_size.is_some() {
+            Some(
+                arbo.get_path_from_inode_id(GLOBAL_CONFIG_INO)?
+                    .set_relative(),
+            )
+        } else {
+            None
+        };
         drop(arbo);
-        log::info!("reading global config at {global_config_path}");
+        log::info!("reading global config at {global_config_path:?}");
 
         let mut global_config_bytes = Vec::new();
-        global_config_bytes.resize(global_config_file_size as usize, 0);
+        if let Some(global_config_file_size) = global_config_file_size {
+            global_config_bytes.resize(global_config_file_size as usize, 0);
 
-        self.disk
-            .read_file(&global_config_path, 0, &mut global_config_bytes)
-            .expect("disk can't read file (global condfig)");
-
+            if let Some(global_config_path) = global_config_path {
+                self.disk
+                    .read_file(&global_config_path, 0, &mut global_config_bytes)
+                    .expect("disk can't read file (global condfig)");
+            }
+        }
         self.network_interface.send_arbo(to, global_config_bytes)
     }
 
@@ -319,9 +329,12 @@ impl FsInterface {
 
         let mut buff = Vec::new();
         buff.resize(size as usize, 0);
-        self.disk
-            .read_file(&path, 0, &mut buff)
-            .map_err(|_| crate::error::WhError::InodeNotFound)?;
+        self.disk.read_file(&path, 0, &mut buff).map_err(|io| {
+            crate::error::WhError::DiskError {
+                detail: "read_local_file".to_owned(),
+                err: io,
+            }
+        })?;
         Ok(buff)
     }
 }

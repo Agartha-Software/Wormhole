@@ -37,23 +37,10 @@ pub enum MessageContent {
 impl fmt::Display for MessageContent {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let name = match self {
-            MessageContent::Register(_) => "Register",
-            MessageContent::Remove(_) => "Remove",
-            MessageContent::Inode(_) => "Inode",
-            MessageContent::RequestFile(_, _) => "RequestFile",
-            MessageContent::PullAnswer(_, _) => "PullAnswer",
-            MessageContent::Rename(_, _, _, _, _) => "Rename",
-            MessageContent::EditHosts(_, _) => "EditHosts",
-            MessageContent::RevokeFile(_, _, _) => "RevokeFile",
-            MessageContent::AddHosts(_, _) => "AddHosts",
-            MessageContent::RemoveHosts(_, _) => "RemoveHosts",
-            MessageContent::EditMetadata(_, _) => "EditMetadata",
-            MessageContent::SetXAttr(_, _, _) => "SetXAttr",
-            MessageContent::RemoveXAttr(_, _) => "RemoveXAttr",
-            MessageContent::RequestFs => "RequestFs",
-            MessageContent::FsAnswer(_, _, _) => "FsAnswer",
-            MessageContent::RedundancyFile(_, _) => "RedundancyFile",
-            MessageContent::Disconnect(_) => "Disconnect",
+            MessageContent::RedundancyFile(_, _) => "RedundancyFile".into(),
+            MessageContent::FsAnswer(_, _, _) => "FsAnswer".into(),
+            MessageContent::PullAnswer(_, _) => "PullAnswer".into(),
+            other => format!("{:?}", other),
         };
         write!(f, "{}", name)
     }

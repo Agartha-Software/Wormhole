@@ -270,7 +270,7 @@ impl WhPath {
         path.remove_last_slash();
         match path.inner.rsplit_once('/') {
             Some((first, last)) => (first.to_string(), last.to_string()),
-            _none => (String::new(), String::new()),
+            None => (String::new(), path.inner),
         }
     }
 

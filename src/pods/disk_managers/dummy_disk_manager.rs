@@ -78,7 +78,7 @@ impl DummyDiskManager {
 impl DiskManager for DummyDiskManager {
     fn new_file(&self, path: &WhPath, _permissions: u16) -> io::Result<()> {
         let path = path.clone().set_relative();
-        let (f_path, name) = path.split_folder_file();
+        let (f_path, _) = path.split_folder_file();
         let f_path: WhPath = (&f_path).into();
         let mut lock = self.files.write().expect("VirtDisk::new_file rwLock");
         match lock.get_mut(&f_path) {
@@ -157,10 +157,7 @@ impl DiskManager for DummyDiskManager {
             Some(VirtualFile::File(_)) => Err(io::ErrorKind::InvalidData.into()),
             None => Err(io::ErrorKind::NotFound.into()),
         }?;
-        self.files
-            .write()
-            .expect("VirtDisk::remove_dir rwLock")
-            .remove(&path);
+        lock.remove(&path);
         Ok(())
     }
 
@@ -172,7 +169,10 @@ impl DiskManager for DummyDiskManager {
             .get_mut(&path.clone().set_relative())
         {
             let len = binary.len();
-            let grow = std::cmp::max(0usize, offset + len - file.len());
+            let grow = offset
+                .checked_add(len)
+                .and_then(|x| x.checked_sub(file.len()))
+                .unwrap_or(0);
             *self.size.write().expect("VirtDisk::write_file rwLock") += grow;
             file.splice(
                 (offset)..(std::cmp::min(file.len(), offset + len)),

@@ -10,14 +10,15 @@ use crate::fuse::fuse_impl::mount_fuse;
 use crate::network::message::{
     FileSystemSerialized, FromNetworkMessage, MessageContent, ToNetworkMessage,
 };
-use crate::pods::arbo::{FsEntry, LOCAL_CONFIG_FNAME, LOCAL_CONFIG_INO, ROOT};
+use crate::pods::arbo::{FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME, LOCAL_CONFIG_INO, ROOT};
 #[cfg(target_os = "windows")]
 use crate::pods::disk_managers::dummy_disk_manager::DummyDiskManager;
 #[cfg(target_os = "linux")]
 use crate::pods::disk_managers::unix_disk_manager::UnixDiskManager;
+use crate::pods::disk_managers::DiskManager;
 use crate::pods::network::redundancy::redundancy_worker;
 #[cfg(target_os = "windows")]
-use crate::winfsp::winfsp_impl::mount_fsp;
+use crate::winfsp::winfsp_impl::{mount_fsp, WinfspHost};
 use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use fuser;
@@ -25,11 +26,6 @@ use log::info;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
-#[cfg(target_os = "windows")]
-use winfsp::host::FileSystemHost;
-
-#[cfg(target_os = "linux")]
-use crate::pods::arbo::GLOBAL_CONFIG_FNAME;
 
 use crate::network::{message::Address, peer_ipc::PeerIPC, server::Server};
 
@@ -53,7 +49,7 @@ pub struct Pod {
     #[cfg(target_os = "linux")]
     fuse_handle: fuser::BackgroundSession,
     #[cfg(target_os = "windows")]
-    fsp_host: FileSystemHost<'static>,
+    fsp_host: WinfspHost,
     network_airport_handle: JoinHandle<()>,
     peer_broadcast_handle: JoinHandle<()>,
     new_peer_handle: JoinHandle<()>,
@@ -88,7 +84,9 @@ pub async fn initiate_connection(
                 }
 
                 loop {
+                    info!("Awaiting response from {first_contact}");
                     match rx.recv().await {
+                        // TODO: timeout here in case of peer malfunction
                         Some(FromNetworkMessage {
                             origin: _,
                             content: MessageContent::FsAnswer(fs, mut peers_address, global_config),
@@ -106,7 +104,10 @@ pub async fn initiate_connection(
                             );
                             break;
                         }
-                        None => continue,
+                        None => {
+                            info!("Empty response from {first_contact}...");
+                            continue;
+                        }
                     };
                 }
             }
@@ -127,7 +128,7 @@ fn register_to_others(peers: &Vec<PeerIPC>, self_address: &Address) -> std::io::
 
 custom_error! {pub PodStopError
     WhError{source: WhError} = "{source}",
-    ArboSavingFailed{error_source: String} = @{format!("PodStopError: could not write arbo to disk: {error_source}")},
+    ArboSavingFailed{source: io::Error} = @{format!("PodStopError: could not write arbo to disk: {source}")},
     PodNotRunning = "No pod with this name was found running.",
     FileNotReadable{file: InodeId, reason: String} = @{format!("PodStopError: could not read file from disk: ({file}) {reason}")},
     FileNotSent{file: InodeId} = @{format!("PodStopError: no pod was able to receive this file before stopping: ({file})")}
@@ -153,7 +154,7 @@ impl Pod {
 
         let mut peers = vec![];
 
-        let (arbo, next_inode) =
+        let (arbo, next_inode, global_config_bytes) =
             if let Some((fs_serialized, peers_addrs, ipc, global_config_bytes)) =
                 initiate_connection(
                     global_config.general.peers.clone(),
@@ -163,17 +164,6 @@ impl Pod {
                 )
                 .await
             {
-                if !global_config_bytes.is_empty() {
-                    info!(
-                        "mount point service: {}",
-                        mount_point.join(GLOBAL_CONFIG_FNAME).to_string()
-                    );
-                    fs::write(
-                        mount_point.join(GLOBAL_CONFIG_FNAME).to_string(),
-                        global_config_bytes,
-                    )
-                    .expect("can't write global_config file");
-                }
                 // TODO use global_config ?
 
                 peers = PeerIPC::peer_startup(peers_addrs, from_network_message_tx.clone()).await;
@@ -182,20 +172,12 @@ impl Pod {
 
                 let mut arbo = Arbo::new();
                 arbo.overwrite_self(fs_serialized.fs_index);
-
-                if let Err(_) = arbo.get_inode(LOCAL_CONFIG_INO) {
-                    let _ = arbo.add_inode_from_parameters(
-                        LOCAL_CONFIG_FNAME.to_string(),
-                        LOCAL_CONFIG_INO,
-                        ROOT,
-                        FsEntry::File(vec![server_address.clone()]),
-                        0o777,
-                    );
-                }
-                let next_inode = arbo.iter().fold(0, |acc, (ino, _)| u64::max(acc, *ino)) + 1;
-                (arbo, next_inode)
+                let next_inode = arbo.iter().fold(Arbo::first_ino(), |acc, (ino, _)| u64::max(acc, *ino)) + 1;
+                (arbo, next_inode, Some(global_config_bytes))
             } else {
-                generate_arbo(&mount_point, &server_address).expect("unable to index folder")
+                let (arbo, next_inode) =
+                    generate_arbo(&mount_point, &server_address).expect("unable to index folder");
+                (arbo, next_inode, None)
             };
 
         let redundancy_target = global_config.redundancy.number;
@@ -219,6 +201,15 @@ impl Pod {
         #[cfg(target_os = "windows")]
         let disk_manager = Box::new(DummyDiskManager::new(&mount_point)?);
 
+        if let Some(global_config_bytes) = global_config_bytes {
+            if let Ok(perms) = Arbo::write_lock(&arbo, "Pod::new")?
+                .get_inode(GLOBAL_CONFIG_INO)
+                .map(|inode| inode.meta.perm)
+            {
+                let _ = disk_manager.new_file(&GLOBAL_CONFIG_FNAME.into(), perms);
+                disk_manager.write_file(&GLOBAL_CONFIG_FNAME.into(), &global_config_bytes, 0)?;
+            }
+        }
         let fs_interface = Arc::new(FsInterface::new(
             network_interface.clone(),
             disk_manager,
@@ -394,7 +385,7 @@ impl Pod {
             });
     }
 
-    pub fn stop(&self) -> Result<(), PodStopError> {
+    pub fn stop(self) -> Result<(), PodStopError> {
         // TODO
         // in actual state, all operations (request from network other than just pulling the asked files)
         // made after calling this function but before dropping the pod are undefined behavior.
@@ -411,6 +402,8 @@ impl Pod {
             .collect();
 
         self.send_files_when_stopping(&arbo, peers);
+        let arbo_bin = bincode::serialize(&*arbo).expect("can't serialize arbo to bincode");
+        drop(arbo);
 
         self.network_interface
             .to_network_message_tx
@@ -424,23 +417,36 @@ impl Pod {
             ))
             .expect("to_network_message_tx closed.");
 
-        let _ = self.fs_interface.disk.remove_file(&ARBO_FILE_FNAME.into());
-        self.fs_interface
-            .disk
-            .write_file(
-                &ARBO_FILE_FNAME.into(),
-                &bincode::serialize(&*arbo).expect("can't serialize arbo to bincode"),
-                0,
-            )
-            .map(|_| ())
-            .map_err(|e| PodStopError::ArboSavingFailed {
-                error_source: e.to_string(),
-            })?;
+        let Self {
+            name: _,
+            network_interface: _,
+            fs_interface: _,
+            mount_point,
+            peers,
+            #[cfg(target_os = "linux")]
+            fuse_handle,
+            #[cfg(target_os = "windows")]
+            fsp_host,
+            network_airport_handle,
+            peer_broadcast_handle,
+            new_peer_handle,
+            redundancy_worker_handle: _,
+            global_config: _,
+            local_config: _,
+        } = self;
 
-        *self.peers.write() = Vec::new(); // dropping PeerIPCs
-        self.network_airport_handle.abort();
-        self.new_peer_handle.abort();
-        self.peer_broadcast_handle.abort();
+        #[cfg(target_os = "linux")]
+        drop(fuse_handle);
+        #[cfg(target_os = "windows")]
+        drop(fsp_host);
+
+        fs::write(&mount_point.join(&ARBO_FILE_FNAME).inner, arbo_bin)
+            .map_err(|io| PodStopError::ArboSavingFailed { source: io })?;
+
+        *peers.write() = Vec::new(); // dropping PeerIPCs
+        network_airport_handle.abort();
+        new_peer_handle.abort();
+        peer_broadcast_handle.abort();
         Ok(())
     }
 

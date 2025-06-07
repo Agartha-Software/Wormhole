@@ -505,7 +505,7 @@ impl NetworkInterface {
                 Some(message) => message,
                 None => continue,
             };
-            log::debug!("From {}: {:?}", origin, content);
+            log::debug!("From {}: {}", origin, content);
             let content_name = content.to_string();
 
             let action_result = match content { // remove scary clone
