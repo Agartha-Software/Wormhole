@@ -52,7 +52,7 @@ async fn pod_value(args: &PodArgs) -> CliResult<(GlobalConfig, LocalConfig, Arc<
     let mut local_config: LocalConfig =
         LocalConfig::read(&local_path).unwrap_or(default_local_config(&args.name));
     if local_config.general.name != args.name {
-        //REVIEW - changer le nom sans prévenir l'utilisateur ou renvoyer une erreur ? Je pense qu'il serait mieux de renvoyer une erreur
+        //REVIEW - Change the name without notifying the user or return an error? I think it would be better to return an error
         local_config.general.name = args.name.clone();
     }
     if local_config.general.address != args.ip {

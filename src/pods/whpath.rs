@@ -137,7 +137,8 @@ impl WhPath {
         pth
     }
 
-    //NOTE - retire la partie demandée "/my/file/path/".remove("file/path") = "/my/"
+    /// Remove the requested part
+    /// “/my/file/path/”.remove(“file/path”) == “/my/”
     pub fn remove<T>(&mut self, delete_this_part: &T) -> &Self
     where
         T: JoinPath + ?Sized,
@@ -148,8 +149,8 @@ impl WhPath {
         self
     }
 
-    //NOTE - Modifier le path pour que celui corresponde au nouveau nom demandé
-    // Ne peut modifier que le dernier élément du path
+    /// Modify the path to match the new name.
+    /// Can only modify the last element of the path.
     pub fn rename<T>(&mut self, file_name: &T) -> &Self
     where
         T: JoinPath + ?Sized,
@@ -187,7 +188,7 @@ impl WhPath {
         self.kind = self.kind();
     }
 
-    //NOTE - changer le path pour "./path"
+    /// Change the path for "./path"
     pub fn set_relative(mut self) -> Self {
         if !self.is_empty() && !Self::is_relative(&self) {
             self.convert_path(PathType::Relative);
@@ -195,7 +196,7 @@ impl WhPath {
         self
     }
 
-    //NOTE - changer le path pour "/path"
+    /// Change the path for "/path"
     pub fn set_absolute(mut self) -> Self {
         if !self.is_empty() && !Self::is_absolute(&self) {
             self.convert_path(PathType::Absolute);
@@ -203,7 +204,7 @@ impl WhPath {
         self
     }
 
-    //NOTE - changer le path pour "path"
+    /// Change the path for "path"
     pub fn remove_prefix(mut self) -> Self {
         if !self.is_empty() && !Self::has_no_prefix(&self) {
             self.convert_path(PathType::NoPrefix);
@@ -227,7 +228,7 @@ impl WhPath {
         self.inner.is_empty()
     }
 
-    //NOTE - fonctions pour mettre ou non un / à la fin
+    /// Put or not a '/' at the end
     pub fn set_end(&mut self, end: bool) -> &Self {
         if end {
             self.add_last_slash();
@@ -237,7 +238,7 @@ impl WhPath {
         self
     }
 
-    //NOTE - true si le path demandé est dans le path original (comme tu gères des string c'est un startwith, en gros)
+    /// Return true if the requested path is in the original path
     pub fn is_in<T>(&self, segment: &T) -> bool
     where
         T: JoinPath + ?Sized,
@@ -245,7 +246,7 @@ impl WhPath {
         self.inner.starts_with(segment.as_str())
     }
 
-    //NOTE - donne le dernier élément du path
+    /// Give the last element of the path
     pub fn get_end(&self) -> String {
         let mut path = self.clone();
         path.remove_last_slash();
@@ -255,7 +256,7 @@ impl WhPath {
         }
     }
 
-    //NOTE - returns all but the last element
+    /// Returns all but the last element
     pub fn get_folder(&self) -> String {
         let mut path = self.clone();
         path.remove_last_slash();
@@ -291,14 +292,14 @@ impl WhPath {
             if !self.get_end().is_empty() {
                 elements.push(self.get_end());
             }
-            self.pop(); // REVIEW - replaced "remove_end()" with pop
+            self.pop();
         }
         let elements = elements.into_iter().rev().collect();
         elements
     }
 
-    ///!SECTION - Est-ce qu'il faudra modifier pour Windows en rajoutant le '\' ??
-    ///!SECTION- A modifier pour prendre en compte les fichiers cachés ?
+    //FIXME - Do I need to modify it for Windows by adding the '\'?
+    //FIXME - Do I need to modify it to take hidden files into account?
     fn remove_leading_slash(segment: &str) -> &str {
         let mut j = 0;
         let mut i = 0;
@@ -321,7 +322,7 @@ impl WhPath {
         return &segment[j..];
     }
 
-    // !SECTION - Est-ce qu'il faudra modifier pour Windows en rajoutant le '\' ??
+    //FIXME - Will I have to modify it for Windows by adding the ‘\’?
     fn add_last_slash(&mut self) -> &Self {
         if self.kind != PathType::Empty && self.inner.chars().last() != Some('/') {
             self.inner = format!("{}/", self.inner);
@@ -329,7 +330,7 @@ impl WhPath {
         return self;
     }
 
-    // !SECTION - Est-ce qu'il faudra modifier pour Windows en rajoutant le '\' ??
+    //FIXME - Will I have to modify it for Windows by adding the ‘\’?
     fn remove_last_slash(&mut self) -> &Self {
         if let Some(pos) = self.inner.rfind('/') {
             if pos == self.inner.len() - 1 {
@@ -359,7 +360,7 @@ impl WhPath {
         return self;
     }
 
-    // !SECTION - Est-ce qu'il faudra modifier pour Windows en rajoutant le '\' ??
+    //FIXME - Will I have to modify it for Windows by adding the ‘\’?
     fn convert_path(&mut self, pathtype: PathType) -> &Self {
         if pathtype == PathType::Empty || self.inner == String::new() {
             self.inner = String::new();

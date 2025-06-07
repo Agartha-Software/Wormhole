@@ -38,7 +38,7 @@ fn get_args(args: Vec<String>) -> (String, Vec<String>) {
 fn main() -> CliResult<()> {
     env_logger::init();
 
-    // Récupérer tous les arguments
+    // Recover all arguments
     let args: Vec<String> = env::args().collect();
     let (ip, cli_args) = get_args(args);
     let ip = ip.as_str();

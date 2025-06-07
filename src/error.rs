@@ -58,9 +58,9 @@ custom_error! {pub CliError
 
 #[derive(Debug)]
 pub enum CliSuccess {
-    /// Succès avec un simple message
+    /// Success with a simple message
     Message(String),
-    /// Succès avec un message et des données supplémentaires
+    /// Success with a message and additional data
     WithData { message: String, data: String },
 }
 
@@ -89,7 +89,7 @@ impl From<bincode::Error> for CliError {
     }
 }
 
-// Conversion pour tungstenite::Error
+// Conversion for tungstenite::Error
 impl From<tokio_tungstenite::tungstenite::Error> for CliError {
     fn from(err: tokio_tungstenite::tungstenite::Error) -> Self {
         CliError::BoxError {
