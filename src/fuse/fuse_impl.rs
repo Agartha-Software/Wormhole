@@ -4,7 +4,7 @@ use crate::pods::arbo::{FsEntry, Inode};
 use crate::pods::filesystem::attrs::SetAttrError;
 use crate::pods::filesystem::fs_interface::{FsInterface, SimpleFileType};
 use crate::pods::filesystem::make_inode::{CreateError, MakeInodeError};
-use crate::pods::filesystem::open::OpenError;
+use crate::pods::filesystem::open::{check_permissions, OpenError};
 use crate::pods::filesystem::read::ReadError;
 use crate::pods::filesystem::remove_inode::RemoveFileError;
 use crate::pods::filesystem::rename::RenameError;
@@ -610,6 +610,24 @@ impl Filesystem for FuseController {
             Ok(()) => reply.ok(),
             Err(err) => reply.error(err.to_libc()),
         }
+    }
+
+    fn access(&mut self, _req: &Request<'_>, ino: u64, mask: i32, reply: ReplyEmpty) {
+        let meta = match self.fs_interface.n_get_inode_attributes(ino) {
+            Ok(meta) => meta,
+            Err(err) => {
+                reply.error(err.to_libc());
+                return;
+            }
+        };
+
+        match check_permissions(mask, meta.perm) {
+            Ok(_) => reply.ok(),
+            Err(OpenError::MultipleAccessFlags) => reply.error(libc::EINVAL),
+            Err(OpenError::TruncReadOnly) => reply.error(libc::EACCES),
+            Err(OpenError::WrongPermissions) => reply.error(libc::EPERM),
+            Err(OpenError::WhError { source }) => reply.error(source.to_libc()),
+        };
     }
 }
 
