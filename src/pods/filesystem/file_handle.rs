@@ -24,7 +24,6 @@ pub type UUID = u64;
 
 #[derive(Debug)]
 pub struct FileHandle {
-    pub uuid: UUID,
     pub perm: AccessMode,
     pub no_atime: bool,
     pub direct: bool,
@@ -61,7 +60,6 @@ impl FileHandleManager {
         self.handles.insert(
             uuid,
             FileHandle {
-                uuid,
                 perm,
                 direct,
                 no_atime,

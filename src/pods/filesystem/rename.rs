@@ -83,7 +83,7 @@ impl FsInterface {
             .clone();
         let mut data = vec![];
         data.resize(meta.size as usize, 0u8);
-        self.read_file(source_ino, 0, &mut data)
+        self.get_file_data(source_ino, 0, &mut data)
             .map_err(|err| match err {
                 ReadError::WhError { source } => RenameError::WhError { source },
                 err => err.into(),

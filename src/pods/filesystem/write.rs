@@ -17,7 +17,6 @@ custom_error! {
     LocalWriteFailed{io: std::io::Error} = "Local write failed: {io}",
     NoFileHandle = "The file doesn't have a file handle",
     NoWritePermission = "The permissions doesn't allow to write",
-    BadFd = "The file handle and the inode id doesn't match",
 }
 
 fn check_file_handle<'a>(
@@ -28,21 +27,13 @@ fn check_file_handle<'a>(
         Some(&FileHandle {
             perm: AccessMode::Read,
             direct: _,
-            uuid: _,
             no_atime: _,
         }) => return Err(WriteError::NoWritePermission),
         Some(&FileHandle {
             perm: AccessMode::Execute,
             direct: _,
-            uuid: _,
             no_atime: _,
         }) => return Err(WriteError::NoWritePermission),
-        Some(&FileHandle {
-            perm: _,
-            direct: _,
-            uuid,
-            no_atime: _,
-        }) if uuid != file_handle_id => return Err(WriteError::BadFd),
         None => return Err(WriteError::NoFileHandle),
         Some(file_handle) => Ok(file_handle),
     }
