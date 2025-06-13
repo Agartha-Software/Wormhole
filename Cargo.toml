@@ -24,17 +24,20 @@ path = "src/bin/service.rs"
 [target.'cfg(windows)'.dependencies.winfsp]
 default-features = false
 features = ["stable", "system", "windows-rs-error", "handle-util"]
-version = "0.11.3"
+version = "0.11.4"
 
 [target.'cfg(windows)'.build-dependencies.winfsp]
 default-features = false
 features = ["stable", "windows-rs-error", "delayload"]
-version = "0.11.3"
+version = "0.11.4"
 
 [target.'cfg(unix)'.dependencies]
 fuser = "0.15.1"
 openat = "0.1.21"
 
+[patch.crates-io]
+winfsp = { git = 'https://github.com/syborg64/winfsp-rs.git', branch = "feat/drop-glue" }
+winfsp-sys = { git = 'https://github.com/syborg64/winfsp-rs.git', branch = "feat/drop-glue" }
 
 [target.'cfg(windows)'.dependencies]
 winfsp-sys = "0.2.2"
@@ -42,7 +45,7 @@ windows-permissions = "0.2.4"
 winapi = "0.3.9"
 ntapi = "0.4.1"
 nt-time = "0.10.6"
-windows = { version = "0.52.0", features = [
+windows = { version = "0.56.0", features = [
     "Win32_Foundation",
     "Win32_System_IO",
     "Win32",

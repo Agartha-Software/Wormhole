@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::{
-    file_handle::{FileHandleManager, UUID},
+    file_handle::{AccessMode, FileHandleManager, OpenFlags, UUID},
     fs_interface::{FsInterface, SimpleFileType},
     open::{check_permissions, OpenError},
 };
@@ -32,13 +32,14 @@ impl FsInterface {
         &self,
         parent_ino: u64,
         name: String,
-        flags: i32,
-        permissions: u16,
         kind: SimpleFileType,
+        flags: OpenFlags,
+        access: AccessMode,
+        permissions: u16,
     ) -> Result<(Inode, UUID), CreateError> {
         let inode = self.make_inode(parent_ino, name, permissions, kind)?;
 
-        let perm = check_permissions(flags, inode.meta.perm)?;
+        let perm = check_permissions(flags, access, inode.meta.perm)?;
 
         //TRUNC has no use on a new file so it can be removed
 

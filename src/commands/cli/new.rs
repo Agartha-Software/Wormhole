@@ -22,8 +22,12 @@ use crate::{
 
 fn mod_file_conf_content(path: WhPath, name: String, ip: &str) -> Result<(), CliError> {
     let local_path = path.clone().join(LOCAL_CONFIG_FNAME).inner;
-    let mut local_config: LocalConfig =
-        LocalConfig::read(&local_path).unwrap_or(default_local_config(&name));
+    let local_config = LocalConfig::read(&local_path).ok();
+    let mut local_config = if let Some(local_config) = local_config {
+        local_config
+    } else {
+        return Ok(());
+    };
     if local_config.general.name != name {
         //REVIEW - Change the name without notifying the user or return an error? I think it would be better to return an error
         local_config.general.name = name.clone();
@@ -55,10 +59,6 @@ pub fn new(ip: &str, mut args: PodArgs) -> CliResult<()> {
         args.path = WhPath::from(&env::current_dir()?.display().to_string());
     }
 
-    fs::read_dir(&args.path.inner)?;
-    if args.url == None {
-        is_new_wh_file_config(&args.path)?;
-    }
     mod_file_conf_content(args.path.clone(), args.name.clone(), &args.ip)?;
     let rt = Runtime::new().unwrap();
     rt.block_on(cli_messager(

@@ -20,6 +20,8 @@ use windows::Wdk::System::SystemServices::FILE_FS_SIZE_INFORMATION;
 use windows::Win32::System::IO::IO_STATUS_BLOCK;
 
 use super::{DiskManager, DiskSizeInfo};
+
+#[derive(Debug)]
 pub struct WindowsDiskManager {
     handle: Win32SafeHandle,
     mount_point: WhPath, // mountpoint on linux and mirror mountpoint on windows
@@ -128,7 +130,7 @@ impl DiskManager for WindowsDiskManager {
         self.get_volume_info_inner()
     }
 
-    fn log_arbo(&self, path: String) -> std::io::Result<()> {
+    fn log_arbo(&self, path: &WhPath) -> std::io::Result<()> {
         todo!()
     }
 

@@ -19,13 +19,13 @@ custom_error! {pub SetAttrError
     WhError{source: WhError} = "{source}",
     SizeNoPerm = "Edit size require to have the write permission on the file",
     InvalidFileHandle = "File handle not found in the open file handles",
-    SetFileSizeIoError { io: std::io::Error } = "Set file size disk side failed",
-    SetPermIoError { io: std::io::Error } = "Set file size disk side failed"
+    SetFileSizeIoError { io: std::io::Error } = "Set file size disk side failed: {io}",
+    SetPermIoError { io: std::io::Error } = "Set file size disk side failed : {io}"
 }
 
 custom_error! {pub AcknoledgeSetAttrError
     WhError{source: WhError} = "{source}",
-    SetFileSizeIoError {io: std::io::Error } = "Set file size disk side failed"
+    SetFileSizeIoError {io: std::io::Error } = "Set file size disk side failed: {io}"
 }
 
 impl FsInterface {

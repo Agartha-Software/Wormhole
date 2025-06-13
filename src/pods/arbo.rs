@@ -142,6 +142,10 @@ impl Inode {
 }
 
 impl Arbo {
+    pub fn first_ino() -> InodeId {
+        return 11;
+    }
+
     pub fn new() -> Self {
         let mut arbo: Self = Self {
             entries: HashMap::new(),
@@ -692,6 +696,7 @@ fn recover_serialized_arbo(parent_folder: &WhPath) -> Option<Arbo> {
     bincode::deserialize(&fs::read(parent_folder.join(ARBO_FILE_FNAME).to_string()).ok()?).ok()
 }
 
+#[cfg(target_os="linux")]
 fn index_folder_recursive(
     arbo: &mut Arbo,
     parent: InodeId,
@@ -756,7 +761,7 @@ pub fn generate_arbo(path: &WhPath, host: &String) -> io::Result<(Arbo, InodeId)
         Ok((arbo, next_ino))
     } else {
         let mut arbo = Arbo::new();
-        let mut next_ino: u64 = 11; // NOTE - will be the first registered inode after root
+        let mut next_ino = Arbo::first_ino(); // NOTE - will be the first registered inode after root
 
         #[cfg(target_os = "linux")]
         index_folder_recursive(&mut arbo, ROOT, &mut next_ino, path, host)?;
