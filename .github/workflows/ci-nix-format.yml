@@ -1,0 +1,46 @@
+name: NIX CI Format Rust
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+jobs:
+  check:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache Cargo registry & git
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache Cargo target
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-target-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Set up Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          nix_path: nixpkgs=channel:nixos-25.05
+
+      - name: Cachix connexion
+        uses: cachix/cachix-action@v14
+        with:
+          name: agartha-software
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
+      - name: Check Formatting
+        run: |
+          cachix watch-exec agartha-software -- nix develop --command cargo fmt --check
