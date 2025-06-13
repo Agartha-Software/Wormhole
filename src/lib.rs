@@ -12,6 +12,7 @@
 pub mod commands;
 pub mod config;
 pub mod data;
+pub mod error;
 pub mod network;
 pub mod pods;
 #[cfg(target_os = "windows")]

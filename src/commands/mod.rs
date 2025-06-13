@@ -1,12 +1,10 @@
-mod join;
-mod register;
-mod remove;
-mod templates;
-mod unregister;
+pub mod cli;
+pub mod cli_commands;
+pub mod default_global_config;
+pub mod default_local_config;
+pub mod service;
 
-pub use join::join;
-pub use register::register;
-pub use remove::remove;
-pub use remove::Mode;
-pub use templates::templates;
-pub use unregister::unregister;
+pub use cli_commands::Cli::{New, Start, Stop, Template};
+
+pub use default_global_config::default_global_config;
+pub use default_local_config::default_local_config;

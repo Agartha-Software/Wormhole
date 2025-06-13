@@ -1,64 +1,59 @@
 services:
   wormhole-base:
     &base-service
+    user: "root:root"
     build: .
     privileged: true
+    security_opt:
+      - seccomp:unconfined  # Désactive SELinux
     cap_add:
       - SYS_ADMIN
+      - DAC_OVERRIDE
+      - SYS_PTRACE
     devices:
       - '/dev/fuse'
     volumes:
-      - ./shared_mnt:/usr/src/wormhole/virtual:rwx
-    stdin_open: true
-    tty: true
+      - ./shared_mnt:/usr/src/wormhole/virtual:rwx,Z
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
     networks:
       - wormhole-net
+    stdin_open: true
+    tty: true
+    environment:
+      - VIRTUAL_FS_ROOT=/usr/src/wormhole/virtual
+      - RUST_BACKTRACE=1
+      - FUSE_GROUP_ID=root
+      - RUST_LOG=debug
+    command: "./wormhole-service"
+
   wormhole1:
     <<: *base-service
     container_name: w1
-    networks:
-      - wormhole-net
-    command: "./wormhole-service 0.0.0.0:8082 wormhole2:8082 wormhole3:8082 /usr/src/wormhole/virtual >> /var/log/wormhole.log 2>&1"
     volumes:
-      - ./shared_mnt1:/usr/src/wormhole/virtual:rwx
-    deploy:
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-        window: 120s
+      - ./shared_mnt1:/usr/src/wormhole/virtual:rwx,Z
+    ports:
+      - "8081:8081"
+    networks:
+      wormhole-net:
+        ipv4_address: 172.20.0.2
+    command: "./wormhole-service"
+
   wormhole2:
     <<: *base-service
     container_name: w2
-    networks:
-      - wormhole-net
-    command: "./wormhole-service 0.0.0.0:8082 wormhole1:8082 wormhole3:8082 /usr/src/wormhole/virtual >> /var/log/wormhole.log 2>&1"
     volumes:
-      - ./shared_mnt2:/usr/src/wormhole/virtual:rwx
-    depends_on:
-      - wormhole1
-    deploy:
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-        window: 120s
-  wormhole3:
-    <<: *base-service
-    container_name: w3
+      - ./shared_mnt2:/usr/src/wormhole/virtual:rwx,Z
+    ports:
+      - "8082:8081"
     networks:
-      - wormhole-net
-    command: "./wormhole-service 0.0.0.0:8082 wormhole1:8082 wormhole2:8082 /usr/src/wormhole/virtual >> /var/log/wormhole.log 2>&1"
-    volumes:
-      - ./shared_mnt3:/usr/src/wormhole/virtual:rwx
-    depends_on:
-      - wormhole2
-    deploy:
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-        window: 120s
+      wormhole-net:
+        ipv4_address: 172.20.0.3
+    command: "./wormhole-service"
+
 networks:
   wormhole-net:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1

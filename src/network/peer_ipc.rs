@@ -2,7 +2,6 @@ use futures_util::{
     stream::{SplitSink, SplitStream},
     StreamExt,
 };
-use log::warn;
 use tokio::{
     net::TcpStream,
     sync::mpsc::{self, UnboundedSender},
@@ -12,20 +11,21 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use crate::network::forward::{forward_read_to_sender, forward_receiver_to_write};
 
-use super::message::{Address, FromNetworkMessage, MessageContent};
+use super::message::{Address, FromNetworkMessage, MessageAndStatus};
 
+#[derive(Debug)]
 pub struct PeerIPC {
     pub address: Address,
     pub thread: tokio::task::JoinHandle<()>,
-    pub sender: mpsc::UnboundedSender<MessageContent>, // send a message to the peer
-                                                       // pub receiver: mpsc::Receiver<NetworkMessage>, // receive a message from the peer
+    pub sender: mpsc::UnboundedSender<MessageAndStatus>, // send a message to the peer
+                                                         // pub receiver: mpsc::Receiver<NetworkMessage>, // receive a message from the peer
 }
 
 impl PeerIPC {
     async fn work(
         stream: WebSocketStream<MaybeTlsStream<TcpStream>>,
         sender: mpsc::UnboundedSender<FromNetworkMessage>,
-        mut receiver: mpsc::UnboundedReceiver<MessageContent>,
+        mut receiver: mpsc::UnboundedReceiver<MessageAndStatus>,
         address: Address,
     ) {
         let (write, read) = stream.split();
@@ -39,7 +39,7 @@ impl PeerIPC {
         write: SplitSink<WebSocketStream<TcpStream>, Message>,
         read: SplitStream<WebSocketStream<TcpStream>>,
         sender: mpsc::UnboundedSender<FromNetworkMessage>,
-        mut receiver: mpsc::UnboundedReceiver<MessageContent>,
+        mut receiver: mpsc::UnboundedReceiver<MessageAndStatus>,
         address: Address,
     ) {
         tokio::join!(
@@ -77,7 +77,7 @@ impl PeerIPC {
         let thread = match tokio_tungstenite::connect_async("ws://".to_string() + &address).await {
             Ok((stream, _)) => tokio::spawn(Self::work(stream, nfa_tx, peer_recv, address.clone())),
             Err(e) => {
-                warn!("failed to connect to {}. Error: {}", address, e);
+                log::warn!("failed to connect to {}. Error: {}", address, e);
                 return None;
             }
         };
@@ -103,5 +103,12 @@ impl PeerIPC {
         .into_iter()
         .flatten()
         .collect()
+    }
+}
+
+impl Drop for PeerIPC {
+    fn drop(&mut self) {
+        log::debug!("Dropping PeerIPC {}", self.address);
+        self.thread.abort();
     }
 }

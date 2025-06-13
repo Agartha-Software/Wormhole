@@ -1,31 +1,42 @@
-use std::{cmp::min, ffi::OsString, io::ErrorKind, sync::Arc, time::UNIX_EPOCH};
-
-use ntapi::ntioapi::FILE_DIRECTORY_FILE;
-use winapi::{
-    shared::{
-        ntstatus::{STATUS_INVALID_DEVICE_REQUEST, STATUS_SUCCESS},
-        winerror::{
-            ERROR_ALREADY_EXISTS, ERROR_FILE_NOT_FOUND, ERROR_GEN_FAILURE, ERROR_INVALID_NAME,
-            ERROR_NOT_FOUND,
-        },
-    },
-    um::winnt::{
-        FILE_ALL_ACCESS, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_NORMAL, FILE_READ_ATTRIBUTES,
-        FILE_WRITE_ATTRIBUTES,
-    },
+use std::{
+    ffi::OsString,
+    io::{Error, ErrorKind},
+    sync::{Arc, RwLock},
+    time::SystemTime,
 };
-use windows::Win32::Foundation::{NTSTATUS, WIN32_ERROR};
+
+use nt_time::FileTime;
+use ntapi::ntioapi::FILE_DIRECTORY_FILE;
+use winapi::shared::{
+    ntstatus::STATUS_INVALID_DEVICE_REQUEST,
+    winerror::{ERROR_ALREADY_EXISTS, ERROR_GEN_FAILURE, ERROR_INVALID_NAME},
+};
+use windows::Win32::{
+    Foundation::{
+        NTSTATUS, STATUS_CANCELLED, STATUS_DEVICE_NOT_READY, STATUS_NOT_A_DIRECTORY,
+        STATUS_OBJECT_NAME_COLLISION, STATUS_OBJECT_NAME_NOT_FOUND, STATUS_PENDING,
+        STATUS_POSSIBLE_DEADLOCK, WIN32_ERROR,
+    },
+    Storage::FileSystem::{FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_DIRECTORY},
+};
 use winfsp::{
     filesystem::{DirInfo, FileInfo, FileSecurity, FileSystemContext, WideNameInfo},
     host::{FileSystemHost, VolumeParams},
-    U16CStr, U16CString,
+    FspError,
 };
-use winfsp_sys::FILE_ACCESS_RIGHTS;
+use winfsp_sys::{FspCleanupDelete, FILE_ACCESS_RIGHTS};
 
-use crate::pods::{
-    arbo::{Arbo, Metadata},
-    fs_interface::{FsInterface, SimpleFileType},
-    whpath::WhPath,
+use crate::{
+    error::WhError,
+    pods::{
+        arbo::{Arbo, Metadata},
+        filesystem::{
+            fs_interface::{FsInterface, SimpleFileType},
+            make_inode::MakeInode,
+            write::WriteError,
+        },
+        whpath::WhPath,
+    },
 };
 
 impl TryInto<WhPath> for &winfsp::U16CStr {
@@ -47,31 +58,26 @@ impl WhPath {
 
 impl Into<FileInfo> for Metadata {
     fn into(self) -> FileInfo {
+        (&self).into()
+    }
+}
+
+impl Into<FileInfo> for &Metadata {
+    fn into(self) -> FileInfo {
+        let attributes = match self.kind {
+            SimpleFileType::File => FILE_ATTRIBUTE_ARCHIVE,
+            SimpleFileType::Directory => FILE_ATTRIBUTE_DIRECTORY,
+        };
+        let now = FileTime::now();
         FileInfo {
-            file_attributes: 0,
+            file_attributes: attributes.0,
             reparse_tag: 0,
-            allocation_size: self.size,
-            file_size: self.size,
-            creation_time: self
-                .crtime
-                .duration_since(UNIX_EPOCH)
-                .map(|t| t.as_secs())
-                .unwrap_or(0),
-            last_access_time: self
-                .atime
-                .duration_since(UNIX_EPOCH)
-                .map(|t| t.as_secs())
-                .unwrap_or(0),
-            last_write_time: self
-                .mtime
-                .duration_since(UNIX_EPOCH)
-                .map(|t| t.as_secs())
-                .unwrap_or(0),
-            change_time: self
-                .ctime
-                .duration_since(UNIX_EPOCH)
-                .map(|t| t.as_secs())
-                .unwrap_or(0),
+            allocation_size: self.size as u64,
+            file_size: self.size as u64,
+            creation_time: FileTime::try_from(self.crtime).unwrap_or(now).to_raw(),
+            last_access_time: FileTime::try_from(self.atime).unwrap_or(now).to_raw(),
+            last_write_time: FileTime::try_from(self.mtime).unwrap_or(now).to_raw(),
+            change_time: FileTime::try_from(self.ctime).unwrap_or(now).to_raw(),
             index_number: self.ino,
             hard_links: 0,
             ea_size: 0,
@@ -79,37 +85,21 @@ impl Into<FileInfo> for Metadata {
     }
 }
 
-impl Into<FileInfo> for &Metadata {
-    fn into(self) -> FileInfo {
-        FileInfo {
-            file_attributes: 0,
-            reparse_tag: 0,
-            allocation_size: self.size,
-            file_size: self.size,
-            creation_time: self
-                .crtime
-                .duration_since(UNIX_EPOCH)
-                .map(|t| t.as_secs())
-                .unwrap_or(0),
-            last_access_time: self
-                .atime
-                .duration_since(UNIX_EPOCH)
-                .map(|t| t.as_secs())
-                .unwrap_or(0),
-            last_write_time: self
-                .mtime
-                .duration_since(UNIX_EPOCH)
-                .map(|t| t.as_secs())
-                .unwrap_or(0),
-            change_time: self
-                .ctime
-                .duration_since(UNIX_EPOCH)
-                .map(|t| t.as_secs())
-                .unwrap_or(0),
-            index_number: self.ino,
-            hard_links: 0,
-            ea_size: 0,
+impl Into<FspError> for &WhError {
+    fn into(self) -> FspError {
+        match self {
+            WhError::InodeNotFound => STATUS_OBJECT_NAME_NOT_FOUND.into(),
+            WhError::InodeIsNotADirectory => STATUS_NOT_A_DIRECTORY.into(),
+            WhError::DeadLock => STATUS_POSSIBLE_DEADLOCK.into(),
+            WhError::NetworkDied { called_from: _ } => STATUS_DEVICE_NOT_READY.into(),
+            WhError::WouldBlock { called_from: _ } => STATUS_PENDING.into(),
         }
+    }
+}
+
+impl Into<FspError> for WhError {
+    fn into(self) -> FspError {
+        (&self).into()
     }
 }
 
@@ -117,9 +107,35 @@ impl Into<FileInfo> for &Metadata {
 pub struct WormholeHandle(u64);
 
 pub struct FSPController {
+    pub volume_label: Arc<RwLock<String>>,
     pub fs_interface: Arc<FsInterface>,
     pub dummy_file: OsString,
     // pub provider: Arc<RwLock<Provider<WindowsFolderHandle>>>,
+}
+
+impl FSPController {
+    fn get_file_info_internal(
+        &self,
+        context: &WormholeHandle,
+        file_info: &mut winfsp::filesystem::FileInfo,
+    ) -> winfsp::Result<()> {
+        let arbo = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::get_file_info")?;
+
+        match arbo.get_inode(context.0) {
+            Ok(inode) => {
+                *file_info = (&inode.meta).into();
+                log::info!("ok:{:?}", file_info);
+                Ok(())
+            }
+            Err(err) => {
+                if err.kind() == ErrorKind::NotFound {
+                    Err(STATUS_OBJECT_NAME_NOT_FOUND.into())
+                } else {
+                    Err(winfsp::FspError::WIN32(ERROR_GEN_FAILURE))
+                }
+            }
+        }
+    }
 }
 
 pub fn mount_fsp(
@@ -128,23 +144,27 @@ pub fn mount_fsp(
 ) -> Result<FileSystemHost<'static>, std::io::Error> {
     let volume_params = VolumeParams::default();
 
-    println!("created volume params...");
+    log::debug!("created volume params...");
     let wormhole_context = FSPController {
+        volume_label: Arc::new(RwLock::new("wormhole_fs".into())),
         fs_interface,
         dummy_file: "dummy".into(), // dummy_file: (&path.clone().rename(&("dummy_file").to_string()).inner).into(),
     };
-    println!("creating host...");
+    log::debug!("creating host...");
     let mut host = FileSystemHost::new::<FSPController>(volume_params, wormhole_context)
         .map_err(|_| std::io::Error::new(ErrorKind::Other, "oh no!"))?;
     // .expect("FSHost::new");
-    println!("created host...");
+    log::debug!("created host...");
 
-    println!("mounting host...");
-    let _ = host.mount(&path.inner)?; //expect("winfsp: host.mount");
-                                      // let result = host.mount("./winfsp_mount")?;
-    println!("mounted host...");
+    log::debug!("mounting host @ {} ...", &path.inner);
+    let _ = host
+        .mount(&path.inner)
+        .ok()
+        .ok_or(Error::other("WinFSP::mount"));
+    // mount function throws the wrong error anyway so no point in inspecting it
+    log::debug!("mounted host...");
     host.start_with_threads(1)?;
-    println!("started host...");
+    log::debug!("started host...");
     Ok(host)
 }
 
@@ -170,20 +190,15 @@ impl FileSystemContext for FSPController {
             return Ok(security);
         }
 
-        // return Err(winfsp::FspError::WIN32(ERROR_NOT_FOUND));
-
-        //let arbo: &Arbo = &self.fs_interface.arbo.read();
-        //let arbo = Arbo::read_lock(&self.fs_interface.arbo, "get_security_by_name")?;
-
         let path: WhPath = file_name
             .try_into()
             .inspect_err(|e| log::error!("{}:{:?}", file_name.to_string_lossy(), e))?;
 
-        let file_type: SimpleFileType =
+        let file_info: FileInfo =
             (&Arbo::read_lock(&self.fs_interface.arbo, "get_security_by_name")?
                 .get_inode_from_path(&path)
                 .inspect_err(|e| log::error!("{}:{:?}", &path.inner, e))?
-                .entry)
+                .meta)
                 .into();
         // let mut descriptor_size = 0;
         // let option_sd = if security_descriptor.is_some() {
@@ -206,18 +221,10 @@ impl FileSystemContext for FSPController {
         //         }
         //     };
         // }
-        let mut attributes: u32 = FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES;
-        attributes |= match file_type {
-            SimpleFileType::File => FILE_ATTRIBUTE_NORMAL,
-            SimpleFileType::Directory => FILE_ATTRIBUTE_DIRECTORY,
-            // SimpleFileType::Link => FILE_ATTRIBUTE_REPARSE_POINT,
-            // SimpleFileType::Other => FILE_ATTRIBUTE_READONLY, // TODO: remove ?
-        };
         let sec = FileSecurity {
             reparse: false,
             sz_security_descriptor: 0,
-            // sz_security_descriptor: descriptor_size as u64,
-            attributes,
+            attributes: file_info.file_attributes,
         };
         log::info!("ok({:?})", sec);
         winfsp::Result::Ok(sec)
@@ -237,19 +244,9 @@ impl FileSystemContext for FSPController {
             log::error!("{:?}", e);
             e
         })?;
-        return match Arbo::read_lock(&self.fs_interface.arbo, "winfsp::open")?
-            .get_inode_from_path(&path)
-        {
+        match Arbo::read_lock(&self.fs_interface.arbo, "winfsp::open")?.get_inode_from_path(&path) {
             Ok(inode) => {
-                let mut attributes: u32 = FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES;
-                attributes |= match (&inode.entry).into() {
-                    SimpleFileType::File => FILE_ATTRIBUTE_NORMAL,
-                    SimpleFileType::Directory => FILE_ATTRIBUTE_DIRECTORY,
-                    // SimpleFileType::Link => FILE_ATTRIBUTE_REPARSE_POINT,
-                    // SimpleFileType::Other => FILE_ATTRIBUTE_READONLY, // TODO: remove ?
-                };
                 *file_info.as_mut() = (&inode.meta).into();
-                file_info.as_mut().file_attributes = attributes;
                 file_info.set_normalized_name(file_name.as_slice(), None);
                 log::info!("ok:{}", inode.id);
                 Ok(WormholeHandle(inode.id))
@@ -257,12 +254,13 @@ impl FileSystemContext for FSPController {
             Err(err) => {
                 log::error!("{:?}", err);
                 if err.kind() == ErrorKind::NotFound {
-                    Err(winfsp::FspError::WIN32(ERROR_FILE_NOT_FOUND))
+                    Err(STATUS_OBJECT_NAME_NOT_FOUND.into())
                 } else {
                     Err(winfsp::FspError::WIN32(ERROR_GEN_FAILURE))
                 }
             }
-        };
+        }
+        .inspect_err(|e| log::error!("open::{e}"))
     }
 
     fn close(&self, context: Self::FileContext) {
@@ -274,12 +272,12 @@ impl FileSystemContext for FSPController {
         &self,
         file_name: &winfsp::U16CStr,
         create_options: u32,
-        granted_access: FILE_ACCESS_RIGHTS,
-        file_attributes: winfsp_sys::FILE_FLAGS_AND_ATTRIBUTES,
-        security_descriptor: Option<&[std::ffi::c_void]>,
-        allocation_size: u64,
-        extra_buffer: Option<&[u8]>,
-        extra_buffer_is_reparse_point: bool,
+        _granted_access: FILE_ACCESS_RIGHTS,
+        _file_attributes: winfsp_sys::FILE_FLAGS_AND_ATTRIBUTES,
+        _security_descriptor: Option<&[std::ffi::c_void]>,
+        _allocation_size: u64,
+        _extra_buffer: Option<&[u8]>,
+        _extra_buffer_is_reparse_point: bool,
         file_info: &mut winfsp::filesystem::OpenFileInfo,
     ) -> winfsp::Result<Self::FileContext> {
         let file_type = match (create_options & FILE_DIRECTORY_FILE) != 0 {
@@ -299,41 +297,57 @@ impl FileSystemContext for FSPController {
 
         let parent = arbo
             .get_inode_from_path(&(&folder).into())
-            .map_err(|_| winfsp::FspError::WIN32(ERROR_NOT_FOUND))?
+            .map_err(|_| STATUS_OBJECT_NAME_NOT_FOUND)?
             .id;
 
         drop(arbo);
-
-        let mut attributes: u32 = FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES;
-        attributes |= match file_type {
-            SimpleFileType::File => FILE_ATTRIBUTE_NORMAL,
-            SimpleFileType::Directory => FILE_ATTRIBUTE_DIRECTORY,
-            // SimpleFileType::Link => FILE_ATTRIBUTE_REPARSE_POINT,
-            // SimpleFileType::Other => FILE_ATTRIBUTE_READONLY, // TODO: remove ?
-        };
-        let (id, inode) = self
+        match self
             .fs_interface
             .make_inode(parent, name, file_type)
-            .inspect_err(|e| log::error!("make_inode:{e}"))?;
-        *file_info.as_mut() = (&inode.meta).into();
-        file_info.as_mut().file_attributes = attributes;
-        file_info.set_normalized_name(file_name.as_slice(), None);
+            .inspect_err(|e| log::error!("make_inode:{e}"))
+        {
+            Ok(inode) => {
+                *file_info.as_mut() = (&inode.meta).into();
+                file_info.set_normalized_name(file_name.as_slice(), None);
 
-        Ok(WormholeHandle(id))
+                Ok(WormholeHandle(inode.id))
+            }
+            Err(MakeInode::AlreadyExist) => Err(STATUS_OBJECT_NAME_COLLISION.into()),
+            Err(MakeInode::LocalCreationFailed { io }) => Err(io.into()),
+            Err(MakeInode::ParentNotFolder) => Err(STATUS_NOT_A_DIRECTORY.into()),
+            Err(MakeInode::ParentNotFound) => Err(STATUS_OBJECT_NAME_NOT_FOUND.into()),
+            Err(MakeInode::WhError { source: _ }) => Err(STATUS_OBJECT_NAME_NOT_FOUND.into()),
+        }
+        .inspect_err(|e| log::error!("create::{e}"))
     }
 
     fn cleanup(
         &self,
         context: &Self::FileContext,
-        file_name: Option<&winfsp::U16CStr>,
+        _file_name: Option<&winfsp::U16CStr>,
         flags: u32,
     ) {
+        log::info!(
+            "winfsp::cleanup({:?}, {})",
+            context,
+            flags & FspCleanupDelete as u32 != 0
+        );
+
+        if flags & FspCleanupDelete as u32 != 0 {
+            let _ = self
+                .fs_interface
+                .remove_inode(context.0)
+                .inspect_err(|e| log::error!("cleanup::{e}"));
+            // cannot bubble out errors here
+            // context.0 = 0;
+            // TODO: invalidate the handle ?
+        }
     }
 
     fn flush(
         &self,
-        context: Option<&Self::FileContext>,
-        file_info: &mut winfsp::filesystem::FileInfo,
+        _context: Option<&Self::FileContext>,
+        _file_info: &mut winfsp::filesystem::FileInfo,
     ) -> winfsp::Result<()> {
         Ok(())
         //         Err(NTSTATUS(STATUS_INVALID_DEVICE_REQUEST).into())
@@ -346,31 +360,8 @@ impl FileSystemContext for FSPController {
     ) -> winfsp::Result<()> {
         log::info!("winfsp::get_file_info({:?})", context);
 
-        let arbo = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::get_file_info")?;
-        let path = arbo.get_path_from_inode_id(context.0)?;
-
-        return match arbo.get_inode(context.0) {
-            Ok(inode) => {
-                let mut attributes: u32 = FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES;
-                attributes |= match (&inode.entry).into() {
-                    SimpleFileType::File => FILE_ATTRIBUTE_NORMAL,
-                    SimpleFileType::Directory => FILE_ATTRIBUTE_DIRECTORY,
-                    // SimpleFileType::Link => FILE_ATTRIBUTE_REPARSE_POINT,
-                    // SimpleFileType::Other => FILE_ATTRIBUTE_READONLY, // TODO: remove ?
-                };
-                *file_info = (&inode.meta).into();
-                file_info.file_attributes = attributes;
-                log::info!("ok:{:?}", file_info);
-                Ok(())
-            }
-            Err(err) => {
-                if err.kind() == ErrorKind::NotFound {
-                    Err(winfsp::FspError::WIN32(ERROR_FILE_NOT_FOUND))
-                } else {
-                    Err(winfsp::FspError::WIN32(ERROR_GEN_FAILURE))
-                }
-            }
-        };
+        self.get_file_info_internal(context, file_info)
+            .inspect_err(|e| log::error!("get_file_info::{e}"))
     }
 
     fn get_security(
@@ -417,12 +408,11 @@ impl FileSystemContext for FSPController {
             context,
             marker.inner_as_cstr().map(|s| s.to_string_lossy())
         );
-        // return Ok(STATUS_SUCCESS as u32);
         let mut entries = if let Ok(entries) = self.fs_interface.read_dir(context.0) {
             entries
         } else {
-            log::error!("err:{ERROR_NOT_FOUND}");
-            return Err(WIN32_ERROR(ERROR_NOT_FOUND).into());
+            log::error!("err:ERROR_NOT_FOUND");
+            return Err(STATUS_OBJECT_NAME_NOT_FOUND.into());
         };
 
         let mut cursor = 0;
@@ -436,16 +426,7 @@ impl FileSystemContext for FSPController {
             let mut dirinfo = DirInfo::<255>::default(); // !todo
                                                          // let mut info = dirinfo.file_info_mut();
             dirinfo.set_name(&entry.name)?;
-
-            let mut attributes: u32 = FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES;
-            attributes |= match (&entry.entry).into() {
-                SimpleFileType::File => FILE_ATTRIBUTE_NORMAL,
-                SimpleFileType::Directory => FILE_ATTRIBUTE_DIRECTORY,
-                // SimpleFileType::Link => FILE_ATTRIBUTE_REPARSE_POINT,
-                // SimpleFileType::Other => FILE_ATTRIBUTE_READONLY, // TODO: remove ?
-            };
             *dirinfo.file_info_mut() = (&entry.meta).into();
-            dirinfo.file_info_mut().file_attributes = attributes;
             log::info!("dirinfo:{}:{:?}", &entry.name, dirinfo.file_info_mut());
             if !dirinfo.append_to_buffer(buffer, &mut cursor) {
                 break;
@@ -457,15 +438,41 @@ impl FileSystemContext for FSPController {
         // Ok(STATUS_SUCCESS as u32)
     }
 
-    // fn rename(
-    //     &self,
-    //     context: &Self::FileContext,
-    //     file_name: &winfsp::U16CStr,
-    //     new_file_name: &winfsp::U16CStr,
-    //     replace_if_exists: bool,
-    // ) -> winfsp::Result<()> {
-    //     Err(NTSTATUS(STATUS_INVALID_DEVICE_REQUEST).into())
-    // }
+    fn rename(
+        &self,
+        context: &Self::FileContext,
+        file_name: &winfsp::U16CStr,
+        new_file_name: &winfsp::U16CStr,
+        replace_if_exists: bool,
+    ) -> winfsp::Result<()> {
+        log::info!(
+            "winfsp::rename({}, {})",
+            file_name.display(),
+            new_file_name.display()
+        );
+
+        let path: WhPath = file_name.try_into().map_err(|e| {
+            log::error!("{:?}", e);
+            e
+        })?;
+        let (folder, name) = path.split_folder_file();
+        let parent = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::open")?
+            .get_inode_from_path(&(&folder).into())?
+            .id;
+
+        let new_path: WhPath = new_file_name.try_into().map_err(|e| {
+            log::error!("{:?}", e);
+            e
+        })?;
+        let (new_folder, new_name) = new_path.split_folder_file();
+        let new_parent = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::open")?
+            .get_inode_from_path(&(&new_folder).into())?
+            .id;
+
+        self.fs_interface
+            .rename(parent, new_parent, &name, &new_name)?;
+        Ok(())
+    }
 
     fn set_basic_info(
         &self,
@@ -474,37 +481,72 @@ impl FileSystemContext for FSPController {
         creation_time: u64,
         last_access_time: u64,
         last_write_time: u64,
-        last_change_time: u64,
+        change_time: u64,
         file_info: &mut winfsp::filesystem::FileInfo,
     ) -> winfsp::Result<()> {
         log::info!("winfsp::set_basic_info({:?})", context);
+        let mut meta = self
+            .fs_interface
+            .get_inode_attributes(context.0)
+            .map_err(|err| {
+                if err.kind() == ErrorKind::NotFound {
+                    STATUS_OBJECT_NAME_NOT_FOUND
+                } else {
+                    STATUS_CANCELLED
+                }
+            })?;
+        let now = SystemTime::now();
 
-        Ok(())
-        // Err(NTSTATUS(STATUS_INVALID_DEVICE_REQUEST).into())
+        if last_access_time != 0 {
+            meta.atime = FileTime::new(last_access_time)
+                .try_into()
+                .unwrap_or_else(|_| now.clone());
+        }
+        if creation_time != 0 {
+            meta.crtime = FileTime::new(creation_time)
+                .try_into()
+                .unwrap_or_else(|_| now.clone());
+        }
+        if last_write_time != 0 {
+            meta.mtime = FileTime::new(last_write_time)
+                .try_into()
+                .unwrap_or_else(|_| now.clone());
+        }
+        if change_time != 0 {
+            meta.ctime = FileTime::new(change_time)
+                .try_into()
+                .unwrap_or_else(|_| now.clone());
+        }
+
+        self.fs_interface.set_inode_meta(context.0, meta)?;
+
+        self.get_file_info_internal(context, file_info)
+            .inspect_err(|e| log::error!("set_file_info::{e}"))
     }
 
     fn set_delete(
         &self,
         context: &Self::FileContext,
-        file_name: &winfsp::U16CStr,
-        delete_file: bool,
+        _file_name: &winfsp::U16CStr,
+        _delete_file: bool, // handled by winfsp
     ) -> winfsp::Result<()> {
         log::info!("winfsp::set_delete({:?})", context);
-
         Ok(())
-        // Err(NTSTATUS(STATUS_INVALID_DEVICE_REQUEST).into())
     }
 
     fn set_file_size(
         &self,
         context: &Self::FileContext,
         new_size: u64,
-        set_allocation_size: bool,
+        _set_allocation_size: bool, // allocation is ignored;
         file_info: &mut winfsp::filesystem::FileInfo,
     ) -> winfsp::Result<()> {
         log::info!("winfsp::set_file_size({:?}, {new_size})", context);
+        let mut meta = self.fs_interface.get_inode_attributes(context.0)?;
+        meta.size = new_size;
+        *file_info = (&meta).into();
+        self.fs_interface.set_inode_meta(context.0, meta)?;
         Ok(())
-        // Err(NTSTATUS(STATUS_INVALID_DEVICE_REQUEST).into())
     }
 
     fn read(
@@ -514,12 +556,11 @@ impl FileSystemContext for FSPController {
         offset: u64,
     ) -> winfsp::Result<u32> {
         log::info!("winfsp::read({:?})", context);
-        let data = self
-            .fs_interface
-            .read_file(context.0, offset, buffer.len() as u64)?;
-        let len = min(data.len(), buffer.len());
-        buffer[0..len].copy_from_slice(&data[0..len]);
-        Ok(len as u32)
+        self.fs_interface
+            .read_file(context.0, offset as usize, buffer)
+            .map(|x| x as u32)
+            .inspect_err(|e| log::error!("read::{e}"))
+            .map_err(|e| e.into())
     }
 
     fn write(
@@ -532,8 +573,25 @@ impl FileSystemContext for FSPController {
         file_info: &mut winfsp::filesystem::FileInfo,
     ) -> winfsp::Result<u32> {
         log::info!("winfsp::write({:?})", context);
-        let size = self.fs_interface.write(context.0, buffer, offset)?;
-        Ok(size as u32)
+        let size = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::write")?
+            .get_inode(context.0)?
+            .meta
+            .size;
+        let offset = if write_to_eof { size } else { offset } as usize;
+        let buffer = if constrained_io {
+            &buffer[0..std::cmp::min(buffer.len(), size as usize)]
+        } else {
+            buffer
+        };
+        match self.fs_interface.write(context.0, buffer, offset) {
+            Ok(size) => {
+                self.get_file_info_internal(context, file_info)?;
+                Ok(size as u32)
+            }
+            Err(WriteError::WhError { source }) => Err(source.into()),
+            Err(WriteError::LocalWriteFailed { io }) => Err(io.into()),
+        }
+        .inspect_err(|e| log::error!("write::{e}"))
     }
 
     // fn get_dir_info_by_name(
@@ -547,22 +605,31 @@ impl FileSystemContext for FSPController {
     //     Err(NTSTATUS(STATUS_INVALID_DEVICE_REQUEST).into())
     // }
 
-    // fn get_volume_info(
-    //     &self,
-    //     out_volume_info: &mut winfsp::filesystem::VolumeInfo,
-    // ) -> winfsp::Result<()> {
-    //     log::info!("winfsp::get_volume_info");
-    //     Ok(())
-    //     // Err(NTSTATUS(STATUS_INVALID_DEVICE_REQUEST).into())
-    // }
+    fn get_volume_info(
+        &self,
+        out_volume_info: &mut winfsp::filesystem::VolumeInfo,
+    ) -> winfsp::Result<()> {
+        log::info!("winfsp::get_volume_info");
+        let info = self.fs_interface.disk.size_info()?;
+        out_volume_info.free_size = info.free_size as u64;
+        out_volume_info.total_size = info.total_size as u64;
+        out_volume_info.set_volume_label(&*self.volume_label.read().expect("winfsp::volume_label"));
+        Ok(())
+    }
 
-    // fn set_volume_label(
-    //     &self,
-    //     volume_label: &winfsp::U16CStr,
-    //     volume_info: &mut winfsp::filesystem::VolumeInfo,
-    // ) -> winfsp::Result<()> {
-    //     Err(NTSTATUS(STATUS_INVALID_DEVICE_REQUEST).into())
-    // }
+    fn set_volume_label(
+        &self,
+        volume_label: &winfsp::U16CStr,
+        volume_info: &mut winfsp::filesystem::VolumeInfo,
+    ) -> winfsp::Result<()> {
+        log::info!("winfsp::set_volume_info");
+        let info = self.fs_interface.disk.size_info()?;
+        volume_info.free_size = info.free_size as u64;
+        volume_info.total_size = info.total_size as u64;
+        *self.volume_label.write().expect("winfsp::volume_label") = volume_label.to_string_lossy();
+        volume_info.set_volume_label(&*self.volume_label.read().expect("winfsp::volume_label"));
+        Ok(())
+    }
 
     // fn get_stream_info(
     //     &self,
@@ -632,10 +699,10 @@ impl FileSystemContext for FSPController {
 
     fn control(
         &self,
-        context: &Self::FileContext,
-        control_code: u32,
-        input: &[u8],
-        output: &mut [u8],
+        _context: &Self::FileContext,
+        _control_code: u32,
+        _input: &[u8],
+        _output: &mut [u8],
     ) -> winfsp::Result<u32> {
         Err(NTSTATUS(STATUS_INVALID_DEVICE_REQUEST).into())
     }

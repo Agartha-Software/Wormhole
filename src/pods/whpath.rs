@@ -1,7 +1,9 @@
-use std::ffi::OsStr;
+use serde::{Deserialize, Serialize};
+use std::ffi::{OsStr, OsString};
+use std::str::FromStr;
 use std::{fmt, path::Path};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Eq, Hash)]
 pub enum PathType {
     Absolute,
     Relative,
@@ -9,7 +11,7 @@ pub enum PathType {
     Empty,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Eq, Hash)]
 pub struct WhPath {
     pub inner: String,
     pub kind: PathType,
@@ -22,6 +24,12 @@ pub trait JoinPath {
 impl JoinPath for OsStr {
     fn as_str(&self) -> &str {
         self.to_str().expect("OsStr conversion to str failed")
+    }
+}
+
+impl JoinPath for &str {
+    fn as_str(&self) -> &str {
+        self
     }
 }
 
@@ -81,6 +89,12 @@ where
     }
 }
 
+impl Into<OsString> for &WhPath {
+    fn into(self) -> OsString {
+        OsString::from_str(&self.inner).expect("infaillable")
+    }
+}
+
 impl WhPath {
     pub fn new() -> Self {
         WhPath {
@@ -89,8 +103,11 @@ impl WhPath {
         }
     }
 
-    //TODO - Faire un join pour de WhPath
-    //NOTE - join deux paths dans l'ordre indiqué, résoud le conflit si le second commence avec ./ ou / ou rien
+    /// Add a segment to the current WhPath. If the segment starts with a `/` or `./` or `../`, the leading slash is removed.
+    /// If the current WhPath is empty, the segment is added as is.
+    /// If the current WhPath is not empty, the segment is added after adding a slash at the end of the current WhPath.
+    /// # Examples
+    ///
     pub fn push<T>(&mut self, segment: &T) -> &Self
     where
         T: JoinPath + ?Sized,
@@ -101,8 +118,12 @@ impl WhPath {
         self
     }
 
-    //TODO - Faire un join pour de WhPath
-    //NOTE - join deux paths dans l'ordre indiqué, résoud le conflit si le second commence avec ./ ou / ou rien
+    /// Join the current path with a new segment. If the segment starts with a `/` or `./` or `../`, the leading slash is removed.
+    /// If the current path is empty, the segment is added as is.
+    /// If the current path is not empty, the segment is added after adding a slash at the end of the current path.
+    /// If the segment is hidden (`is_hidden()` return true), the segment is added as is, without adding a slash.
+    /// # Examples
+    ///
     pub fn join<T>(&self, segment: &T) -> Self
     where
         T: JoinPath + ?Sized,
@@ -110,12 +131,14 @@ impl WhPath {
         let mut pth = self.clone();
 
         pth.add_last_slash();
+
         let seg = Self::remove_leading_slash(segment.as_str());
         pth.inner = format!("{}{}", pth.inner, seg);
         pth
     }
 
-    //NOTE - retire la partie demandée "/my/file/path/".remove("file/path") = "/my/"
+    /// Remove the requested part
+    /// “/my/file/path/”.remove(“file/path”) == “/my/”
     pub fn remove<T>(&mut self, delete_this_part: &T) -> &Self
     where
         T: JoinPath + ?Sized,
@@ -126,8 +149,8 @@ impl WhPath {
         self
     }
 
-    //NOTE - Modifier le path pour que celui corresponde au nouveau nom demandé
-    // Ne peut modifier que le dernier élément du path
+    /// Modify the path to match the new name.
+    /// Can only modify the last element of the path.
     pub fn rename<T>(&mut self, file_name: &T) -> &Self
     where
         T: JoinPath + ?Sized,
@@ -165,7 +188,7 @@ impl WhPath {
         self.kind = self.kind();
     }
 
-    //NOTE - changer le path pour "./path"
+    /// Change the path for "./path"
     pub fn set_relative(mut self) -> Self {
         if !self.is_empty() && !Self::is_relative(&self) {
             self.convert_path(PathType::Relative);
@@ -173,7 +196,7 @@ impl WhPath {
         self
     }
 
-    //NOTE - changer le path pour "/path"
+    /// Change the path for "/path"
     pub fn set_absolute(mut self) -> Self {
         if !self.is_empty() && !Self::is_absolute(&self) {
             self.convert_path(PathType::Absolute);
@@ -181,7 +204,7 @@ impl WhPath {
         self
     }
 
-    //NOTE - changer le path pour "path"
+    /// Change the path for "path"
     pub fn remove_prefix(mut self) -> Self {
         if !self.is_empty() && !Self::has_no_prefix(&self) {
             self.convert_path(PathType::NoPrefix);
@@ -205,7 +228,7 @@ impl WhPath {
         self.inner.is_empty()
     }
 
-    //NOTE - fonctions pour mettre ou non un / à la fin
+    /// Put or not a '/' at the end
     pub fn set_end(&mut self, end: bool) -> &Self {
         if end {
             self.add_last_slash();
@@ -215,7 +238,7 @@ impl WhPath {
         self
     }
 
-    //NOTE - true si le path demandé est dans le path original (comme tu gères des string c'est un startwith, en gros)
+    /// Return true if the requested path is in the original path
     pub fn is_in<T>(&self, segment: &T) -> bool
     where
         T: JoinPath + ?Sized,
@@ -223,7 +246,7 @@ impl WhPath {
         self.inner.starts_with(segment.as_str())
     }
 
-    //NOTE - donne le dernier élément du path
+    /// Give the last element of the path
     pub fn get_end(&self) -> String {
         let mut path = self.clone();
         path.remove_last_slash();
@@ -233,7 +256,7 @@ impl WhPath {
         }
     }
 
-    //NOTE - returns all but the last element
+    /// Returns all but the last element
     pub fn get_folder(&self) -> String {
         let mut path = self.clone();
         path.remove_last_slash();
@@ -269,27 +292,37 @@ impl WhPath {
             if !self.get_end().is_empty() {
                 elements.push(self.get_end());
             }
-            self.pop(); // REVIEW - replaced "remove_end()" with pop
+            self.pop();
         }
         let elements = elements.into_iter().rev().collect();
         elements
     }
 
-    ///!SECTION - Est-ce qu'il faudra modifier pour Windows en rajoutant le '\' ??
-    ///!SECTION- A modifier pour prendre en compte les fichiers cachés ?
+    //FIXME - Do I need to modify it for Windows by adding the '\'?
+    //FIXME - Do I need to modify it to take hidden files into account?
     fn remove_leading_slash(segment: &str) -> &str {
+        let mut j = 0;
         let mut i = 0;
-        for c in segment.chars() {
-            if c == '.' || c == '/' {
-                i += 1;
+        let chars: Vec<char> = segment.chars().collect();
+        while i < chars.len() {
+            if chars[i] == '.' {
+                if i + 1 < chars.len() && (chars[i + 1] == '/' || chars[i + 1] == '.') {
+                    i += 1;
+                    j += 2;
+                } else {
+                    break;
+                }
+            } else if chars[i] == '/' {
+                j += 1;
             } else {
                 break;
             }
+            i += 1;
         }
-        return &segment[i..];
+        return &segment[j..];
     }
 
-    // !SECTION - Est-ce qu'il faudra modifier pour Windows en rajoutant le '\' ??
+    //FIXME - Should we modify it for Windows by adding the ‘\’?
     fn add_last_slash(&mut self) -> &Self {
         if self.kind != PathType::Empty && self.inner.chars().last() != Some('/') {
             self.inner = format!("{}/", self.inner);
@@ -297,7 +330,7 @@ impl WhPath {
         return self;
     }
 
-    // !SECTION - Est-ce qu'il faudra modifier pour Windows en rajoutant le '\' ??
+    //FIXME - Should we modify it for Windows by adding the ‘\’?
     fn remove_last_slash(&mut self) -> &Self {
         if let Some(pos) = self.inner.rfind('/') {
             if pos == self.inner.len() - 1 {
@@ -327,7 +360,7 @@ impl WhPath {
         return self;
     }
 
-    // !SECTION - Est-ce qu'il faudra modifier pour Windows en rajoutant le '\' ??
+    //FIXME - Should we modify it for Windows by adding the ‘\’?
     fn convert_path(&mut self, pathtype: PathType) -> &Self {
         if pathtype == PathType::Empty || self.inner == String::new() {
             self.inner = String::new();
@@ -356,7 +389,7 @@ mod tests {
         assert_eq!(WhPath::remove_leading_slash("./bar"), "bar");
         assert_eq!(WhPath::remove_leading_slash("/bar"), "bar");
         assert_eq!(WhPath::remove_leading_slash(""), "");
-        assert_eq!(WhPath::remove_leading_slash(".bar"), "bar");
+        assert_eq!(WhPath::remove_leading_slash(".bar"), ".bar");
     }
 
     #[test]
