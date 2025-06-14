@@ -11,15 +11,27 @@ pub async fn cli_messager(ip: &str, cli: Cli) -> CliResult<()> {
     let bytes = bincode::serialize(&cli)?;
     ws_stream.send(Message::Binary(bytes)).await?;
 
+    let mut has_error = false;
     while let Ok(Some(msg)) = ws_stream.try_next().await {
         if msg.is_text() {
             let response = msg.to_text()?;
-            log::info!("Service anwser: {response}");
+            if response.contains("CliError") {
+                has_error = true;
+                log::error!("Service answer: {response}");
+            } else {
+                log::info!("Service answer: {response}");
+            }
             break;
         }
     }
 
     ws_stream.close(None).await?;
     log::info!("Connection closed");
-    Ok(())
+    if has_error {
+        Err(crate::error::CliError::Message {
+            reason: "got an error".to_string(),
+        })
+    } else {
+        Ok(())
+    }
 }
