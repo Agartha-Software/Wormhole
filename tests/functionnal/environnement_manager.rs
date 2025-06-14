@@ -64,7 +64,7 @@ impl EnvironnementManager {
             .args(&[
                 "run".to_string(),
                 "--bin".to_string(),
-                "wormhole-service".to_string(),
+                "wormholed".to_string(),
                 ip.to_string(),
             ])
             .stdout(Self::generate_pipe(pipe_output))
@@ -97,7 +97,7 @@ impl EnvironnementManager {
             .args(&[
                 "run".to_string(),
                 "--bin".to_string(),
-                "wormhole-cli".to_string(),
+                "wormhole".to_string(),
                 "template".to_string(),
                 "-C".to_string(),
                 dir_path.to_string_lossy().to_string(),
@@ -114,7 +114,7 @@ impl EnvironnementManager {
                 let mut args = vec![
                     "run".to_string(),
                     "--bin".to_string(),
-                    "wormhole-cli".to_string(),
+                    "wormhole".to_string(),
                     service_ip.to_string(), // service ip
                     "new".to_string(),
                     network_name, // network name

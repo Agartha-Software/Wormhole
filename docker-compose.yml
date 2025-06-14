@@ -24,7 +24,7 @@ services:
       - RUST_BACKTRACE=1
       - FUSE_GROUP_ID=root
       - RUST_LOG=debug
-    command: "./wormhole-service"
+    command: "./wormholed"
 
   wormhole1:
     <<: *base-service
@@ -36,7 +36,7 @@ services:
     networks:
       wormhole-net:
         ipv4_address: 172.20.0.2
-    command: "./wormhole-service"
+    command: "./wormholed"
 
   wormhole2:
     <<: *base-service
@@ -48,7 +48,7 @@ services:
     networks:
       wormhole-net:
         ipv4_address: 172.20.0.3
-    command: "./wormhole-service"
+    command: "./wormholed"
 
 networks:
   wormhole-net:
