@@ -42,7 +42,7 @@ pub fn get_all_peers_address(peers: &Arc<RwLock<Vec<PeerIPC>>>) -> WhResult<Vec<
     Ok(peers
         .try_read_for(LOCK_TIMEOUT)
         .ok_or(WhError::WouldBlock {
-            called_from: "apply_redundancy: can't lock peers mutex".to_string(),
+            called_from: "get_all_peers_address: can't lock peers mutex".to_string(),
         })?
         .iter()
         .map(|peer| peer.address.clone())
@@ -474,6 +474,9 @@ impl NetworkInterface {
 
     pub fn register_new_node(&self, socket: Address, addr: Address) {
         self.edit_peer_ip(socket, addr);
+        self.to_redundancy_tx
+            .send(RedundancyMessage::CheckIntegrity)
+            .unwrap();
     }
 
     pub fn disconnect_peer(&self, addr: Address) -> io::Result<()> {
@@ -491,6 +494,9 @@ impl NetworkInterface {
                 hosts.retain(|h| *h != addr);
             }
         }
+        self.to_redundancy_tx
+            .send(RedundancyMessage::CheckIntegrity)
+            .unwrap();
         Ok(())
     }
 
