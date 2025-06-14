@@ -11,7 +11,7 @@ use std::env;
 
 use super::cli_messager;
 
-pub fn remove(ip: &str, mut args: RemoveArgs) -> CliResult<()> {
+pub fn remove(ip: &str, mut args: RemoveArgs) -> CliResult<String> {
     if args.name == "." {
         let p = env::current_dir()?;
         let path = WhPath::from(&p.display().to_string());

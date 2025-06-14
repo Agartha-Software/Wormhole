@@ -17,21 +17,21 @@ For users and other softwares, the files behaves like any normal files, while th
 The connection between the cli and the service is made by default on the address 127.0.0.1:8081 but can be modified by adding the new address in the command just after the binary (to be done for both)
 
 ```
-cargo run --bin wormhole-service
+cargo run --bin wormholed
 ^---------------------
 Build and run
 ```
 
 Create a new Wormhole network
 ```
-cargo run --bin wormhole-cli new pod_name -C virutal1/ -i 127.17.0.1:8081
+cargo run --bin wormhole new pod_name -C virutal1/ -i 127.17.0.1:8081
 ^---------------------       ^--                ^-----       ^---------------
 Build and run                 command            directory     host ip
 ```
 
 Join an existing Wormhole network
 ```
-cargo run --bin wormhole-cli new pod_name2 -C virutal2/ -i 127.17.0.2:8081 -u 127.17.0.1:8081 -a 127.17.0.3:8081 127.17.0.4:8081 127.17.0.5:8081
+cargo run --bin wormhole new pod_name2 -C virutal2/ -i 127.17.0.2:8081 -u 127.17.0.1:8081 -a 127.17.0.3:8081 127.17.0.4:8081 127.17.0.5:8081
 ^---------------------       ^--                ^-----       ^----------       ^-------------     ^-----------------------------------------------
 Build and run                 command            directory     host ip         ip of node to join     additionnal host
 ```
@@ -53,7 +53,7 @@ docker-compose up
 
 #### **2. Create a Network Template on w1**
 ```bash
-docker exec -it w1 ./wormhole-cli template
+docker exec -it w1 ./wormhole template
 ```
 - **Purpose**: Initializes a default network configuration in `shared_mnt1/.global_config.toml`.
 - **Expected Result**:
@@ -66,7 +66,7 @@ docker exec -it w1 ./wormhole-cli template
 
 #### **3. Create a New Pod on w1**
 ```bash
-docker exec -it w1 ./wormhole-cli new test
+docker exec -it w1 ./wormhole new test
 ```
 - **Purpose**: Creates a pod named `test` in `w1`'s network.
 - **Expected Events**:
@@ -89,7 +89,7 @@ docker inspect w1
 
 #### **5. Connect w2 to w1's Network**
 ```bash
-docker exec -it w2 ./wormhole-cli new test 172.20.0.3:8081
+docker exec -it w2 ./wormhole new test 172.20.0.3:8081
 ```
 - **Purpose**: Join `w2` to the `test` network hosted by `w1`.
 - **Expected Result**:
@@ -106,10 +106,10 @@ docker exec -it w2 ./wormhole-cli new test 172.20.0.3:8081
 docker-compose up
 
 # 2. Configure w1 as the primary node
-docker exec -it w1 ./wormhole-cli template
-docker exec -it w1 ./wormhole-cli new test1
+docker exec -it w1 ./wormhole template
+docker exec -it w1 ./wormhole new test1
 
 # 3. Configure w2 and connect it
 docker inspect w1 # → Get w1’s IP and port (e.g., GateWay:172.20.0.3)
-docker exec -it w2 ./wormhole-cli new test2 172.20.0.3:8081
+docker exec -it w2 ./wormhole new test2 172.20.0.3:8081
 ```

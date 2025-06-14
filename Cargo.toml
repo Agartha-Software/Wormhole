@@ -14,11 +14,11 @@ name = "wormhole"
 path = "src/lib.rs"
 
 [[bin]]
-name = "wormhole-cli"
+name = "wormhole"
 path = "src/bin/cli.rs"
 
 [[bin]]
-name = "wormhole-service"
+name = "wormholed"
 path = "src/bin/service.rs"
 
 [target.'cfg(windows)'.dependencies.winfsp]
@@ -87,3 +87,4 @@ assert_fs = "1.1.2"
 dir-diff = "0.3.3"
 serial_test = "3.2.0"
 tokio = { version = "1.38.0", default-features = false, features = ["process"] }
+lazy_static = "1.5.0"
