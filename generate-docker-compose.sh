@@ -42,7 +42,7 @@ for ((i=1; i<=SERVICE_COUNT; i++)); do
     container_name: w$i
     networks:
       - wormhole-net
-    command: "./wormhole-service /usr/src/wormhole/virtual 0.0.0.0:8082 $(for ((j=1; j<=SERVICE_COUNT; j++)); do if [[ $j -ne $i ]]; then echo -n "wormhole$j:8082 "; fi; done) >> /var/log/wormhole.log 2>&1"
+    command: "./wormhole-service 0.0.0.0:8081 >> /var/log/wormhole.log 2>&1"
     volumes:
       - ./shared_mnt$i:/usr/src/wormhole/virtual:rwx
 EOF

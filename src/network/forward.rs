@@ -4,18 +4,27 @@ use std::fmt::Debug;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::tungstenite::Message;
 
+use crate::error::WhError;
 use crate::network::message::MessageContent;
 
-use super::message::FromNetworkMessage;
+use super::message::{FromNetworkMessage, MessageAndStatus};
 
-pub async fn forward_receiver_to_write<T>(mut write: T, rx: &mut UnboundedReceiver<MessageContent>)
-where
+pub async fn forward_receiver_to_write<T>(
+    mut write: T,
+    rx: &mut UnboundedReceiver<MessageAndStatus>,
+) where
     T: Sink<Message> + Unpin,
     <T as Sink<Message>>::Error: Debug,
 {
-    while let Some(message) = rx.recv().await {
+    while let Some((message, status_tx)) = rx.recv().await {
         let serialized = bincode::serialize(&message).unwrap();
-        write.send(Message::binary(serialized)).await.unwrap();
+        let sent = write.send(Message::binary(serialized)).await;
+
+        status_tx.inspect(|tx| {
+            let _ = tx.send(sent.map_err(|_| WhError::NetworkDied {
+                called_from: "forward_receiver_to_write".to_string(),
+            }));
+        });
     }
 }
 
