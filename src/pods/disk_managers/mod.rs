@@ -5,8 +5,8 @@ use std::fmt::Debug;
 pub mod dummy_disk_manager;
 #[cfg(target_os = "linux")]
 pub mod unix_disk_manager;
-#[cfg(target_os = "windows")]
-pub mod windows_disk_manager;
+//#[cfg(target_os = "windows")]
+//pub mod windows_disk_manager;
 
 pub struct DiskSizeInfo {
     pub free_size: usize,

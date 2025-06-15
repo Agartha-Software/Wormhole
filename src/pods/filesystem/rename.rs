@@ -1,3 +1,5 @@
+use std::io;
+
 use custom_error::custom_error;
 
 use crate::{
@@ -243,6 +245,13 @@ impl FsInterface {
                 return Err(RenameError::DestinationExists);
             }
         }
+        self.rename_locally(parent, new_parent, name, new_name)
+            .or_else(|e| match e {
+                RenameError::LocalRenamingFailed { io } if io.kind() == io::ErrorKind::NotFound => {
+                    Ok(())
+                }
+                other => Err(other),
+            })?;
         self.network_interface
             .acknowledge_rename(parent, new_parent, name, new_name)?;
         Ok(())

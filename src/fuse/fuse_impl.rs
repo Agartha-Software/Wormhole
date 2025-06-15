@@ -6,6 +6,8 @@ use crate::pods::filesystem::fs_interface::{FsInterface, SimpleFileType};
 use crate::pods::filesystem::make_inode::{CreateError, MakeInodeError};
 use crate::pods::filesystem::open::{check_permissions, OpenError};
 use crate::pods::filesystem::read::ReadError;
+use crate::pods::filesystem::file_handle::{OpenFlags, AccessMode};
+
 use crate::pods::filesystem::remove_inode::RemoveFileError;
 use crate::pods::filesystem::rename::RenameError;
 use crate::pods::filesystem::write::WriteError;
@@ -355,7 +357,7 @@ impl Filesystem for FuseController {
             Some(kind) => kind,
             None => {
                 // If it's not a file or a directory it's not yet supported
-                reply.error(libc::ENOSYS);
+                reply.error(libc::EPERM);
                 return;
             }
         };
@@ -489,7 +491,8 @@ impl Filesystem for FuseController {
     }
 
     fn open(&mut self, _req: &Request<'_>, ino: u64, flags: i32, reply: fuser::ReplyOpen) {
-        match self.fs_interface.open(ino, flags) {
+        match AccessMode::from_libc(flags)
+            .and_then(|access| self.fs_interface.open(ino, OpenFlags::from_libc(flags), access)) {
             Ok(file_handle) => reply.opened(file_handle, flags as u32), // TODO - check flags ?,
             Err(OpenError::WhError { source }) => reply.error(source.to_libc()),
             Err(OpenError::MultipleAccessFlags) => reply.error(libc::EINVAL),
@@ -549,18 +552,23 @@ impl Filesystem for FuseController {
             Some(kind) => kind,
             None => {
                 // If it's not a file or a directory it's not yet supported
-                reply.error(libc::ENOSYS);
+                reply.error(libc::EPERM);
                 return;
             }
         };
 
-        match self.fs_interface.create(
-            parent,
-            name.to_string_lossy().to_string(),
-            flags,
-            permissions,
-            kind,
-        ) {
+        match AccessMode::from_libc(flags)
+            .map_err(|source| CreateError::OpenError { source })
+            .and_then(|access| {
+                self.fs_interface.create(
+                    parent,
+                    name.to_string_lossy().to_string(),
+                    kind,
+                    OpenFlags::from_libc(flags),
+                    access,
+                    permissions,
+                )
+            }) {
             Ok((inode, fh)) => reply.created(&TTL, &inode.meta.into(), 0, fh, flags as u32),
             Err(CreateError::MakeInode {
                 source: MakeInodeError::LocalCreationFailed { io },
@@ -625,7 +633,10 @@ impl Filesystem for FuseController {
             }
         };
 
-        match check_permissions(mask, meta.perm) {
+
+
+        match AccessMode::from_libc(mask)
+            .and_then(|access| check_permissions(OpenFlags::from_libc(mask), access, meta.perm)) {
             Ok(_) => reply.ok(),
             Err(OpenError::MultipleAccessFlags) => reply.error(libc::EINVAL),
             Err(OpenError::TruncReadOnly) => reply.error(libc::EACCES),
