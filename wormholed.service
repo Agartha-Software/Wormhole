@@ -3,7 +3,7 @@ Description=Wormhole Service Daemon
 After=network.target
 
 [Service]
-ExecStart=/usr/src/wormhole/wormhole-service 0.0.0.0:8081
+ExecStart=/usr/src/wormhole/wormholed 0.0.0.0:8081
 Restart=on-failure
 Environment=RUST_LOG=debug
 Environment=SERVICE_ADDRESS=0.0.0.0:8081

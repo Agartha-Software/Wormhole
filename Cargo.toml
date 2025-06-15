@@ -14,11 +14,11 @@ name = "wormhole"
 path = "src/lib.rs"
 
 [[bin]]
-name = "wormhole-cli"
+name = "wormhole"
 path = "src/bin/cli.rs"
 
 [[bin]]
-name = "wormhole-service"
+name = "wormholed"
 path = "src/bin/service.rs"
 
 [target.'cfg(windows)'.dependencies.winfsp]
