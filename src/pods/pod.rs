@@ -335,6 +335,7 @@ impl Pod {
                     file: ino,
                     reason: e.to_string(),
                 })?;
+        let file_content = Arc::new(file_content);
 
         for host in possible_hosts {
             let (status_tx, mut status_rx) = tokio::sync::mpsc::unbounded_channel::<WhResult<()>>();
