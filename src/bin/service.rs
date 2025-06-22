@@ -39,6 +39,7 @@ type CliTcpWriter =
     SplitSink<WebSocketStream<tokio::net::TcpStream>, tokio_tungstenite::tungstenite::Message>;
 
 async fn handle_cli_command(
+    ip: &IpP,
     mut pods: HashMap<String, Pod>,
     command: Cli,
     mut writer: CliTcpWriter,
@@ -201,9 +202,13 @@ async fn handle_cli_command(
                 Err(CliError::PodNotFound)
             }
         }
-        _ => Err(CliError::InvalidCommand),
+        Cli::Template(_template_arg) => todo!(),
+        Cli::Inspect => todo!(),
+        Cli::Status => Ok(CliSuccess::Message(format!("{}", ip.to_string()))),
+        Cli::Interrupt => todo!(),
     };
-    let string_output = response_command.map_or_else(|e| e.to_string(), |a| a.to_string());
+    let string_output =
+        response_command.map_or_else(|e| format!("CliError: {:?}", e), |a| a.to_string());
     match writer.send(Message::Text(string_output)).await {
         Ok(()) => log::debug!("Sent answer to cli"),
         Err(err) => log::error!("Message can't send to cli: {}", err),
@@ -255,23 +260,44 @@ async fn get_cli_command(stream: tokio::net::TcpStream) -> WhResult<(Cli, CliTcp
     Ok((cmd, writer))
 }
 
+const MAX_TRY_PORTS: u8 = 10;
+const MAX_PORT: u16 = 65535;
 /// Listens for CLI calls and launch one tcp instance per cli command
+/// if `specific_ip` is not given, will try all ports starting from 8081 to 9999, incrementing until success
+/// if `specific_ip` is given, will try the given ip and fail on error.
 async fn start_cli_listener(
     mut pods: HashMap<String, Pod>,
-    ip: String,
+    specific_ip: Option<String>,
     mut interrupt_rx: UnboundedReceiver<()>,
 ) -> HashMap<String, Pod> {
-    let mut ip: IpP = IpP::try_from(&ip).expect("start_cli_listener: invalid ip provided");
-    println!("Starting CLI's TcpListener on {}", ip.to_string());
+    let mut ip: IpP = IpP::try_from(&specific_ip.clone().unwrap_or("127.0.0.1:8081".to_string()))
+        .expect("start_cli_listener: invalid ip provided");
+    log::debug!("Starting CLI's TcpListener on {}", ip.to_string());
 
+    let mut port_tries_count = 0;
     let mut listener = TcpListener::bind(&ip.to_string()).await;
     while let Err(e) = listener {
+        if let Some(_) = specific_ip {
+            log::error!(
+                "The specified address ({}) not available due to {}\nThe service is not starting.",
+                ip.to_string(),
+                e
+            );
+            panic!("Unable to start cli_listener");
+        }
+        if ip.port >= MAX_PORT {
+            panic!("Unable to start cli_listener (not testing ports above {MAX_PORT})");
+        }
+        if port_tries_count > MAX_TRY_PORTS {
+            panic!("Unable to start cli_listener (tested {MAX_TRY_PORTS}/{MAX_TRY_PORTS})");
+        }
         log::error!(
             "Address {} not available due to {}, switching...",
             ip.to_string(),
             e
         );
         ip.set_port(ip.port + 1);
+        port_tries_count += 1;
         log::debug!("Starting CLI's TcpListener on {}", ip.to_string());
         listener = TcpListener::bind(&ip.to_string()).await;
     }
@@ -289,7 +315,7 @@ async fn start_cli_listener(
                 continue;
             }
         };
-        pods = handle_cli_command(pods, command, writer).await;
+        pods = handle_cli_command(&ip, pods, command, writer).await;
     }
     pods
 }
@@ -303,18 +329,14 @@ async fn main() {
 
     #[cfg(target_os = "windows")]
     match winfsp_init() {
-        Ok(_token) => println!("got fsp token!"),
+        Ok(_token) => log::debug!("got fsp token!"),
         Err(err) => {
-            println!("fsp error: {:?}", err);
+            log::error!("fsp error: {:?}", err);
             std::process::exit(84)
         }
     }
 
-    let ip: String = env::args()
-        .nth(1)
-        .unwrap_or("127.0.0.1:8081".to_string())
-        .into();
-    println!("Starting service on {}", ip);
+    let ip = env::args().nth(1);
 
     let terminal_handle = tokio::spawn(terminal_watchdog(interrupt_tx));
     let cli_airport = tokio::spawn(start_cli_listener(pods, ip, interrupt_rx));

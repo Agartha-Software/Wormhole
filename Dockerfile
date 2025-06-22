@@ -3,7 +3,7 @@ FROM rust:1.78.0-buster AS builder
 RUN apt update && apt install -y pkg-config libfuse3-dev
 WORKDIR /usr/src/wormhole
 COPY . .
-RUN cargo build --bin wormhole-service && cargo build --bin wormhole-cli
+RUN cargo build --bin wormholed && cargo build --bin wormhole
 
 RUN mkdir -p /usr/src/wormhole/virtual && \
     chmod -R 775 /usr/src/wormhole/virtual
@@ -15,10 +15,10 @@ RUN apt-get update && \
     echo 'user_allow_other' >> /etc/fuse.conf
 
 WORKDIR /usr/src/wormhole
-COPY --from=builder /usr/src/wormhole/target/debug/wormhole-service .
-COPY --from=builder /usr/src/wormhole/target/debug/wormhole-cli .
-COPY wormhole-service.service /etc/systemd/system/
+COPY --from=builder /usr/src/wormhole/target/debug/wormholed .
+COPY --from=builder /usr/src/wormhole/target/debug/wormhole .
+COPY wormholed.service /etc/systemd/system/
 
-RUN systemctl enable wormhole-service.service
+RUN systemctl enable wormholed.service
 
 CMD ["/lib/systemd/systemd"]

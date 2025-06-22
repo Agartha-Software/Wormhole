@@ -23,6 +23,8 @@ pub enum Cli {
     GetHosts(GetHostsArgs),
     /// Tree the folder structure from the given path and show hosts for each file
     Tree(TreeArgs),
+    /// Checks that the service is working (should print it's ip)
+    Status,
     /// Remove a pod from its network
     Remove(RemoveArgs),
     /// Apply a new configuration to a pod

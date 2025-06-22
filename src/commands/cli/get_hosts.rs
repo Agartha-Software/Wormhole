@@ -11,7 +11,7 @@ use crate::{
 
 use super::cli_messager;
 
-pub fn get_hosts(ip: &str, args: GetHostsArgs) -> CliResult<()> {
+pub fn get_hosts(ip: &str, args: GetHostsArgs) -> CliResult<String> {
     let rt = Runtime::new().unwrap();
     rt.block_on(cli_messager(ip, Cli::GetHosts(args)))
 }

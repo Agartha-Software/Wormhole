@@ -1,4 +1,5 @@
 extern crate wormhole;
+use serial_test::parallel;
 use std::{
     collections::HashMap,
     time::{Duration, SystemTime},
@@ -39,6 +40,7 @@ fn arbo_values(inode: &Inode, expected_result: Inode) {
     assert!(now.duration_since(inode.meta.crtime).unwrap() < tolerance);
 }
 
+#[parallel]
 #[test]
 fn test_inserting_and_retreiving_files() {
     let mut arbo = Arbo::new();
