@@ -95,6 +95,12 @@ impl Into<OsString> for &WhPath {
     }
 }
 
+impl AsRef<Path> for WhPath {
+    fn as_ref(&self) -> &Path {
+        Path::new(&self.inner)
+    }
+}
+
 impl WhPath {
     pub fn new() -> Self {
         WhPath {

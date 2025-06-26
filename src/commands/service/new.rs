@@ -23,6 +23,7 @@ pub async fn new(args: PodArgs) -> CliResult<Pod> {
     )
     .await
     .map_err(|e| CliError::PodCreationFailed { reason: e })
+    .inspect_err(|e| log::error!("Pod creation failed: {}", e))
 }
 
 fn add_hosts(
