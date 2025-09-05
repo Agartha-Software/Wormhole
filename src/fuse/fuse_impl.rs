@@ -626,7 +626,7 @@ pub fn mount_fuse(
     let options = vec![
         MountOption::RW,
         // MountOption::DefaultPermissions,
-        MountOption::FSName("wormhole".to_string()),
+        MountOption::FSName(format!("wormhole@{}", mount_point.get_end())),
     ];
     let ctrl = FuseController { fs_interface };
 

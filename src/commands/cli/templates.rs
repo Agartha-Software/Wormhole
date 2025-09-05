@@ -13,9 +13,8 @@ use crate::pods::whpath::WhPath;
 pub fn templates(path: &WhPath, name: &str) -> CliResult<String> {
     let global_config = default_global_config();
     let local_config = default_local_config(name);
-    path.clone().set_absolute();
-    fs::read_dir(path.inner.clone()).map(|_| ())?;
-    local_config.write(path.join(LOCAL_CONFIG_FNAME).inner)?;
-    global_config.write(path.join(GLOBAL_CONFIG_FNAME).inner)?;
+    fs::read_dir(path).map(|_| ())?;
+    local_config.write(&path.join(LOCAL_CONFIG_FNAME))?;
+    global_config.write(&path.join(GLOBAL_CONFIG_FNAME))?;
     Ok("ok".to_string())
 }

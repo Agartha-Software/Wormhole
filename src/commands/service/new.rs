@@ -9,12 +9,12 @@ use crate::{
         whpath::WhPath,
     },
 };
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 pub async fn new(args: PodArgs) -> CliResult<Pod> {
     let (global_config, local_config, server, mount_point) = pod_value(&args).await?;
     Pod::new(
-        args.name.clone(),
+        local_config.general.name.clone(),
         global_config,
         local_config.clone(),
         mount_point,
@@ -49,26 +49,58 @@ fn add_hosts(
 }
 
 async fn pod_value(args: &PodArgs) -> CliResult<(GlobalConfig, LocalConfig, Arc<Server>, WhPath)> {
-    let local_path = args.path.clone().join(LOCAL_CONFIG_FNAME).inner;
+    log::info!("args: {args:?}");
+    let path = args
+        .mountpoint
+        .as_ref()
+        .and_then(|path| {
+            let (parent, folder) = path.split_folder_file();
+            std::fs::canonicalize(&parent)
+                .ok()
+                .map(|p| PathBuf::from(p).join(folder))
+        })
+        .ok_or(CliError::InvalidArgument {
+            arg: "path".to_owned(),
+        })?;
+
+    log::info!("canonical: {:?}", path);
+    // let pod_name = args.name.clone().ok_or(||CliError::PodNotFound).or_else(|_| match std::fs::canonicalize(&path).map(|file| {
+    //     file.file_name()
+    //     .and_then(|f| f.to_str())
+    //     .map(|f| f.to_owned())
+    // }) {
+    //     Ok(Some(name)) => Ok(name.to_owned()),
+    //     e => {
+    //         Err(CliError::InvalidArgument {
+    //             arg: format!("name: {e:?}"),
+    //         })
+    //     }
+    // })?;
+    // log::info!("name: {pod_name}");
+    let address = "0.0.0.0:".to_owned() + &args.port;
+    let local_cfg_path = path.join(LOCAL_CONFIG_FNAME);
+    let global_cfg_path = path.join(GLOBAL_CONFIG_FNAME);
+
+    // return Err(CliError::BincodeError);
+
     let mut local_config: LocalConfig =
-        LocalConfig::read(&local_path).unwrap_or(default_local_config(&args.name));
+        LocalConfig::read(&local_cfg_path).unwrap_or(default_local_config(&args.name));
     if local_config.general.name != args.name {
         //REVIEW - Change the name without notifying the user or return an error? I think it would be better to return an error
         local_config.general.name = args.name.clone();
     }
-    if local_config.general.address != args.ip {
-        local_config.general.address = args.ip.clone();
+    if local_config.general.address != address {
+        local_config.general.address = address;
     }
     let server: Arc<Server> = Arc::new(Server::setup(&local_config.general.address).await?);
 
-    let global_path = args.path.clone().join(GLOBAL_CONFIG_FNAME).inner;
     let global_config: GlobalConfig =
-        GlobalConfig::read(global_path).unwrap_or(default_global_config());
+        GlobalConfig::read(global_cfg_path).unwrap_or(default_global_config());
     let global_config = add_hosts(
         global_config,
         args.url.clone().unwrap_or("".to_string()),
-        args.additional_hosts.clone().unwrap_or(vec![]),
+        args.additional_hosts.clone(),
     );
 
-    Ok((global_config, local_config, server, args.path.clone()))
+    Ok((global_config, local_config, server, path.as_os_str().into()))
 }

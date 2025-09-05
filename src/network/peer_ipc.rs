@@ -74,6 +74,7 @@ impl PeerIPC {
     ) -> Option<Self> {
         let (peer_send, peer_recv) = mpsc::unbounded_channel();
 
+        log::trace!("connecting to ws://{address}");
         let thread = match tokio_tungstenite::connect_async("ws://".to_string() + &address).await {
             Ok((stream, _)) => tokio::spawn(Self::work(stream, nfa_tx, peer_recv, address.clone())),
             Err(e) => {

@@ -47,7 +47,7 @@ custom_error! {pub CliError
     FileConfigName{name: String} = "This isn't a valid configuration's file: {name}",
 
     PodCreationFailed{reason: io::Error} = "Pod creation failed: {reason}",
-    PodRemovalFailed{name: String} = "Pod removal failed, a pod with this name {name} doens't exist",
+    PodRemovalFailed{name: String} = "Pod removal of {name} failed",
 
     InvalidConfig{file: String} = "Configuration file {file} is missing or invalid",
     InvalidCommand = "Unrecognized command",

@@ -4,23 +4,17 @@
 
 use tokio::runtime::Runtime;
 
+use crate::commands::cli::path_or_wd;
 use crate::commands::cli_commands::{Cli, RemoveArgs};
 use crate::error::CliResult;
-use crate::pods::whpath::WhPath;
-use std::env;
 
 use super::cli_messager;
 
 pub fn remove(ip: &str, mut args: RemoveArgs) -> CliResult<String> {
-    if args.name == "." {
-        let p = env::current_dir()?;
-        let path = WhPath::from(&p.display().to_string());
-        args.path = if args.path.inner != "." {
-            path.join(&args.path)
-        } else {
-            path
-        }
+    if args.name.is_none() {
+        args.path = Some(path_or_wd(args.path)?)
     }
+
     let rt = Runtime::new().unwrap();
     rt.block_on(cli_messager(ip, Cli::Remove(args)))
 }
