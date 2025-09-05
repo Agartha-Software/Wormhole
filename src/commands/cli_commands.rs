@@ -23,6 +23,8 @@ pub enum Cli {
     GetHosts(GetHostsArgs),
     /// Tree the folder structure from the given path and show hosts for each file
     Tree(TreeArgs),
+    /// Checks that the service is working (should print it's ip)
+    Status,
     /// Remove a pod from its network
     Remove(RemoveArgs),
     /// Apply a new configuration to a pod
@@ -40,39 +42,43 @@ pub struct PodConf {
     #[arg(long, short, default_value = ".")]
     pub name: String,
     /// Path of the pod
-    #[arg(long, short = 'C', default_value = ".")]
+    #[arg(long, short, default_value = ".")]
     pub path: WhPath,
     /// Names of all configuration files that you want to restore
     #[arg(long, short, default_values_t = [String::from(LOCAL_CONFIG_FNAME), String::from(GLOBAL_CONFIG_FNAME)])]
     pub files: Vec<String>,
 }
 
-#[derive(Debug, clap::Args, Serialize, Deserialize)]
+#[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
 #[command(version, about, long_about = None)]
 pub struct GetHostsArgs {
     /// Name of the pod
+    #[arg(long, short)]
     pub name: String,
     /// File path from the root of the wh folder
+    #[arg(long, short)]
     pub path: WhPath,
 }
 
-#[derive(Debug, clap::Args, Serialize, Deserialize)]
+#[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
 #[command(version, about, long_about = None)]
 pub struct TreeArgs {
     /// Name of the pod
+    #[arg(long, short)]
     pub name: String,
     /// Root of the tree
-    #[arg(default_value = "/")]
+    #[arg(long, short, default_value = "/")]
     pub path: WhPath,
 }
 
-#[derive(Debug, clap::Args, Serialize, Deserialize)]
+#[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
 #[command(version, about, long_about = None)]
 pub struct PodArgs {
     /// Name of the pod
+    #[arg(long, short)]
     pub name: String,
     /// Change to DIRECTORY before doing anything
-    #[arg(long, short = 'C', default_value = ".")]
+    #[arg(long, short, default_value = ".")]
     pub path: WhPath,
     /// Modify the default ip address of the Pod
     #[arg(long, short, default_value = "127.17.0.1:8081")]
@@ -85,25 +91,25 @@ pub struct PodArgs {
     pub additional_hosts: Option<Vec<String>>,
 }
 
-#[derive(Debug, clap::Args, Serialize, Deserialize)]
+#[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
 #[command(version, about, long_about = None)]
 pub struct StatusPodArgs {
     /// Name of the pod for updating status pod. If the name equal 'None' the name will be read from the current directory
     #[arg(long, short, default_value = ".")]
     pub name: String,
     /// Path is used uniquely if the pod name is 'None'
-    #[arg(long, short = 'C', default_value = ".")]
+    #[arg(long, short, default_value = ".")]
     pub path: WhPath,
 }
 
-#[derive(Debug, clap::Args, Serialize, Deserialize)]
+#[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
 #[command(version, about, long_about = None)]
 pub struct TemplateArg {
     /// Name of the network to create
     #[arg(long, short, default_value = "default")]
     pub name: String,
     /// Change to DIRECTORY before doing anything
-    #[arg(long, short = 'C', default_value = ".")]
+    #[arg(long, short, default_value = ".")]
     pub path: WhPath,
 }
 
@@ -131,12 +137,7 @@ pub struct RemoveArgs {
     #[arg(long, short, required_unless_present = "path", conflicts_with = "path")]
     pub name: String,
     /// Change to DIRECTORY before doing anything
-    #[arg(
-        long,
-        short = 'C',
-        required_unless_present = "name",
-        conflicts_with = "name"
-    )]
+    #[arg(long, short, required_unless_present = "name", conflicts_with = "name")]
     pub path: WhPath,
     /// Mode for pod removal
     #[arg(long, default_value = "simple")]

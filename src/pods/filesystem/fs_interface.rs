@@ -193,7 +193,6 @@ impl FsInterface {
             }
         };
         drop(arbo);
-
         let _created = self.disk.new_file(&path, perms);
         let status = self
             .disk

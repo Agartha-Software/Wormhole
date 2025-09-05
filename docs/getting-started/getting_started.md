@@ -8,13 +8,18 @@ Wormhole uses two binaries:
 
  Wormhole being still in heavy developpement, the project still require to build the project from source.
 
-## Prerequisites
+## Install
+See the [install guide](docs/getting-started/install.md). This is the simplest way to directly install Wormhole
+
+## Build for source
+If the [install guide](docs/getting-started/install.md) does not cover your system.
+### Prerequisites
 
 - [Rust](https://www.rust-lang.org/tools/install) installed.
 - Clone the source code.
 - Optional: [Docker](https://docs.docker.com/get-docker/) for containerized deployment.
 
-## How to build
+### How to build
 
 Run cargo build command:
 ```

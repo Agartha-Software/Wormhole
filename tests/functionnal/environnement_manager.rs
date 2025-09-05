@@ -99,7 +99,7 @@ impl EnvironnementManager {
                 "--bin".to_string(),
                 "wormhole".to_string(),
                 "template".to_string(),
-                "-C".to_string(),
+                "-p".to_string(),
                 dir_path.to_string_lossy().to_string(),
             ])
             .stdout(Self::generate_pipe(pipe_output))
@@ -117,8 +117,9 @@ impl EnvironnementManager {
                     "wormhole".to_string(),
                     service_ip.to_string(), // service ip
                     "new".to_string(),
+                    "--name".to_string(),
                     network_name, // network name
-                    "-C".to_string(),
+                    "-p".to_string(),
                     dir_path.to_string_lossy().to_string(),
                     "-i".to_string(),
                     ip.to_string(),

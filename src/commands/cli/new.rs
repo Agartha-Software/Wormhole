@@ -54,7 +54,7 @@ fn is_new_wh_file_config(path: &WhPath) -> CliResult<()> {
 }
 
 //FIXME - Error id name of the pod not check (can be already exist)
-pub fn new(ip: &str, mut args: PodArgs) -> CliResult<()> {
+pub fn new(ip: &str, mut args: PodArgs) -> CliResult<String> {
     if args.path.inner == "." {
         args.path = WhPath::from(&env::current_dir()?.display().to_string());
     }
@@ -71,5 +71,5 @@ pub fn new(ip: &str, mut args: PodArgs) -> CliResult<()> {
             additional_hosts: args.additional_hosts,
         }),
     ))?;
-    Ok(())
+    Ok("ok".to_string())
 }

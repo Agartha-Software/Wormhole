@@ -26,8 +26,7 @@ use tokio::net::TcpListener;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{accept_async, WebSocketStream};
-#[cfg(target_os = "windows")]
-use winfsp::winfsp_init;
+
 use wormhole::commands::{self, cli_commands::Cli};
 use wormhole::config::types::Config;
 use wormhole::config::LocalConfig;
@@ -35,26 +34,41 @@ use wormhole::error::{CliError, CliSuccess, WhError, WhResult};
 use wormhole::network::ip::IpP;
 use wormhole::pods::pod::Pod;
 
+#[cfg(target_os = "windows")]
+use winfsp::winfsp_init;
+
 type CliTcpWriter =
     SplitSink<WebSocketStream<tokio::net::TcpStream>, tokio_tungstenite::tungstenite::Message>;
 
 async fn handle_cli_command(
+    ip: &IpP,
     pods: &mut HashMap<String, Pod>,
     command: Cli,
     mut writer: CliTcpWriter,
 ) {
     let response_command = match command {
-        Cli::New(pod_args) => match commands::service::new(pod_args).await {
-            Ok(pod) => {
-                let name = pod.get_name().to_string();
-                pods.insert(name.clone(), pod);
-                Ok(CliSuccess::WithData {
-                    message: String::from("Pod created with success"),
-                    data: name,
+        Cli::New(pod_args) => {
+            let mount_point_exists = pods.values().any(|p| p.get_mount_point() == &pod_args.path);
+
+            if mount_point_exists {
+                log::error!("This mount point already exist.");
+                Err(CliError::Message {
+                    reason: "This mount point already exist.".to_string(),
                 })
+            } else {
+                match commands::service::new(pod_args.clone()).await {
+                    Ok(pod) => {
+                        let name = pod.get_name().to_string();
+                        pods.insert(name.clone(), pod);
+                        Ok(CliSuccess::WithData {
+                            message: String::from("Pod created with success"),
+                            data: name,
+                        })
+                    }
+                    Err(e) => Err(e),
+                }
             }
-            Err(e) => Err(e),
-        },
+        }
         Cli::Start(pod_args) => commands::service::start(pod_args).await,
         Cli::Stop(pod_args) => {
             if let Some(pod) = pods.remove(&pod_args.name) {
@@ -201,9 +215,13 @@ async fn handle_cli_command(
                 Err(CliError::PodNotFound)
             }
         }
-        _ => Err(CliError::InvalidCommand),
+        Cli::Template(_template_arg) => todo!(),
+        Cli::Inspect => todo!(),
+        Cli::Status => Ok(CliSuccess::Message(format!("{}", ip.to_string()))),
+        Cli::Interrupt => todo!(),
     };
-    let string_output = response_command.map_or_else(|e| e.to_string(), |a| a.to_string());
+    let string_output =
+        response_command.map_or_else(|e| format!("CliError: {:?}", e), |a| a.to_string());
     match writer.send(Message::Text(string_output)).await {
         Ok(()) => log::debug!("Sent answer to cli"),
         Err(err) => log::error!("Message can't send to cli: {}", err),
@@ -254,22 +272,52 @@ async fn get_cli_command(stream: tokio::net::TcpStream) -> WhResult<(Cli, CliTcp
     Ok((cmd, writer))
 }
 
+const MAX_TRY_PORTS: u16 = 10;
+const MAX_PORT: u16 = 65535;
+
+custom_error::custom_error! {CliListenerError
+    ProvidedIpNotAvailable {ip: String, err: String} = "The specified address ({ip}) not available ({err})\nThe service is not starting.",
+    AboveMainPort {max_port: u16} = "Unable to start cli_listener (not testing ports above {max_port})",
+    AboveMaxTry {max_try_port: u16} = "Unable to start cli_listener (tested {max_try_port} ports)",
+}
+
 /// Listens for CLI calls and launch one tcp instance per cli command
+/// if `specific_ip` is not given, will try all ports starting from 8081 to 9999, incrementing until success
+/// if `specific_ip` is given, will try the given ip and fail on error.
 async fn start_cli_listener(
     pods: &mut HashMap<String, Pod>,
-    mut ip: IpP,
-    mut interrupt_rx: UnboundedReceiver<()>,
-) {
+    specific_ip: Option<String>,
+    mut signals_rx: UnboundedReceiver<()>,
+) -> Result<(), CliListenerError> {
+    let mut ip: IpP = IpP::try_from(&specific_ip.clone().unwrap_or("127.0.0.1:8081".to_string()))
+        .expect("start_cli_listener: invalid ip provided");
     println!("Starting CLI's Listener on {}", ip.to_string());
 
+    let mut port_tries_count = 0;
     let mut listener = TcpListener::bind(&ip.to_string()).await;
     while let Err(e) = listener {
-        log::error!(
+        if let Some(_) = specific_ip {
+            return Err(CliListenerError::ProvidedIpNotAvailable {
+                ip: ip.to_string(),
+                err: e.to_string(),
+            });
+        }
+        if ip.port >= MAX_PORT {
+            return Err(CliListenerError::AboveMainPort { max_port: MAX_PORT });
+        }
+        if port_tries_count > MAX_TRY_PORTS {
+            return Err(CliListenerError::AboveMaxTry {
+                max_try_port: MAX_TRY_PORTS,
+            });
+        }
+        log::warn!(
             "Address {} not available due to {}, switching...",
             ip.to_string(),
             e
         );
         ip.set_port(ip.port + 1);
+        port_tries_count += 1;
+        log::debug!("Starting CLI's TcpListener on {}", ip.to_string());
         listener = TcpListener::bind(&ip.to_string()).await;
     }
     log::info!("Started CLI's TcpListener on {}", ip.to_string());
@@ -277,7 +325,7 @@ async fn start_cli_listener(
 
     while let Some(Ok((stream, _))) = tokio::select! {
         v = listener.accept() => Some(v),
-        _ = interrupt_rx.recv() => None,
+        _ = signals_rx.recv() => None,
     } {
         let (command, writer) = match get_cli_command(stream).await {
             Ok(cmd) => cmd,
@@ -286,8 +334,9 @@ async fn start_cli_listener(
                 continue;
             }
         };
-        handle_cli_command(pods, command, writer).await;
+        handle_cli_command(&ip, pods, command, writer).await;
     }
+    Ok(())
 }
 
 const DEFAULT_ADDRESS: &str = "127.0.0.1:8081";
@@ -295,6 +344,8 @@ const DEFAULT_ADDRESS: &str = "127.0.0.1:8081";
 #[tokio::main]
 async fn main() {
     let (interrupt_tx, interrupt_rx) = mpsc::unbounded_channel::<()>();
+    let (signals_tx, signals_rx) = mpsc::unbounded_channel::<()>();
+
     let mut pods: HashMap<String, Pod> = HashMap::new();
 
     if env::args().any(|arg| arg == "-h" || arg == "--help") {
@@ -306,29 +357,22 @@ async fn main() {
 
     #[cfg(target_os = "windows")]
     match winfsp_init() {
-        Ok(_token) => println!("got fsp token!"),
+        Ok(_token) => log::debug!("got fsp token!"),
         Err(err) => {
-            println!("fsp error: {:?}", err);
+            log::error!("fsp error: {:?}", err);
             std::process::exit(84)
         }
     }
 
-    let ip_string = env::args().nth(1).unwrap_or(DEFAULT_ADDRESS.into());
-
-    let ip = match IpP::try_from(&ip_string) {
-        Ok(ip) => ip,
-        Err(_) => {
-            println!("Address IP '{ip_string}' is invalid");
-            return;
-        }
-    };
+    let ip_string = env::args().nth(1);
     let terminal_handle = tokio::spawn(terminal_watchdog(interrupt_tx));
-    let cli_airport = start_cli_listener(&mut pods, ip, interrupt_rx);
-    log::trace!("Starting service on {}", ip_string);
+    let signals_task = tokio::spawn(handle_signals(signals_tx, interrupt_rx));
+    log::trace!("Starting service on {:?}", ip_string);
     log::info!("Started");
+    let _ = start_cli_listener(&mut pods, ip_string, signals_rx).await;
 
-    cli_airport.await;
     terminal_handle.abort();
+    signals_task.await.unwrap();
 
     log::info!("Stopping");
     for (name, pod) in pods.into_iter() {
@@ -349,11 +393,71 @@ pub async fn terminal_watchdog(tx: UnboundedSender<()>) {
         // NOTE -  on ctrl-D -> quit
         match read {
             0 => {
-                log::info!("Quiting!");
                 let _ = tx.send(());
                 return;
             }
             _ => (),
         };
+    }
+}
+
+async fn handle_signals(tx: UnboundedSender<()>, interrupt_rx: UnboundedReceiver<()>) {
+    #[cfg(unix)]
+    {
+        handle_signals_unix(tx, interrupt_rx).await;
+    }
+
+    #[cfg(windows)]
+    {
+        handle_signals_windows(tx, interrupt_rx).await;
+    }
+}
+
+#[cfg(unix)]
+async fn handle_signals_unix(tx: UnboundedSender<()>, mut interrupt_rx: UnboundedReceiver<()>) {
+    use tokio::signal::unix;
+
+    let mut sigint = unix::signal(unix::SignalKind::interrupt()).expect("failed to bind SIGINT");
+    let mut sigterm = unix::signal(unix::SignalKind::terminate()).expect("failed to bind SIGTERM");
+
+    log::info!("Unix signal handler initialised, waiting for SIGINT or SIGTERM…");
+
+    tokio::select! {
+        _ = sigint.recv() => {
+            log::info!("Quiting by Signal: SIGINT");
+            let _ = tx.send(());
+        }
+        _ = sigterm.recv() => {
+            log::info!("Quiting by Signal: SIGTERM");
+            let _ = tx.send(());
+        }
+        _ = interrupt_rx.recv() => {
+            log::info!("Quiting by Ctrl+D! (EOF)");
+            let _ = tx.send(());
+        }
+    }
+}
+
+#[cfg(windows)]
+async fn handle_signals_windows(tx: UnboundedSender<()>, mut interrupt_rx: UnboundedReceiver<()>) {
+    log::info!("Windows signal handler initialised…");
+
+    let mut sig_c = tokio::signal::windows::ctrl_c().expect("Failed to register ctrl_c");
+    let mut sig_break =
+        tokio::signal::windows::ctrl_break().expect("Failed to register ctrl_break");
+
+    tokio::select! {
+        _ = sig_c.recv() => {
+            log::info!("Quiting by Signal: CTRL+C");
+            let _ = tx.send(());
+        }
+        _ = sig_break.recv() => {
+            log::info!("Quiting by Signal: CTRL+BREAK");
+            let _ = tx.send(());
+        }
+        _ = interrupt_rx.recv() => {
+            log::info!("Quiting by Ctrl-Z (EOF)");
+            let _ = tx.send(());
+        }
     }
 }

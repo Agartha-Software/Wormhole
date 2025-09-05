@@ -13,7 +13,7 @@ use crate::{
 
 use super::cli_messager;
 
-pub fn restore(ip: &str, mut args: PodConf) -> CliResult<()> {
+pub fn restore(ip: &str, mut args: PodConf) -> CliResult<String> {
     let files_name = vec![LOCAL_CONFIG_FNAME, GLOBAL_CONFIG_FNAME];
 
     for file in args.files.clone() {

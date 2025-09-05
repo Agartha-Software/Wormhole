@@ -25,6 +25,10 @@ impl WhError {
             WhError::WouldBlock { called_from: _ } => libc::EWOULDBLOCK,
         }
     }
+
+    pub fn into_io(self) -> io::Error {
+        io::Error::other(self)
+    }
 }
 
 pub type WhResult<T> = Result<T, WhError>;

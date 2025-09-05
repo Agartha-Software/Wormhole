@@ -1,4 +1,4 @@
-use std::fs;
+use std::time::Duration;
 use std::{io, sync::Arc};
 
 use crate::config::types::Config;
@@ -10,7 +10,7 @@ use crate::fuse::fuse_impl::mount_fuse;
 use crate::network::message::{
     FileSystemSerialized, FromNetworkMessage, MessageContent, ToNetworkMessage,
 };
-use crate::pods::arbo::{FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME, LOCAL_CONFIG_INO, ROOT};
+use crate::pods::arbo::{FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_INO, ROOT};
 #[cfg(target_os = "windows")]
 use crate::pods::disk_managers::dummy_disk_manager::DummyDiskManager;
 #[cfg(target_os = "linux")]
@@ -84,29 +84,30 @@ pub async fn initiate_connection(
                 }
 
                 loop {
-                    info!("Awaiting response from {first_contact}");
-                    match rx.recv().await {
-                        // TODO: timeout here in case of peer malfunction
-                        Some(FromNetworkMessage {
+                    match tokio::time::timeout(Duration::from_secs(2), rx.recv()).await {
+                        Ok(Some(FromNetworkMessage {
                             origin: _,
                             content: MessageContent::FsAnswer(fs, mut peers_address, global_config),
-                        }) => {
+                        })) => {
                             // remove itself from peers and first_connect because the connection is already existing
                             peers_address.retain(|address| {
                                 *address != server_address && *address != first_contact
                             });
                             return Some((fs, peers_address, ipc, global_config));
                         }
-                        Some(_) => {
+                        Ok(Some(_)) => {
                             info!(
                                 "First message with {first_contact} failed: His answer is not the FileSystem, corrupted client.\n
-                                Trying with next know address"
+                                Trying with next known address"
                             );
                             break;
                         }
-                        None => {
-                            info!("Empty response from {first_contact}...");
-                            continue;
+                        Ok(None) => continue,
+                        Err(_) => {
+                            log::error!(
+                                "Timeout when waiting peer answer. Trying with next known address"
+                            );
+                            break;
                         }
                     };
                 }
@@ -134,6 +135,35 @@ custom_error! {pub PodStopError
     FileNotSent{file: InodeId} = "PodStopError: no pod was able to receive this file before stopping: ({file})"
 }
 
+/// Create all the directories present in Arbo. (not the files)
+///
+/// Required at setup to resolve issue #179
+/// (files pulling need the parent folder to be already present)
+fn create_all_dirs(arbo: &Arbo, from: InodeId, disk: &dyn DiskManager) -> io::Result<()> {
+    let from = arbo.n_get_inode(from).map_err(|e| e.into_io())?;
+
+    return match &from.entry {
+        FsEntry::File(_) => Ok(()),
+        FsEntry::Directory(children) => {
+            let current_path = arbo
+                .n_get_path_from_inode_id(from.id)
+                .map_err(|e| e.into_io())?;
+            disk.new_dir(&current_path, from.meta.perm).or_else(|e| {
+                if e.kind() == io::ErrorKind::AlreadyExists {
+                    Ok(())
+                } else {
+                    Err(e)
+                }
+            })?;
+
+            for child in children {
+                create_all_dirs(arbo, *child, disk)?
+            }
+            Ok(())
+        }
+    };
+}
+
 impl Pod {
     pub async fn new(
         name: String,
@@ -145,7 +175,7 @@ impl Pod {
     ) -> io::Result<Self> {
         let mut global_config = global_config;
 
-        log::info!("mount point {}", mount_point);
+        log::trace!("mount point {}", mount_point);
         let (to_network_message_tx, to_network_message_rx) = mpsc::unbounded_channel();
         let (from_network_message_tx, mut from_network_message_rx) = mpsc::unbounded_channel();
         let (to_redundancy_tx, to_redundancy_rx) = mpsc::unbounded_channel();
@@ -176,15 +206,34 @@ impl Pod {
                     .iter()
                     .fold(Arbo::first_ino(), |acc, (ino, _)| u64::max(acc, *ino))
                     + 1;
+
                 (arbo, next_inode, Some(global_config_bytes))
             } else {
+                if global_config.general.peers.len() > 0 {
+                    // NOTE - temporary fix
+                    // made to help with tests and debug
+                    // choice not to fail should later be supported by the cli
+                    log::error!("No peers answered. Stopping.");
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "None of the specified peers could answer",
+                    ));
+                }
                 let (arbo, next_inode) =
                     generate_arbo(&mount_point, &server_address).expect("unable to index folder");
                 (arbo, next_inode, None)
             };
 
-        let redundancy_target = global_config.redundancy.number;
+        #[cfg(target_os = "linux")]
+        let disk_manager = Box::new(UnixDiskManager::new(&mount_point)?);
+        #[cfg(target_os = "windows")]
+        let disk_manager = Box::new(DummyDiskManager::new(&mount_point)?);
+
+        create_all_dirs(&arbo, ROOT, disk_manager.as_ref())
+            .inspect_err(|e| log::error!("unable to create_all_dirs: {e}"))?;
+
         let arbo: Arc<RwLock<Arbo>> = Arc::new(RwLock::new(arbo));
+        let redundancy_target = global_config.redundancy.number;
         let local = Arc::new(RwLock::new(local_config));
         let global = Arc::new(RwLock::new(global_config));
 
@@ -198,11 +247,6 @@ impl Pod {
             local.clone(),
             global.clone(),
         ));
-
-        #[cfg(target_os = "linux")]
-        let disk_manager = Box::new(UnixDiskManager::new(&mount_point)?);
-        #[cfg(target_os = "windows")]
-        let disk_manager = Box::new(DummyDiskManager::new(&mount_point)?);
 
         if let Some(global_config_bytes) = global_config_bytes {
             if let Ok(perms) = Arbo::write_lock(&arbo, "Pod::new")?
@@ -429,8 +473,8 @@ impl Pod {
         let Self {
             name: _,
             network_interface: _,
-            fs_interface: _,
-            mount_point,
+            fs_interface,
+            mount_point: _,
             peers,
             #[cfg(target_os = "linux")]
             fuse_handle,
@@ -449,7 +493,9 @@ impl Pod {
         #[cfg(target_os = "windows")]
         drop(fsp_host);
 
-        fs::write(&mount_point.join(&ARBO_FILE_FNAME).inner, arbo_bin)
+        fs_interface
+            .disk
+            .write_file(&ARBO_FILE_FNAME.into(), &arbo_bin, 0)
             .map_err(|io| PodStopError::ArboSavingFailed { source: io })?;
 
         *peers.write() = Vec::new(); // dropping PeerIPCs

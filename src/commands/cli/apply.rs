@@ -13,7 +13,7 @@ use crate::{
 
 use super::cli_messager;
 
-pub fn apply(ip: &str, mut args: PodConf) -> CliResult<()> {
+pub fn apply(ip: &str, mut args: PodConf) -> CliResult<String> {
     let files_name = vec![LOCAL_CONFIG_FNAME, GLOBAL_CONFIG_FNAME];
 
     for file in args.files.clone() {
@@ -39,5 +39,5 @@ pub fn apply(ip: &str, mut args: PodConf) -> CliResult<()> {
             files: args.files,
         }),
     ))?;
-    Ok(())
+    Ok("ok".to_string())
 }
