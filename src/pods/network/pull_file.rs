@@ -1,5 +1,3 @@
-use crate::config::types::Config;
-use crate::config::LocalConfig;
 use crate::error::WhResult;
 use crate::network::message::{MessageContent, ToNetworkMessage};
 use crate::pods::arbo::{Arbo, FsEntry};
@@ -22,11 +20,6 @@ custom_error! {
 impl NetworkInterface {
     // REVIEW - recheck and simplify this if possible
     pub fn pull_file_sync(&self, file: InodeId) -> Result<Option<Callback>, PullError> {
-        let self_addr = LocalConfig::read_lock(&self.local_config, "pull_file_sync")
-            .expect("pull_fyle_sync: can't get self_addr")
-            .general
-            .address
-            .clone();
         let arbo = Arbo::n_read_lock(&self.arbo, "pull file sync")?;
         let hosts = {
             if let FsEntry::File(hosts) = &arbo.n_get_inode(file)?.entry {
@@ -36,9 +29,13 @@ impl NetworkInterface {
             }
         };
 
-        assert!(hosts.len() != 0, "No hosts hold the file.");
+        if hosts.len() == 0 {
+            return Err(PullError::NoHostAvailable);
+        }
 
-        if hosts.contains(&self_addr) {
+        let hostname = self.hostname()?;
+
+        if hosts.contains(&hostname) {
             // if the asked file is already on disk
             Ok(None)
         } else {
@@ -51,7 +48,7 @@ impl NetworkInterface {
                 self.to_network_message_tx
                     .send(ToNetworkMessage::SpecificMessage(
                         (
-                            MessageContent::RequestFile(file, self_addr.clone()),
+                            MessageContent::RequestFile(file, hostname.clone()),
                             Some(status_tx.clone()),
                         ),
                         vec![host.clone()], // NOTE - naive choice for now

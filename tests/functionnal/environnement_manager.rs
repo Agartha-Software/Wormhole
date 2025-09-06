@@ -44,7 +44,7 @@ impl EnvironnementManager {
             .map(|service| &service.ip)
             .max_by(|ip1, ip2| ip1.port.cmp(&ip2.port))
             .map_or_else(
-                || IpP::try_from(&"127.0.0.1:8081".to_string()).unwrap(),
+                || IpP::try_from(&"0.0.0.0:8081".to_string()).unwrap(),
                 |ip| {
                     let mut ip = ip.clone();
                     ip.set_port(ip.port + 1);
@@ -99,7 +99,6 @@ impl EnvironnementManager {
                 "--bin".to_string(),
                 "wormhole".to_string(),
                 "template".to_string(),
-                "-p".to_string(),
                 dir_path.to_string_lossy().to_string(),
             ])
             .stdout(Self::generate_pipe(pipe_output))
@@ -117,12 +116,11 @@ impl EnvironnementManager {
                     "wormhole".to_string(),
                     service_ip.to_string(), // service ip
                     "new".to_string(),
-                    "--name".to_string(),
                     network_name, // network name
-                    "-p".to_string(),
+                    "-m".to_string(),
                     dir_path.to_string_lossy().to_string(),
-                    "-i".to_string(),
-                    ip.to_string(),
+                    "-p".to_string(),
+                    ip.port.to_string(),
                 ];
 
                 if let Some(peer) = connect_to {
@@ -163,7 +161,7 @@ impl EnvironnementManager {
                     let temp_dir = assert_fs::TempDir::new().expect("can't create temp dir");
                     let mut pod_ip = conn_to
                         .clone()
-                        .unwrap_or(IpP::try_from(&"127.0.0.1:8080".to_string()).unwrap());
+                        .unwrap_or(IpP::try_from(&"0.0.0.0:8080".to_string()).unwrap());
                     pod_ip.set_ip_last(pod_ip.get_ip_last() + 1);
 
                     println!(

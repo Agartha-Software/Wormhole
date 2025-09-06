@@ -1,15 +1,9 @@
-use std::{
-    path::{Path, PathBuf},
-    process::ExitStatus,
-};
+use std::{path::Path, process::ExitStatus};
 
 use futures_util::io;
-use wormhole::{
-    network::ip::IpP,
-    pods::arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
-};
+use wormhole::pods::arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME};
 
-use crate::functionnal::environment_manager::types::{Service, CLI_BIN};
+use crate::functionnal::environment_manager::types::{Service, CLI_BIN, MAX_PORT};
 
 /// Returns `true` if the given services runs a pod on the given network
 pub fn service_has_pod_on_network(service: &Service, network: &String) -> bool {
@@ -21,11 +15,13 @@ pub fn service_has_pod_on_network(service: &Service, network: &String) -> bool {
 }
 
 // Returns `true` if the service is matching the requirements
-pub fn service_filter(ip: &Option<IpP>, network: &Option<String>, service: &Service) -> bool {
+pub fn service_filter(port: &Option<u16>, network: &Option<String>, service: &Service) -> bool {
     network
         .as_ref()
         .map_or_else(|| true, |nw| service_has_pod_on_network(service, &nw))
-        && (ip.as_ref().map_or_else(|| true, |ip| service.ip == *ip))
+        && (port
+            .as_ref()
+            .map_or_else(|| true, |port| service.port == *port))
 }
 
 /// Runs a command with the cli and returns it's stdout
@@ -38,69 +34,70 @@ where
     log::trace!("Cli command with args {:?}", args);
 
     let output = std::process::Command::new(CLI_BIN)
+        .env("RUST_LOG", "wormhole=DEBUG")
         .args(args)
         .output()
         .expect("can't launch cli command");
-    (
-        output.status,
-        std::str::from_utf8(&output.stdout).unwrap().to_string(),
-        std::str::from_utf8(&output.stderr).unwrap().to_string(),
-    )
+    let stdout = std::str::from_utf8(&output.stdout).unwrap().to_string();
+    let stderr = std::str::from_utf8(&output.stderr).unwrap().to_string();
+    log::info!("command:\n{}", &stdout);
+    log::info!("command:\n{}", &stderr);
+    (output.status, stdout, stderr)
 }
 
 /// Cli commands to create a pod
 pub fn cli_pod_creation_command(
     network_name: String,
-    service_ip: &IpP,
+    service_port: u16,
     dir_path: &Path,
-    ip: &IpP,
-    connect_to: Option<&IpP>,
-) -> IpP {
+    port_range: &mut std::ops::RangeFrom<u16>,
+    connect_to: Option<&u16>,
+) -> u16 {
     let (status, _, _) = cli_command(&[
-        service_ip.to_string().as_ref(),
+        &format!("127.0.0.1:{service_port}"),
         "template",
-        "-p",
+        "-m",
         dir_path.to_string_lossy().to_string().as_ref(),
     ]);
     assert!(status.success(), "template cli command failed");
 
-    let mut ip = ip.clone();
-
+    let mut port;
     loop {
+        port = port_range.next().unwrap();
+        log::info!("trying pod on {port}");
         let (status, _, stderr) = cli_command({
             let mut args = vec![
-                service_ip.to_string(),
+                format!("127.0.0.1:{service_port}"),
                 "new".to_string(),
-                "-n".to_string(),
                 network_name.clone(),
-                "-p".to_string(),
+                "-m".to_string(),
                 dir_path.to_string_lossy().to_string(),
-                "-i".to_string(),
-                ip.to_string(),
+                "-p".to_string(),
+                port.to_string(),
             ];
 
             if let Some(peer) = connect_to {
                 args.push("-u".to_string());
-                args.push(peer.to_string());
+                args.push(format!("0.0.0.0:{peer}"));
             }
             args
         });
-        if !status.success() && !stderr.contains("AddrInUse") {
-            log::error!("Cli stderr: {}", stderr);
-            assert!(status.success(), "'new' cli command failed");
-        } else if !status.success() {
-            assert!(
-                ip.get_ip_last() < 100,
-                "seems that 100+ pods are already running"
-            );
-            log::warn!("Pod ip {} already in use", ip);
-            ip.set_ip_last(ip.get_ip_last() + 1);
-        } else {
-            log::trace!("Created pod on {}", ip);
+        if status.success() {
             break;
+        } else if port < MAX_PORT {
+            log::error!("'new' cli command: {}", status);
+            log::error!("\n{}", stderr);
+        } else {
+            assert_eq!(
+                None,
+                status.success().then_some(status),
+                "'new' cli command failed and max port reached"
+            );
         }
+
+        log::trace!("Created pod on {}", port);
     }
-    ip
+    port
 }
 
 /// Recursively copies a directory from -> to

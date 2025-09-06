@@ -1,5 +1,8 @@
 use super::message::ToNetworkMessage;
-use crate::error::{CliError, CliResult};
+use crate::{
+    error::{CliError, CliResult},
+    pods::pod::Pod,
+};
 use std::{
     collections::HashMap,
     net::SocketAddr,
@@ -12,6 +15,11 @@ use tokio::{
 pub type Tx = UnboundedReceiver<ToNetworkMessage>;
 pub type PeerMap = Arc<Mutex<HashMap<SocketAddr, Tx>>>;
 
+pub struct Service {
+    // pub server: Server
+    pub pods: HashMap<String, Pod>,
+}
+
 pub struct Server {
     pub listener: TcpListener,
     pub state: PeerMap,
@@ -19,7 +27,7 @@ pub struct Server {
 
 impl Server {
     pub async fn setup(addr: &str) -> CliResult<Server> {
-        let socket_addr: SocketAddr = addr.parse().map_err(|e| CliError::Server {
+        let socket_addr: SocketAddr = addr.parse().map_err(|_| CliError::Server {
             addr: addr.to_owned(),
             err: std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid ip address"),
         })?;
