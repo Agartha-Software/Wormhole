@@ -31,9 +31,21 @@ Add the package in your configuration
 # configuration.nix
 environment.systemPackages = with pkgs; [
   ...
-  inputs.wormhole.packages.${pkgs.system}.default # wormhole package
+  inputs.wormhole.packages.${pkgs.system}.wormhole # wormhole package
   ...
 ];
 ```
+
+Add the systemd service if needed
+```nix
+# flake.nix
+modules = [
+  ...
+  inputs.wormhole.nixosModules.wormhole
+    {
+      services.wormhole.enable = true;
+    }
+  ...
+]
 
 You can then rebuild using `nixos-rebuild switch" and should have access to both `wormhole` and `wormholed` binaries
