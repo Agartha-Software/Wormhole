@@ -9,7 +9,7 @@ use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::{
     error::{WhError, WhResult},
-    pods::arbo::LOCK_TIMEOUT,
+    pods::arbo::{InodeId, LOCK_TIMEOUT},
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -36,6 +36,8 @@ pub struct FileHandle {
     pub perm: AccessMode,
     pub no_atime: bool,
     pub direct: bool,
+    pub ino: InodeId,
+    pub dirty: bool,
 }
 
 #[derive(Debug)]
@@ -61,7 +63,12 @@ impl FileHandleManager {
         self.hasher.finish()
     }
 
-    pub fn insert_new_file_handle(&mut self, flags: OpenFlags, perm: AccessMode) -> WhResult<UUID> {
+    pub fn insert_new_file_handle(
+        &mut self,
+        flags: OpenFlags,
+        perm: AccessMode,
+        ino: InodeId,
+    ) -> WhResult<UUID> {
         let direct = flags.direct;
         let no_atime = flags.no_atime;
 
@@ -72,6 +79,8 @@ impl FileHandleManager {
                 perm,
                 direct,
                 no_atime,
+                ino,
+                dirty: false,
             },
         );
         Ok(uuid)

@@ -585,14 +585,14 @@ impl Filesystem for FuseController {
     fn release(
         &mut self,
         _req: &Request<'_>,
-        _ino: u64,
+        ino: u64,
         file_handle: u64,
         _flags: i32,
         _lock_owner: Option<u64>,
         _flush: bool,
         reply: fuser::ReplyEmpty,
     ) {
-        match self.fs_interface.release(file_handle) {
+        match self.fs_interface.release(file_handle, ino) {
             Ok(()) => reply.ok(),
             Err(err) => reply.error(err.to_libc()),
         }

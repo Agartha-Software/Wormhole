@@ -48,7 +48,7 @@ impl FsInterface {
         //}
 
         let mut file_handles = FileHandleManager::write_lock(&self.file_handles, "create")?;
-        let file_handle = file_handles.insert_new_file_handle(flags, perm)?;
+        let file_handle = file_handles.insert_new_file_handle(flags, perm, inode.id)?;
         return Ok((inode, file_handle));
     }
 

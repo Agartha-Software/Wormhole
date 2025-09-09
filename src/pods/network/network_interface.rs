@@ -302,14 +302,14 @@ impl NetworkInterface {
                     MessageContent::RevokeFile(id, self_hostname, meta),
                 ))
                 .expect("revoke_remote_hosts: unable to update modification on the network thread");
-            self.apply_redundancy(id);
+            // self.apply_redundancy(id);
         }
         Ok(())
     }
 
     pub fn revoke_remote_hosts(&self, id: InodeId) -> WhResult<()> {
         self.update_hosts(id, vec![self.hostname()?])?;
-        self.apply_redundancy(id);
+        // self.apply_redundancy(id);
         Ok(())
     }
 

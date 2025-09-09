@@ -108,7 +108,7 @@ impl FsInterface {
 
         let mut file_handles = FileHandleManager::write_lock(&self.file_handles, "open")?;
         file_handles
-            .insert_new_file_handle(flags, perm)
+            .insert_new_file_handle(flags, perm, ino)
             .map_err(|err| err.into())
     }
 }

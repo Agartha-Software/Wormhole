@@ -338,7 +338,7 @@ impl Pod {
             #[cfg(target_os = "linux")]
             fuse_handle: mount_fuse(&proto.mountpoint, fs_interface.clone())?,
             #[cfg(target_os = "windows")]
-            fsp_host: mount_fsp(&mountpoint, fs_interface.clone())?,
+            fsp_host: mount_fsp(&proto.mountpoint, fs_interface.clone())?,
             network_airport_handle,
             peer_broadcast_handle,
             new_peer_handle,

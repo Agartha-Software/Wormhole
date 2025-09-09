@@ -306,14 +306,14 @@ impl FileSystemContext for FSPController {
             flags & FspCleanupDelete as u32 != 0
         );
 
+        let _ = self
+            .fs_interface
+            .release(context.handle, context.ino)
+            .inspect_err(|e| log::warn!("cleanup::{e};"));
         if flags & FspCleanupDelete as u32 != 0 {
             let _ = self
                 .fs_interface
                 .remove_inode(context.ino)
-                .inspect_err(|e| log::warn!("cleanup::{e};"));
-            let _ = self
-                .fs_interface
-                .release(context.handle)
                 .inspect_err(|e| log::warn!("cleanup::{e};"));
             // cannot bubble out errors here
         }
