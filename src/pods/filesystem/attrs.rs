@@ -41,8 +41,8 @@ impl FsInterface {
         let inode = arbo.n_get_inode_mut(ino)?;
 
         let self_addr =
-            LocalConfig::read_lock(&self.network_interface.local_config, "pull_file_sync")
-                .expect("pull_fyle_sync: can't get self_addr")
+            LocalConfig::read_lock(&self.network_interface.local_config, "acknowledge_metadata")
+                .expect("acknowledge_metadata: can't get self_addr")
                 .general
                 .address
                 .clone();
