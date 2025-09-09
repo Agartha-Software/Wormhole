@@ -1,11 +1,8 @@
 use crate::{
     commands::{cli_commands::PodArgs, default_global_config, default_local_config},
     config::{types::Config, GlobalConfig, LocalConfig},
-    error::{CliError, CliResult, PortError},
-    network::{
-        ip::{IpP, MAX_PORT},
-        server::Server,
-    },
+    error::{CliError, CliResult},
+    network::server::Server,
     pods::{
         arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
         pod::Pod,
@@ -14,36 +11,7 @@ use crate::{
 };
 use std::sync::Arc;
 
-pub fn validate_and_test_port(address: &str) -> Result<(), PortError> {
-    use std::net::{SocketAddr, TcpListener};
-
-    let socket_addr: SocketAddr = address.parse().map_err(|_| PortError::AddressParseError {
-        address: address.to_string(),
-    })?;
-
-    let port = socket_addr.port();
-    if port < 1024 || port > MAX_PORT {
-        return Err(PortError::InvalidPort { port: port });
-    }
-
-    match TcpListener::bind(socket_addr) {
-        Ok(_listener) => Ok(()),
-        Err(e) => match e.kind() {
-            std::io::ErrorKind::AddrInUse => Err(PortError::PortAlreadyInUse {
-                port,
-                address: address.to_string(),
-            }),
-            std::io::ErrorKind::PermissionDenied => Err(PortError::InvalidPort { port: port }),
-            _ => Err(PortError::PortBindFailed {
-                address: address.to_string(),
-                source: e,
-            }),
-        },
-    }
-}
-
 pub async fn new(args: PodArgs) -> CliResult<Pod> {
-    validate_and_test_port(&args.ip)?;
     let (global_config, local_config, server, mount_point) = pod_value(&args).await?;
 
     Pod::new(

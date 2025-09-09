@@ -1,5 +1,8 @@
 use super::message::ToNetworkMessage;
-use crate::error::{CliError, CliResult};
+use crate::{
+    error::{CliError, CliResult, PortError},
+    network::ip::MAX_PORT,
+};
 use std::{
     collections::HashMap,
     net::SocketAddr,
@@ -19,10 +22,16 @@ pub struct Server {
 
 impl Server {
     pub async fn setup(addr: &str) -> CliResult<Server> {
-        let socket_addr: SocketAddr = addr.parse().map_err(|e| CliError::Server {
-            addr: addr.to_owned(),
-            err: std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid ip address"),
+        let socket_addr: SocketAddr = addr.parse().map_err(|_| PortError::AddressParseError {
+            address: addr.to_string(),
         })?;
+
+        let port = socket_addr.port();
+        if port < 1024 || port > MAX_PORT {
+            return Err(CliError::PortError {
+                source: PortError::InvalidPort { port: port },
+            });
+        }
 
         let socket = TcpSocket::new_v4().map_err(|e| CliError::Server {
             addr: addr.to_owned(),
@@ -32,10 +41,33 @@ impl Server {
             addr: addr.to_owned(),
             err: e,
         })?;
-        socket.bind(socket_addr).map_err(|e| CliError::Server {
-            addr: addr.to_owned(),
-            err: e,
-        })?;
+
+        match socket.bind(socket_addr) {
+            Ok(_listener) => (),
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::AddrInUse => {
+                    return Err(PortError::PortAlreadyInUse {
+                        port: socket_addr.port(),
+                        address: addr.to_string(),
+                    }
+                    .into())
+                }
+                std::io::ErrorKind::PermissionDenied => {
+                    return Err(PortError::InvalidPort {
+                        port: socket_addr.port(),
+                    }
+                    .into())
+                }
+                _ => {
+                    return Err(PortError::PortBindFailed {
+                        address: addr.to_string(),
+                        source: e,
+                    }
+                    .into())
+                }
+            },
+        }
+
         let listener = socket.listen(1024).map_err(|e| CliError::Server {
             addr: addr.to_owned(),
             err: e,
