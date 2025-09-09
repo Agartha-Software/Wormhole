@@ -3,7 +3,10 @@ use std::env;
 use tokio::runtime::Runtime;
 
 use crate::{
-    commands::cli_commands::{Cli, PodConf},
+    commands::{
+        cli::path_or_wd,
+        cli_commands::{Cli, PodConf},
+    },
     error::{CliError, CliResult},
     pods::{
         arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
@@ -21,14 +24,8 @@ pub fn restore(ip: &str, mut args: PodConf) -> CliResult<String> {
             return Err(CliError::FileConfigName { name: file });
         }
     }
-    if args.name == "." {
-        let p = env::current_dir()?;
-        let path = WhPath::from(&p.display().to_string());
-        args.path = if args.path.inner != "." {
-            path.join(&args.path)
-        } else {
-            path
-        }
+    if args.name.is_none() {
+        args.path = Some(path_or_wd(args.path)?)
     }
     let rt = Runtime::new().unwrap();
     rt.block_on(cli_messager(

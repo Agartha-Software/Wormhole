@@ -110,3 +110,15 @@ jobs:
           overwrite: true
           file: ./target/release/wormholed.exe
           asset_name: wormholed.exe
+      - name: Compile .ISS to .EXE Installer
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
+        with:
+          path: .github/installer.iss
+          options: /F"WormholeInstaller" /O".\"
+      - name: Upload wormhole installer
+        uses: svenstaro/upload-release-action@2.11.2
+        with:
+          release_id: ${{ needs.update_release_draft.outputs.release_id }}
+          overwrite: true
+          file: .\WormholeInstaller.exe
+          asset_name: WormholeInstaller.exe

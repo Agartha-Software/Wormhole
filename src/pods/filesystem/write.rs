@@ -3,7 +3,7 @@ use crate::{
     pods::arbo::{Arbo, InodeId},
 };
 use custom_error::custom_error;
-use parking_lot::RwLockReadGuard;
+use parking_lot::{RwLockReadGuard, RwLockWriteGuard};
 
 use super::{
     file_handle::{AccessMode, FileHandle, FileHandleManager, UUID},
@@ -20,19 +20,23 @@ custom_error! {
 }
 
 fn check_file_handle<'a>(
-    file_handles: &'a RwLockReadGuard<FileHandleManager>,
+    file_handles: &'a mut RwLockWriteGuard<FileHandleManager>,
     file_handle_id: UUID,
-) -> Result<&'a FileHandle, WriteError> {
-    match file_handles.handles.get(&file_handle_id) {
-        Some(&FileHandle {
+) -> Result<&'a mut FileHandle, WriteError> {
+    match file_handles.handles.get_mut(&file_handle_id) {
+        Some(&mut FileHandle {
             perm: AccessMode::Read,
             direct: _,
             no_atime: _,
+            dirty: _,
+            ino: _,
         }) => return Err(WriteError::NoWritePermission),
-        Some(&FileHandle {
+        Some(&mut FileHandle {
             perm: AccessMode::Execute,
             direct: _,
             no_atime: _,
+            dirty: _,
+            ino: _,
         }) => return Err(WriteError::NoWritePermission),
         None => return Err(WriteError::NoFileHandle),
         Some(file_handle) => Ok(file_handle),
@@ -47,8 +51,10 @@ impl FsInterface {
         offset: usize,
         file_handle: UUID,
     ) -> Result<usize, WriteError> {
-        let file_handles = FileHandleManager::read_lock(&self.file_handles, "write")?;
-        let _file_handle = check_file_handle(&file_handles, file_handle)?;
+        let mut file_handles = FileHandleManager::write_lock(&self.file_handles, "write")?;
+        let file_handle = check_file_handle(&mut file_handles, file_handle)?;
+
+        file_handle.dirty = true;
 
         let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface.write")?;
         let path = arbo.n_get_path_from_inode_id(id)?;

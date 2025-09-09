@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fs, io,
+    ops::RangeFrom,
     sync::Arc,
     time::{Duration, SystemTime},
 };
@@ -38,7 +39,10 @@ pub const ARBO_FILE_FNAME: &str = ".arbo";
 
 /// InodeId is represented by an u64
 pub type Hosts = Vec<Address>;
+
+/// todo: replace usage of InodeId with Ino when no parallel merges are likely to be conflicting
 pub type InodeId = u64;
+pub type Ino = u64;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 /// Should be extended until meeting [fuser::FileType]
@@ -64,6 +68,7 @@ pub type ArboIndex = HashMap<InodeId, Inode>;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Arbo {
     entries: ArboIndex,
+    pub next_ino: RangeFrom<Ino>,
 }
 
 pub const BLOCK_SIZE: u64 = 512;
@@ -142,13 +147,14 @@ impl Inode {
 }
 
 impl Arbo {
-    pub fn first_ino() -> InodeId {
+    pub fn first_ino() -> Ino {
         return 11;
     }
 
     pub fn new() -> Self {
         let mut arbo: Self = Self {
             entries: HashMap::new(),
+            next_ino: Self::first_ino()..,
         };
 
         arbo.entries.insert(
@@ -699,8 +705,7 @@ fn recover_serialized_arbo(parent_folder: &WhPath) -> Option<Arbo> {
 #[cfg(target_os = "linux")]
 fn index_folder_recursive(
     arbo: &mut Arbo,
-    parent: InodeId,
-    ino: &mut InodeId,
+    parent: Ino,
     path: &WhPath,
     host: &String,
 ) -> io::Result<()> {
@@ -721,11 +726,10 @@ fn index_folder_recursive(
                 ))
             }
             Some(ino) => ino,
-            None => {
-                let used = *ino;
-                *ino += 1;
-                used
-            }
+            None => arbo
+                .next_ino
+                .next()
+                .ok_or(io::Error::other("ran out of Inodes"))?,
         };
 
         arbo.add_inode(Inode::new(
@@ -745,29 +749,22 @@ fn index_folder_recursive(
         arbo.set_inode_meta(used_ino, meta)?;
 
         if ftype.is_dir() {
-            index_folder_recursive(arbo, *ino - 1, ino, &path.join(&fname), host)
+            index_folder_recursive(arbo, used_ino, &path.join(&fname), host)
                 .expect("error in filesystem indexion (3)");
         };
     }
     Ok(())
 }
 
-pub fn generate_arbo(path: &WhPath, host: &String) -> io::Result<(Arbo, InodeId)> {
+pub fn generate_arbo(path: &WhPath, host: &String) -> io::Result<Arbo> {
     if let Some(arbo) = recover_serialized_arbo(path) {
-        let next_ino: u64 = *arbo
-            .entries
-            .keys()
-            .reduce(|acc, i| std::cmp::max(acc, i))
-            .unwrap_or(&11)
-            + 1;
-        Ok((arbo, next_ino))
+        Ok(arbo)
     } else {
         let mut arbo = Arbo::new();
-        let mut next_ino = Arbo::first_ino(); // NOTE - will be the first registered inode after root
 
         #[cfg(target_os = "linux")]
-        index_folder_recursive(&mut arbo, ROOT, &mut next_ino, path, host)?;
-        Ok((arbo, next_ino))
+        index_folder_recursive(&mut arbo, ROOT, path, host)?;
+        Ok(arbo)
     }
 }
 

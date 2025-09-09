@@ -60,14 +60,15 @@ pub struct LocalConfig {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct GeneralLocalConfig {
-    pub name: String,
-    pub address: String,
+    // pub name: String,
+    pub hostname: String,
+    pub url: Option<String>,
 }
 
 impl LocalConfig {
     pub fn constructor(&mut self, local: Self) -> Result<(), CliError> {
-        self.general.name = local.general.name;
-        if local.general.address != self.general.address {
+        // self.general.name = local.general.name;
+        if local.general.hostname != self.general.hostname {
             log::warn!("Local Config: Impossible to modify an ip address");
             return Err(CliError::Unimplemented {
                 arg: "Local Config: Impossible to modify an ip address".to_owned(),
@@ -85,30 +86,43 @@ pub struct GlobalConfig {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct GeneralGlobalConfig {
-    pub peers: Vec<String>,
+    /// name of the network
+    pub name: String,
+    /// network urls to join the netwoek from
+    pub entrypoints: Vec<String>,
+    /// hostnames of known peers
+    pub hosts: Vec<String>,
+    /// paths not tracked by wormhole
     pub ignore_paths: Vec<String>, //FIXME - What is this ???
+    /// ?
     pub pods_names: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RedundancyConfig {
     pub number: u64,
 }
 
-impl GlobalConfig {
-    pub fn constructor(&mut self, global: Self) -> Result<(), CliError> {
-        self.general.ignore_paths = global.general.ignore_paths;
-        self.general.pods_names = global.general.pods_names;
-        if global.general.peers != self.general.peers {
-            log::warn!("Global Config: Impossible to modify peers' ip address");
-            return Err(CliError::Unimplemented {
-                arg: "Global Config: Impossible to modify peers' ip address".to_owned(),
-            });
-        }
-        self.redundancy.number = global.redundancy.number;
-
-        Ok(())
+impl Default for RedundancyConfig {
+    fn default() -> Self {
+        Self { number: 2 }
     }
+}
+
+impl GlobalConfig {
+    // pub fn constructor(&mut self, global: Self) -> Result<(), CliError> {
+    //     self.general.ignore_paths = global.general.ignore_paths;
+    //     self.general.pods_names = global.general.pods_names;
+    //     if global.general.entrypoints != self.general.entrypoints {
+    //         log::warn!("Global Config: Impossible to modify peers' ip address");
+    //         return Err(CliError::Unimplemented {
+    //             arg: "Global Config: Impossible to modify peers' ip address".to_owned(),
+    //         });
+    //     }
+    //     self.redundancy.number = global.redundancy.number;
+
+    //     Ok(())
+    // }
 }
 
 //OLD

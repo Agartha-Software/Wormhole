@@ -4,11 +4,14 @@ env:
   MIRROR_URL: git@github.com:EpitechPromo2026/G-EIP-700-PAR-7-1-eip-axel.denis.git
 
 on:
-  pull_request:
+  push:
     branches: ["main"]
+  workflow_dispatch: # Allow manual triggers
 
 jobs:
   push_to_mirror:
+    if:
+      github.repository == ‘Agartha-Software/Wormhole’ # disable Forks trying this job (even if it would safely fail)
     runs-on: ubuntu-latest
 
     steps:

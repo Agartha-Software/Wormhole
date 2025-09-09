@@ -15,6 +15,11 @@ use tokio::{
 pub type Tx = UnboundedReceiver<ToNetworkMessage>;
 pub type PeerMap = Arc<Mutex<HashMap<SocketAddr, Tx>>>;
 
+pub struct Service {
+    // pub server: Server
+    pub pods: HashMap<String, Pod>,
+}
+
 pub struct Server {
     pub listener: TcpListener,
     pub state: PeerMap,

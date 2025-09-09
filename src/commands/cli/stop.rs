@@ -3,9 +3,12 @@ use std::env;
 use tokio::runtime::Runtime;
 
 use crate::{
-    commands::cli_commands::{
-        Cli::{self},
-        StatusPodArgs,
+    commands::{
+        cli::path_or_wd,
+        cli_commands::{
+            Cli::{self},
+            StatusPodArgs,
+        },
     },
     error::CliResult,
     pods::whpath::WhPath,
@@ -14,14 +17,8 @@ use crate::{
 use super::cli_messager;
 
 pub fn stop(ip: &str, mut stop_args: StatusPodArgs) -> CliResult<String> {
-    if stop_args.name == "." {
-        let p = env::current_dir()?;
-        let path = WhPath::from(&p.display().to_string());
-        stop_args.path = if stop_args.path.inner != "." {
-            path.join(&stop_args.path)
-        } else {
-            path
-        }
+    if stop_args.name.is_none() {
+        stop_args.path = Some(path_or_wd(stop_args.path)?)
     }
 
     let rt = Runtime::new().unwrap();

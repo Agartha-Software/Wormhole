@@ -81,6 +81,9 @@ where
 {
     fn from(path: &T) -> Self {
         let mut wh_path = WhPath {
+            #[cfg(target_os = "windows")]
+            inner: path.as_str().to_string().replace("\\", "/"), // todo: properly handle backslashes
+            #[cfg(target_os = "linux")]
             inner: path.as_str().to_string(),
             kind: PathType::Empty,
         };

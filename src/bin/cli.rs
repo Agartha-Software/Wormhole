@@ -50,7 +50,7 @@ fn main() -> CliResult<()> {
         Cli::Stop(args) => commands::cli::stop(ip, args),
         Cli::Template(args) => {
             log::info!("creating network {:?}", args.name.clone());
-            commands::cli::templates(&args.path, &args.name)
+            commands::cli::templates(&args.mountpoint.unwrap_or(".".into()), &args.name)
         }
         Cli::New(args) => {
             log::info!("creating pod");

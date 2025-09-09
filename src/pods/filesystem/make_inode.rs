@@ -48,7 +48,7 @@ impl FsInterface {
         //}
 
         let mut file_handles = FileHandleManager::write_lock(&self.file_handles, "create")?;
-        let file_handle = file_handles.insert_new_file_handle(flags, perm)?;
+        let file_handle = file_handles.insert_new_file_handle(flags, perm, inode.id)?;
         return Ok((inode, file_handle));
     }
 
@@ -63,13 +63,7 @@ impl FsInterface {
         kind: SimpleFileType,
     ) -> Result<Inode, MakeInodeError> {
         let new_entry = match kind {
-            SimpleFileType::File => FsEntry::File(vec![LocalConfig::read_lock(
-                &self.network_interface.local_config,
-                "remove_inode_locally",
-            )?
-            .general
-            .address
-            .clone()]),
+            SimpleFileType::File => FsEntry::File(vec![self.network_interface.hostname()?.clone()]),
             SimpleFileType::Directory => FsEntry::Directory(Vec::new()),
         };
 

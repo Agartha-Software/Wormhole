@@ -3,17 +3,14 @@ use crate::{
     error::{WhError, WhResult},
     network::message::{Address, MessageContent, RedundancyMessage, ToNetworkMessage},
     pods::{
-        arbo::{Arbo, FsEntry, InodeId},
+        arbo::{Arbo, FsEntry, Ino, InodeId},
         filesystem::fs_interface::FsInterface,
     },
 };
 use futures_util::future::join_all;
-use std::{error, future::Future, sync::Arc};
+use std::sync::Arc;
 use tokio::{
-    sync::{
-        futures,
-        mpsc::{unbounded_channel, UnboundedReceiver},
-    },
+    sync::mpsc::{unbounded_channel, UnboundedReceiver},
     task::JoinSet,
 };
 
@@ -28,8 +25,7 @@ pub async fn redundancy_worker(
     mut reception: UnboundedReceiver<RedundancyMessage>,
     nw_interface: Arc<NetworkInterface>,
     fs_interface: Arc<FsInterface>,
-    redundancy: u64, // TODO - when updated in conf, send a message to this worker for update
-    self_addr: Address, // TODO - Same
+    // redundancy: u64, // TODO - when updated in conf, send a message to this worker for update
 ) {
     loop {
         let message = match reception.recv().await {
@@ -49,22 +45,14 @@ pub async fn redundancy_worker(
 
         let _ = match message {
             RedundancyMessage::ApplyTo(ino) => {
-                let _ = apply_to(
-                    &nw_interface,
-                    &fs_interface,
-                    redundancy,
-                    &peers,
-                    &self_addr,
-                    ino,
-                )
-                .await
-                .inspect_err(|e| log::error!("Redundancy error: {e}"));
+                let _ = apply_to(&nw_interface, &fs_interface, &peers, ino)
+                    .await
+                    .inspect_err(|e| log::error!("Redundancy error: {e}"));
             }
             RedundancyMessage::CheckIntegrity => {
-                let _ =
-                    check_integrity(&nw_interface, &fs_interface, redundancy, &peers, &self_addr)
-                        .await
-                        .inspect_err(|e| log::error!("Redundancy error: {e}"));
+                let _ = check_integrity(&nw_interface, &fs_interface, &peers)
+                    .await
+                    .inspect_err(|e| log::error!("Redundancy error: {e}"));
             }
         };
     }
@@ -107,32 +95,29 @@ fn eligible_to_apply(
 async fn check_integrity(
     nw_interface: &Arc<NetworkInterface>,
     fs_interface: &Arc<FsInterface>,
-    redundancy: u64,
     peers: &Vec<Address>,
-    self_addr: &Address,
 ) -> WhResult<()> {
     let available_peers = peers.len() + 1;
 
+    let hostname = nw_interface.hostname()?;
+
     // Applies redundancy to needed files
-    let selected_files: Vec<InodeId> =
+    let selected_files: Vec<Ino> =
         Arbo::n_read_lock(&nw_interface.arbo, "redundancy: check_integrity")?
             .iter()
             .filter_map(|(ino, inode)| {
-                eligible_to_apply(*ino, &inode.entry, redundancy, available_peers, self_addr)
+                eligible_to_apply(
+                    *ino,
+                    &inode.entry,
+                    nw_interface.global_config.read().redundancy.number,
+                    available_peers,
+                    &hostname,
+                )
             })
             .collect();
     let futures = selected_files
         .iter()
-        .map(|ino| {
-            apply_to(
-                nw_interface,
-                fs_interface,
-                redundancy,
-                peers,
-                self_addr,
-                ino.clone(),
-            )
-        })
+        .map(|ino| apply_to(nw_interface, fs_interface, peers, ino.clone()))
         .collect::<Vec<_>>();
 
     let errors: Vec<WhError> = join_all(futures)
@@ -157,15 +142,15 @@ async fn check_integrity(
 async fn apply_to(
     nw_interface: &Arc<NetworkInterface>,
     fs_interface: &Arc<FsInterface>,
-    redundancy: u64,
     peers: &Vec<Address>,
-    self_addr: &Address,
     ino: u64,
 ) -> WhResult<usize> {
     if Arbo::is_local_only(ino) {
         return Ok(0);
     }
     let file_binary = Arc::new(fs_interface.read_local_file(ino)?);
+
+    let redundancy = nw_interface.global_config.read().redundancy.number;
 
     let missing_hosts_count: usize;
     let available_hosts = peers.len() + 1; // + myself
@@ -177,15 +162,7 @@ async fn apply_to(
         (redundancy - 1) as usize
     };
 
-    let new_hosts = push_redundancy(
-        nw_interface,
-        peers,
-        ino,
-        file_binary,
-        target_redundancy,
-        self_addr.clone(),
-    )
-    .await;
+    let new_hosts = push_redundancy(nw_interface, peers, ino, file_binary, target_redundancy).await;
 
     nw_interface.update_hosts(ino, new_hosts)?;
     Ok(missing_hosts_count)
@@ -198,9 +175,8 @@ async fn push_redundancy(
     ino: InodeId,
     file_binary: Arc<Vec<u8>>,
     target_redundancy: usize,
-    self_addr: Address,
 ) -> Vec<Address> {
-    let mut success_hosts: Vec<Address> = vec![self_addr];
+    let mut success_hosts: Vec<Address> = vec![nw_interface.hostname().unwrap()];
     let mut set: JoinSet<WhResult<Address>> = JoinSet::new();
 
     for i in 0..target_redundancy {
