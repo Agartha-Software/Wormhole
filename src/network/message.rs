@@ -20,7 +20,9 @@ pub enum MessageContent {
     Register(Address),
     Remove(InodeId),
     Inode(Inode),
+    /// Request a specific file from from a peer
     RequestFile(InodeId, Address),
+    /// Response to a RequestFile with the file data
     PullAnswer(InodeId, Vec<u8>),
     RedundancyFile(InodeId, Arc<Vec<u8>>),
     /// Parent, New Parent, Name, New Name, overwrite
