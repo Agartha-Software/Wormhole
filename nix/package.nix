@@ -1,40 +1,44 @@
 { pkgs, self, ... }:
+
 let
-  # The following sources helps downloading the custom winfsp patch
-  # If winfsp in one day sourced on the official repo, could dismiss
-  # this for a single derivation, like was started on this commit:
-  # d968432c3c9b38ddb35da9a20e79dc0a31cf1e74
-  aggregatedSource = pkgs.stdenv.mkDerivation {
-    pname = "cargo-crates-dl";
+  cargoDeps = pkgs.stdenv.mkDerivation {
+    pname = "wormhole-deps";
     version = "0.0.0";
+
     src = self;
+
     doCheck = false;
     dontFixup = true;
     nativeBuildInputs = with pkgs; [ cargo rustc cacert wget ];
+
     buildPhase = ''
       runHook preBuild
       export CARGO_HOME=$PWD/.cargo
-      cargo fetch --locked
+      cargo vendor --locked > vendor-config.toml
       runHook postBuild
     '';
+
     installPhase = ''
       runHook preInstall
       mkdir $out
-      cp -r . $out
+      mv vendor $out
+      mv vendor-config.toml $out
       runHook postInstall
     '';
+
     outputHashAlgo = "sha256";
     outputHashMode = "recursive";
-    # NOTE for me - find by placing pkgs.lib.fakeHash here, and doing nix build .#wormhole
-    outputHash = "sha256-T+RC5V1prNFr+MHuFy8n8hI/afULr1tVQVsXx4I7UTA=";
+    outputHash = "sha256-7bSZIKmxcEoNc+jaKgGA8RtqEO0zJeq0I5fXhQJU/bk=";
   };
+
 in pkgs.stdenv.mkDerivation {
   pname = "wormhole";
   version = "0.1.0";
 
-  src = aggregatedSource;
+  src = self;
+  cargoDeps = cargoDeps;
 
-  buildInputs = [ pkgs.rustc pkgs.cargo pkgs.fuse3 pkgs.pkg-config ];
+  buildInputs = with pkgs; [ rustc cargo fuse3 pkg-config ];
 
   buildPhase = ''
     runHook preBuild
@@ -42,6 +46,12 @@ in pkgs.stdenv.mkDerivation {
     export RUST_SRC_PATH=${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}
     export RUSTUP_TOOLCHAIN=stable
     export CARGO_TARGET_DIR=target
+
+    export CARGO_HOME=$PWD/.cargo
+    mkdir -p $CARGO_HOME
+    ln -s ${cargoDeps}/vendor ./vendor
+    ln -s ${cargoDeps}/vendor-config.toml $CARGO_HOME/config.toml
+
     cargo build --frozen --release --all-features
   '';
 
