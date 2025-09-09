@@ -500,6 +500,7 @@ impl NetworkInterface {
         Ok(())
     }
 
+    /// Main loop receiving messages from the network and dispatching them to the filesystem interface
     pub async fn network_airport(
         mut network_reception: UnboundedReceiver<FromNetworkMessage>,
         fs_interface: Arc<FsInterface>,

@@ -42,7 +42,7 @@ use super::arbo::{InodeId, ARBO_FILE_FNAME, ARBO_FILE_INO, GLOBAL_CONFIG_INO};
 #[derive(Debug)]
 pub struct Pod {
     name: String,
-    network_interface: Arc<NetworkInterface>,
+    pub(crate) network_interface: Arc<NetworkInterface>, // TODO - make private
     fs_interface: Arc<FsInterface>,
     mount_point: WhPath,
     peers: Arc<RwLock<Vec<PeerIPC>>>,
@@ -444,6 +444,15 @@ impl Pod {
         });
     }
 
+    pub fn get_peers(&self) -> Vec<Address> {
+        self.network_interface
+            .peers
+            .read()
+            .iter()
+            .map(|p| p.address.clone())
+            .collect()
+    }
+
     pub async fn stop(self) -> Result<(), PodStopError> {
         // TODO
         // in actual state, all operations (request from network other than just pulling the asked files)
@@ -453,13 +462,7 @@ impl Pod {
 
         let arbo = Arbo::n_read_lock(&self.network_interface.arbo, "Pod::Pod::stop(1)")?;
 
-        let peers: Vec<Address> = self
-            .peers
-            .read()
-            .iter()
-            .map(|peer| peer.address.clone())
-            .collect();
-
+        let peers: Vec<Address> = self.get_peers();
         self.send_files_when_stopping(&arbo, peers).await;
         let arbo_bin = bincode::serialize(&*arbo).expect("can't serialize arbo to bincode");
         drop(arbo);
