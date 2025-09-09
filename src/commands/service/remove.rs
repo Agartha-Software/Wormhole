@@ -28,11 +28,18 @@ async fn take_remove(_pod: Pod) -> CliResult<CliSuccess> {
     })
 }
 
+async fn freeze_remove(_pod: Pod) -> CliResult<CliSuccess> {
+    Err(CliError::Unimplemented {
+        arg: "Freeze remove".into(),
+    })
+}
+
 pub async fn remove(args: RemoveArgs, pod: Pod) -> CliResult<CliSuccess> {
     match args.mode {
         Mode::Simple => simple_remove(pod).await,
         Mode::Clone => clone_remove(pod).await,
         Mode::Clean => clean_remove(pod).await,
         Mode::Take => take_remove(pod).await,
+        Mode::Freeze => freeze_remove(pod).await,
     }
 }

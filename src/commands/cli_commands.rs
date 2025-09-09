@@ -122,6 +122,10 @@ pub enum Mode {
     Clean,
     /// Remove this pod from the network without distributing its data to other nodes
     Take,
+    /// Remove the connection in both directions, this pod is in read-only mode
+    /// and will not be able to write any data to the network anymore
+    /// but will still be able to read data from the network
+    Freeze,
 }
 
 // Structure RemoveArgs modifiée
