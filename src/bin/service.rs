@@ -419,6 +419,7 @@ async fn main() {
     let terminal_handle = if std::io::stdout().is_terminal() {
         Some(tokio::spawn(terminal_watchdog(interrupt_tx)))
     } else {
+        println!("Starting in deamon mode");
         None
     };
     let signals_task = tokio::spawn(handle_signals(signals_tx, interrupt_rx));
