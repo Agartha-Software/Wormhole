@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ pkgs, self, ... }:
 let
   # The following sources helps downloading the custom winfsp patch
   # If winfsp in one day sourced on the official repo, could dismiss
@@ -7,13 +7,7 @@ let
   aggregatedSource = pkgs.stdenv.mkDerivation {
     pname = "cargo-crates-dl";
     version = "0.0.0";
-    src = pkgs.fetchFromGitHub {
-      owner = "Agartha-Software";
-      repo = "Wormhole";
-      rev = "1b2a51787361339d2aeb56532748004569013c5b";
-      # NOTE for me - find by placing pkgs.lib.fakeHash here, and doing nix build .#wormhole
-      sha256 = "sha256-AfdMFFcNhDXkP+LxGtBTqksA3RfUb6S6xW4p7O09UFM=";
-    };
+    src = self;
     doCheck = false;
     dontFixup = true;
     nativeBuildInputs = with pkgs; [ cargo rustc cacert wget ];
