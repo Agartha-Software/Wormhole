@@ -207,6 +207,7 @@ async fn handle_cli_command(
                             "Configuration applied successfully. Pod name changed.".to_owned(),
                         ))
                     } else {
+                        //FIXME - Cancel the change of name in the config files
                         Err(CliError::Message {
                             reason: "Impossible to remove the pod for change his name".to_owned(),
                         })
@@ -266,10 +267,11 @@ async fn handle_cli_command(
                 Err(CliError::PodNotFound)
             }
         }
-        Cli::Template(_template_arg) => todo!(),
+        Cli::Template(_template_arg) => Ok(CliSuccess::Message(
+            "What are you doing, template command is not implemented yet".to_owned(),
+        )),
         Cli::Inspect => todo!(),
         Cli::Status => Ok(CliSuccess::Message(format!("{}", ip.to_string()))),
-        Cli::Interrupt => todo!(),
     };
     let string_output = response_command
         .inspect_err(|e| log::error!("handling cli: {e:?}"))

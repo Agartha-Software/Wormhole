@@ -75,10 +75,6 @@ fn main() -> CliResult<()> {
             log::info!("retore a specific file config");
             commands::cli::restore(ip, args)
         }
-        Cli::Interrupt => {
-            log::warn!("interrupt command");
-            todo!("interrupt");
-        }
     };
     if let Err(e) = &status {
         log::error!("CLI: error reported: {e}");

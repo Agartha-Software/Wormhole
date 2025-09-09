@@ -31,8 +31,6 @@ pub enum Cli {
     Apply(PodConf),
     /// Restore many or a specific file configuration
     Restore(PodConf),
-    /// Stops the service
-    Interrupt,
 }
 
 #[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
