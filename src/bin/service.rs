@@ -274,7 +274,7 @@ async fn handle_cli_command(
         Cli::Interrupt => todo!(),
     };
     let string_output = response_command.map_or_else(|e| format!("{}", e), |a| a.to_string());
-    match writer.send(Message::Text(string_output)).await {
+    match writer.send(Message::Text(string_output.into())).await {
         Ok(()) => log::debug!("Sent answer to cli"),
         Err(err) => log::error!("Message can't send to cli: {}", err),
     }
