@@ -23,7 +23,7 @@ impl NetworkInterface {
     // REVIEW - recheck and simplify this if possible
     pub fn pull_file_sync(&self, file: InodeId) -> Result<Option<Callback>, PullError> {
         let self_addr = LocalConfig::read_lock(&self.local_config, "pull_file_sync")
-            .expect("pull_fyle_sync: can't get self_addr")
+            .expect("pull_file_sync: can't get self_addr")
             .general
             .address
             .clone();
