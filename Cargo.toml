@@ -85,7 +85,7 @@ tokio = { version = "1.38.0", default-features = false, features = [
     "sync",
     "signal",
 ] }
-tokio-tungstenite = "0.23"
+tokio-tungstenite = "^0.27"
 futures-util = { version = "0.3.30", default-features = false, features = [
     "sink",
     "std",
@@ -101,6 +101,7 @@ sysinfo = "0.34.2"
 custom_error = "1.9.2"
 signal-hook = "0.3.18"
 futures = "0.3"
+gethostname = "1.0.2"
 
 [dev-dependencies]
 assert_fs = "1.1.2"

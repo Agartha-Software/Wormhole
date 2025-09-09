@@ -24,8 +24,9 @@ use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::{accept_async, WebSocketStream};
+use tokio_tungstenite::WebSocketStream;
 
 use wormhole::commands::{self, cli_commands::Cli};
 use wormhole::config::types::Config;
@@ -49,7 +50,7 @@ async fn handle_cli_command(
     let response_command = match command {
         Cli::New(pod_args) => {
             if if let Some(path) = &pod_args.mountpoint {
-                pods.values().any(|p| p.get_mount_point() == path)
+                pods.values().any(|p| p.get_mountpoint() == path)
             } else {
                 false
             } {
@@ -57,13 +58,13 @@ async fn handle_cli_command(
                     reason: "This mount point already exist.".to_string(),
                 })
             } else {
+                let pod_name = pod_args.name.clone();
                 match commands::service::new(pod_args).await {
                     Ok(pod) => {
-                        let name = pod.get_name().to_string();
-                        pods.insert(name.clone(), pod);
+                        pods.insert(pod_name.clone(), pod);
                         Ok(CliSuccess::WithData {
                             message: String::from("Pod created with success"),
-                            data: name,
+                            data: pod_name,
                         })
                     }
                     Err(e) => Err(e),
@@ -85,7 +86,7 @@ async fn handle_cli_command(
                         })
                         .and_then(|path| {
                             pods.iter()
-                                .find(|(_, pod)| pod.get_mount_point() == &path)
+                                .find(|(_, pod)| pod.get_mountpoint() == &path)
                                 .map(|(key, _)| key.clone())
                                 .ok_or(CliError::PodNotFound)
                         })
@@ -115,7 +116,7 @@ async fn handle_cli_command(
                         })
                         .and_then(|path| {
                             pods.iter()
-                                .find(|(_, pod)| pod.get_mount_point() == &path)
+                                .find(|(_, pod)| pod.get_mountpoint() == &path)
                                 .map(|(key, _)| key.clone())
                                 .ok_or(CliError::PodNotFound)
                         })
@@ -131,12 +132,12 @@ async fn handle_cli_command(
             let opt_pod = if let Some(name) = &restore_args.name {
                 pods.iter().find(|(n, _)| n == &name)
             } else if let Some(path) = &restore_args.path {
-                pods.iter().find(|(_, pod)| pod.get_mount_point() == path)
+                pods.iter().find(|(_, pod)| pod.get_mountpoint() == path)
             } else {
                 None
             };
             if let Some((_, pod)) = opt_pod {
-                restore_args.path = Some(pod.get_mount_point().clone());
+                restore_args.path = Some(pod.get_mountpoint().clone());
                 commands::service::restore(
                     pod.local_config.clone(),
                     pod.global_config.clone(),
@@ -158,14 +159,14 @@ async fn handle_cli_command(
             let opt_pod = if let Some(name) = &pod_conf.name {
                 pods.iter().find(|(n, _)| n == &name)
             } else if let Some(path) = &pod_conf.path {
-                pods.iter().find(|(_, pod)| pod.get_mount_point() == path)
+                pods.iter().find(|(_, pod)| pod.get_mountpoint() == path)
             } else {
                 None
             };
 
             //Apply new confi in the pod and check if the name change
             let res = if let Some((name, pod)) = opt_pod {
-                pod_conf.path = Some(pod.get_mount_point().clone());
+                pod_conf.path = Some(pod.get_mountpoint().clone());
 
                 match commands::service::apply(
                     pod.local_config.clone(),
@@ -179,11 +180,12 @@ async fn handle_cli_command(
                             "handle_cli_command::apply",
                         ) {
                             Ok(local) => {
-                                if local.general.name != *name {
-                                    Ok(Some((local.general.name.clone(), name.clone())))
-                                } else {
-                                    Ok(None)
-                                }
+                                Ok(None)
+                                // if local.general.name != *name {
+                                //     Ok(Some((local.general.name.clone(), name.clone())))
+                                // } else {
+                                //     Ok(None)
+                                // }
                             }
                             Err(err) => Err(CliError::WhError { source: err }),
                         }
@@ -201,6 +203,7 @@ async fn handle_cli_command(
             // Modify the name in the hashmap if it necessary
             match res {
                 Ok(Some((new_name, old_name))) => {
+                    let old_name: String = old_name;
                     if let Some(pod) = pods.remove(&old_name) {
                         pods.insert(new_name, pod);
                         Ok(CliSuccess::Message("tt".to_owned()))
@@ -220,7 +223,7 @@ async fn handle_cli_command(
             if let Some((_, pod)) = if let Some(name) = &args.name {
                 pods.iter().find(|(n, _)| n == &name)
             } else if let Some(path) = &args.path {
-                pods.iter().find(|(_, pod)| pod.get_mount_point() == path)
+                pods.iter().find(|(_, pod)| pod.get_mountpoint() == path)
             } else {
                 None
             } {
@@ -244,8 +247,8 @@ async fn handle_cli_command(
                         .find_map(|(n, pod)| (n == name).then_some((pod, None)))
                 } else if let Some(path) = &path {
                     pods.iter().find_map(|(_, pod)| {
-                        log::info!("TREE: pod: {:?}", &pod.get_mount_point());
-                        path.strip_prefix(&pod.get_mount_point())
+                        log::info!("TREE: pod: {:?}", &pod.get_mountpoint());
+                        path.strip_prefix(&pod.get_mountpoint())
                             .ok()
                             .map(|sub| (pod, Some(sub.into())))
                     })
@@ -272,7 +275,7 @@ async fn handle_cli_command(
     let string_output = response_command
         .inspect_err(|e| log::error!("handling cli: {e:?}"))
         .map_or_else(|e| format!("CliError: {:?}", e), |a| a.to_string());
-    match writer.send(Message::Text(string_output)).await {
+    match writer.send(Message::Text(string_output.into())).await {
         Ok(()) => log::debug!("Sent answer to cli"),
         Err(err) => log::error!("Message can't send to cli: {}", err),
     }
@@ -280,7 +283,16 @@ async fn handle_cli_command(
 
 async fn get_cli_command(stream: tokio::net::TcpStream) -> WhResult<(Cli, CliTcpWriter)> {
     // Accept the TCP stream as a WebSocket stream
-    let ws_stream = match accept_async(stream).await {
+    let ws_stream = match tokio_tungstenite::accept_async_with_config(
+        stream,
+        Some(
+            WebSocketConfig::default()
+                .max_message_size(None)
+                .max_frame_size(None),
+        ),
+    )
+    .await
+    {
         Ok(s) => s,
         Err(e) => {
             log::error!("get_cli_command: can't accept tcp stream: {}", e);

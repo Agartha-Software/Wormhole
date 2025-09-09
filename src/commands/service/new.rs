@@ -1,5 +1,5 @@
 use crate::{
-    commands::{cli_commands::PodArgs, default_global_config, default_local_config},
+    commands::cli_commands::PodArgs,
     config::{types::Config, GlobalConfig, LocalConfig},
     error::{CliError, CliResult},
     network::server::Server,
@@ -9,17 +9,17 @@ use crate::{
         whpath::WhPath,
     },
 };
+use gethostname::gethostname;
 use std::{path::PathBuf, sync::Arc};
 
 pub async fn new(args: PodArgs) -> CliResult<Pod> {
     let (global_config, local_config, server, mount_point) = pod_value(&args).await?;
     Pod::new(
-        local_config.general.name.clone(),
+        // local_config.general.name.clone(),
         global_config,
         local_config.clone(),
         mount_point,
         server.clone(),
-        local_config.clone().general.address,
     )
     .await
     .map_err(|e| CliError::PodCreationFailed { reason: e })
@@ -35,16 +35,8 @@ fn add_hosts(
         return global_config;
     }
 
-    additional_hosts.push(url);
-    if global_config.general.peers.is_empty() {
-        global_config.general.peers = additional_hosts;
-    } else {
-        for host in additional_hosts {
-            if !global_config.general.peers.contains(&host) {
-                global_config.general.peers.push(host);
-            }
-        }
-    }
+    additional_hosts.insert(0, url);
+    global_config.general.entrypoints.extend(additional_hosts);
     global_config
 }
 
@@ -64,38 +56,28 @@ async fn pod_value(args: &PodArgs) -> CliResult<(GlobalConfig, LocalConfig, Arc<
         })?;
 
     log::info!("canonical: {:?}", path);
-    // let pod_name = args.name.clone().ok_or(||CliError::PodNotFound).or_else(|_| match std::fs::canonicalize(&path).map(|file| {
-    //     file.file_name()
-    //     .and_then(|f| f.to_str())
-    //     .map(|f| f.to_owned())
-    // }) {
-    //     Ok(Some(name)) => Ok(name.to_owned()),
-    //     e => {
-    //         Err(CliError::InvalidArgument {
-    //             arg: format!("name: {e:?}"),
-    //         })
-    //     }
-    // })?;
-    // log::info!("name: {pod_name}");
+
     let address = "0.0.0.0:".to_owned() + &args.port;
     let local_cfg_path = path.join(LOCAL_CONFIG_FNAME);
     let global_cfg_path = path.join(GLOBAL_CONFIG_FNAME);
 
-    // return Err(CliError::BincodeError);
+    let mut local_config: LocalConfig = LocalConfig::read(&local_cfg_path).unwrap_or_default();
+    local_config.general.hostname = args
+        .hostname
+        .clone()
+        .or_else(|| gethostname().into_string().ok())
+        .ok_or(CliError::Message {
+            reason: "no valid hostname".to_owned(),
+        })?;
+    local_config.general.url = Some(
+        args.listen_url
+            .as_ref()
+            .unwrap_or(&local_config.general.hostname)
+            .clone(),
+    );
+    let server: Arc<Server> = Arc::new(Server::setup(&address).await?);
 
-    let mut local_config: LocalConfig =
-        LocalConfig::read(&local_cfg_path).unwrap_or(default_local_config(&args.name));
-    if local_config.general.name != args.name {
-        //REVIEW - Change the name without notifying the user or return an error? I think it would be better to return an error
-        local_config.general.name = args.name.clone();
-    }
-    if local_config.general.address != address {
-        local_config.general.address = address;
-    }
-    let server: Arc<Server> = Arc::new(Server::setup(&local_config.general.address).await?);
-
-    let global_config: GlobalConfig =
-        GlobalConfig::read(global_cfg_path).unwrap_or(default_global_config());
+    let global_config: GlobalConfig = GlobalConfig::read(global_cfg_path).unwrap_or_default();
     let global_config = add_hosts(
         global_config,
         args.url.clone().unwrap_or("".to_string()),

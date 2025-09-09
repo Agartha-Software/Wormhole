@@ -12,10 +12,11 @@ pub fn apply(
     global_config: Arc<RwLock<GlobalConfig>>,
     args: PodConf,
 ) -> CliResult<CliSuccess> {
+    let mut log = String::default();
     for file in args.files {
         match file.as_str() {
             LOCAL_CONFIG_FNAME => {
-                let conf = LocalConfig::read(
+                let mut conf = LocalConfig::read(
                     &args
                         .path
                         .as_ref()
@@ -23,7 +24,19 @@ pub fn apply(
                         .join(LOCAL_CONFIG_FNAME)
                         .inner,
                 )?;
-                LocalConfig::write_lock(&local_config, "apply::local_config")?.constructor(conf)?;
+                {
+                    let hostname = &local_config.read().general.hostname;
+                    if conf.general.hostname != *hostname {
+                        conf.general.hostname = hostname.clone();
+                        log.push_str("Warning: hostname change rejected\n");
+                    }
+                    let url = &local_config.read().general.url;
+                    if conf.general.url != *url {
+                        conf.general.url = url.clone();
+                        log.push_str("Warning: url change rejected\n");
+                    }
+                }
+                *LocalConfig::write_lock(&local_config, "apply::local_config")? = conf;
             }
             GLOBAL_CONFIG_FNAME => {
                 let conf = GlobalConfig::read(
@@ -34,13 +47,14 @@ pub fn apply(
                         .join(GLOBAL_CONFIG_FNAME)
                         .inner,
                 )?;
-                GlobalConfig::write_lock(&global_config, "apply::global_conf")?
-                    .constructor(conf)?;
+                *GlobalConfig::write_lock(&global_config, "apply::global_conf")? = conf;
             }
             _ => return Err(CliError::InvalidArgument { arg: file }),
         }
     }
     Ok(CliSuccess::Message(
-        "The new configuration is apply".to_owned(),
+        log.is_empty()
+            .then_some("New configuration succesfully applied".into())
+            .unwrap_or(format!("New configuration applied\n{log}")),
     ))
 }
