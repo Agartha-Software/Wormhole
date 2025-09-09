@@ -19,6 +19,7 @@ use std::collections::HashMap;
  *  and execute instructions on the disk
  */
 use std::env;
+use std::io::IsTerminal;
 
 use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
@@ -426,14 +427,23 @@ async fn main() {
         }
     }
 
-    let ip_string = env::args().nth(1);
-    let terminal_handle = tokio::spawn(terminal_watchdog(interrupt_tx));
+    let ip_string = env::args().filter(|arg| arg != "--nodeamon").nth(1);
+    let terminal_handle =
+        if std::io::stdout().is_terminal() || env::args().any(|arg| arg == "--nodeamon") {
+            Some(tokio::spawn(terminal_watchdog(interrupt_tx)))
+        } else {
+            println!("Starting in deamon mode");
+            None
+        };
     let signals_task = tokio::spawn(handle_signals(signals_tx, interrupt_rx));
     log::trace!("Starting service on {:?}", ip_string);
     log::info!("Started");
     let _ = start_cli_listener(&mut pods, ip_string, signals_rx).await;
 
-    terminal_handle.abort();
+    if let Some(terminal_handle) = terminal_handle {
+        terminal_handle.abort();
+    }
+
     signals_task.await.unwrap();
 
     log::info!("Stopping");

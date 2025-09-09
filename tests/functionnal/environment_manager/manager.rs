@@ -48,7 +48,7 @@ impl EnvironmentManager {
         );
 
         let mut instance = std::process::Command::new(SERVICE_BIN)
-            .args(&[&format!("127.0.0.1:{port}")])
+            .args(&[&format!("127.0.0.1:{port}"), "--nodeamon"])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .stdin(Stdio::piped())

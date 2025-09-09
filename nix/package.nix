@@ -7,9 +7,12 @@ let
   aggregatedSource = pkgs.stdenv.mkDerivation {
     pname = "cargo-crates-dl";
     version = "0.0.0";
-    src = fetchGit {
-      url = "https://github.com/Agartha-Software/Wormhole";
-      rev = "55c5ff8953af9f1de1a0a4cda4cf210374e85358";
+    src = pkgs.fetchFromGitHub {
+      owner = "Agartha-Software";
+      repo = "Wormhole";
+      rev = "1b2a51787361339d2aeb56532748004569013c5b";
+      # NOTE for me - find by placing pkgs.lib.fakeHash here, and doing nix build .#wormhole
+      sha256 = "sha256-AfdMFFcNhDXkP+LxGtBTqksA3RfUb6S6xW4p7O09UFM=";
     };
     doCheck = false;
     dontFixup = true;
@@ -28,7 +31,8 @@ let
     '';
     outputHashAlgo = "sha256";
     outputHashMode = "recursive";
-    outputHash = "sha256-VzkwFYMAs1sYcmHbLlDeYPL53NmTqFcoGSTudzcekzs=";
+    # NOTE for me - find by placing pkgs.lib.fakeHash here, and doing nix build .#wormhole
+    outputHash = "sha256-T+RC5V1prNFr+MHuFy8n8hI/afULr1tVQVsXx4I7UTA=";
   };
 in pkgs.stdenv.mkDerivation {
   pname = "wormhole";
