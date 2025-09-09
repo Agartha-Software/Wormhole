@@ -1,6 +1,8 @@
 use custom_error::custom_error;
 use std::{fmt, io};
 
+use crate::pods::filesystem::read::ReadError;
+use crate::pods::network::pull_file::PullError;
 use crate::pods::pod::PodInfoError;
 use crate::pods::pod::PodStopError;
 use bincode;
@@ -38,6 +40,8 @@ custom_error! {pub CliError
     BincodeError = "Serialization error",
     TungsteniteError = "WebSocket error",
     IoError{source: io::Error} = "I/O error: {source}", // Pour les erreurs fs::remove_dir_all, etc.
+    PullError{source: PullError} = "{source}",
+    ReadError{source: ReadError} = "{source}",
 
     PodNotFound = "Pod not found",
     PodInfoError{source: PodInfoError} = "{source}",
