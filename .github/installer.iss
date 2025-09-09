@@ -23,10 +23,12 @@ Name: "french"; MessagesFile: "compiler:Languages\French.isl"
 [Files]
 Source: "..\target\release\wormhole.exe"; DestDir: "{app}"; Flags: allowunsafefiles
 Source: "..\target\release\wormholed.exe"; DestDir: "{app}"; Flags: allowunsafefiles
+Source: "..\winfsp.msi"; DestDir: "{app}"; Flags: allowunsafefiles deleteafterinstall
 
 [Tasks]
 Name: "StartMenuEntry" ; Description: "Start wormhole service when Windows starts" ; GroupDescription: "Windows Startup"; MinVersion: 4,4;
 Name: AddDefenderExclusion; Description: "Exclude Wormhole service from Windows Defender"; GroupDescription: "Security options"; Flags: unchecked
+Name: InstallWinFSPDependancy ; Description: "Also install the WinFSP dependency" ; GroupDescription: "Dependancies"
 
 [icons]
 Name: "{userstartup}\Wormhole Service"; Filename: "{app}\wormholed.exe"; Tasks: "StartMenuEntry"; Check: not IsAdminInstallMode
@@ -39,6 +41,9 @@ Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environmen
     Check: NeedsAddPath('{app}')
 
 [Run]
+Filename: "msiexec.exe"; \
+  Parameters: "/i ""{app}\winfsp.msi"" /norestart ADDLOCAL=ALL"; \
+  Flags: runascurrentuser; Tasks: InstallWinFSPDependancy
 Filename: "powershell.exe"; \
   Parameters: "-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -Command Add-MpPreference -ExclusionPath '""{app}\wormholed.exe""'"; \
   Flags: runhidden runascurrentuser; Tasks: AddDefenderExclusion
