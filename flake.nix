@@ -26,7 +26,7 @@
 
       packages = forEachSystem (system:
         let pkgs = nixpkgs.legacyPackages.${system};
-        in { wormhole = import ./nix/package.nix { inherit pkgs; }; });
+        in { wormhole = import ./nix/package.nix { inherit pkgs self; }; });
 
       nixosModules.wormhole = { config, lib, pkgs, ... }:
         let
