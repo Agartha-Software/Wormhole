@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["forward","ip","message","peer_ipc","server"]};
+window.SIDEBAR_ITEMS = {"enum":["HandshakeError"],"mod":["forward","ip","message","peer_ipc","server"]};

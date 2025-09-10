@@ -1,1 +1,1 @@
-searchState.loadedDescShard("wormholed", 0, "Listens for CLI calls and launch one tcp instance per cli …")
+searchState.loadedDescShard("wormholed", 0, "Returns the argument unchanged.\nCalls <code>U::from(self)</code>.\nListens for CLI calls and launch one tcp instance per cli …")

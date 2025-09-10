@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["PodInfoError","PodStopError"],"fn":["initiate_connection"],"struct":["Pod"]};
+window.SIDEBAR_ITEMS = {"enum":["PodInfoError","PodStopError"],"struct":["Pod"]};

@@ -155,7 +155,7 @@ value of this operation. fh will contain the value set by the open method, or
 will be undefined if the open method didn’t set any value. <a>Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.release" class="method trait-impl"><a class="src rightside" href="../../../src/wormhole/fuse/fuse_impl.rs.html#585-599">Source</a><a href="#method.release" class="anchor">§</a><h4 class="code-header">fn <a class="fn">release</a>(
     &amp;mut self,
     _req: &amp;Request&lt;'_&gt;,
-    _ino: <a class="primitive" href="https://doc.rust-lang.org/1.89.0/std/primitive.u64.html">u64</a>,
+    ino: <a class="primitive" href="https://doc.rust-lang.org/1.89.0/std/primitive.u64.html">u64</a>,
     file_handle: <a class="primitive" href="https://doc.rust-lang.org/1.89.0/std/primitive.u64.html">u64</a>,
     _flags: <a class="primitive" href="https://doc.rust-lang.org/1.89.0/std/primitive.i32.html">i32</a>,
     _lock_owner: <a class="enum" href="https://doc.rust-lang.org/1.89.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.89.0/std/primitive.u64.html">u64</a>&gt;,

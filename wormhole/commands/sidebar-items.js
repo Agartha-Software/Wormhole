@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["cli","cli_commands","default_global_config","default_local_config","service"]};
+window.SIDEBAR_ITEMS = {"mod":["cli","cli_commands","service"]};

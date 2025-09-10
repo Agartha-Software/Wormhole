@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["DEFAULT_ADDRESS"],"fn":["get_cli_command","handle_cli_command","main","start_cli_listener","terminal_watchdog"],"type":["CliTcpWriter"]};
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_ADDRESS","MAX_PORT","MAX_TRY_PORTS"],"enum":["CliListenerError"],"fn":["get_cli_command","handle_cli_command","handle_signals","handle_signals_unix","main","start_cli_listener","terminal_watchdog"],"type":["CliTcpWriter"]};

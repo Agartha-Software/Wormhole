@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["Server"],"type":["PeerMap","Tx"]};
+window.SIDEBAR_ITEMS = {"struct":["Server","Service"],"type":["PeerMap","Tx"]};

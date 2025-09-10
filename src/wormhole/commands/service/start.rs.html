@@ -7,6 +7,6 @@
 <a href=#7 id=7 data-nosnippet>7</a>    <span class="kw">let </span>name = start_args.name.clone();
 <a href=#8 id=8 data-nosnippet>8</a>    <span class="prelude-val">Ok</span>(CliSuccess::WithData {
 <a href=#9 id=9 data-nosnippet>9</a>        message: String::from(<span class="string">"Pod start: "</span>),
-<a href=#10 id=10 data-nosnippet>10</a>        data: name,
+<a href=#10 id=10 data-nosnippet>10</a>        data: name.unwrap_or(<span class="string">""</span>.to_owned()),
 <a href=#11 id=11 data-nosnippet>11</a>    })
 <a href=#12 id=12 data-nosnippet>12</a>}</code></pre></div></section></main></body></html>
