@@ -17,7 +17,6 @@ use crate::{
 /// through the network
 #[derive(Serialize, Deserialize, Clone)]
 pub enum MessageContent {
-    Register(Address),
     Remove(InodeId),
     Inode(Inode),
     RequestFile(InodeId, Address),
@@ -42,7 +41,6 @@ pub enum MessageContent {
 impl fmt::Display for MessageContent {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let name = match self {
-            MessageContent::Register(_) => "Register",
             MessageContent::Remove(_) => "Remove",
             MessageContent::Inode(_) => "Inode",
             MessageContent::RequestFile(_, _) => "RequestFile",
@@ -81,7 +79,6 @@ impl fmt::Debug for MessageContent {
             MessageContent::RedundancyFile(id, _) => write!(f, "RedundancyFile({id}, <bin>)"),
             MessageContent::FsAnswer(_, peers, _) => write!(f, "FsAnswer(<bin>, {peers:?}, <bin>"),
             MessageContent::PullAnswer(id, _) => write!(f, "PullAnswer({id}, <bin>)"),
-            MessageContent::Register(address) => write!(f, "Register({address})"),
             MessageContent::Remove(id) => write!(f, "Remove({id})"),
             MessageContent::RequestFile(id, y) => write!(f, "RequestFile({id}, {y})"),
             MessageContent::Rename(parent, new_parent, name, new_name, overwrite) => write!(

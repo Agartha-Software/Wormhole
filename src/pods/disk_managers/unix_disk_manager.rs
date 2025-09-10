@@ -38,6 +38,12 @@ impl UnixDiskManager {
         // /!\
         // /!\
 
+        std::fs::create_dir(mount_point).or_else(|e| {
+            (e.kind() == io::ErrorKind::AlreadyExists)
+                .then_some(())
+                .ok_or(e)
+        })?;
+
         Ok(Self {
             handle: Dir::open(mount_point.clone())?,
             mount_point: mount_point.clone(),

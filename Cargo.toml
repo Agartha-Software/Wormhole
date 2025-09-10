@@ -1,13 +1,27 @@
 [package]
-name = "wormhole"
+name = "wormhole-fs"
 version = "0.1.0"
-edition = "2021"
 authors = [
     "Axel Denis <axel.denis@epitech.eu>",
     "Julian Scott <julian.scott@epitech.eu>",
     "Ludovic De Chavagnac <ludovic.de-chavagnac@epitech.eu>",
     "Arthur Aillet <arthur.aillet@epitech.eu>",
 ]
+description = "Wormhole is a data decentralisation solution. It aims to create one single virtual storage space between many computers."
+edition = "2021"
+include = [
+    "/Cargo.toml",
+    "/LICENSE.txt",
+    "README.md",
+    "/src/**",
+    "/tests/**",
+    "build.rs",
+]
+keywords = ["wormhole", "storage"]
+license = "	AGPL-3.0-only"
+repository = "https://github.com/Agartha-Software/Wormhole"
+rust-version = "1.86.0"
+
 
 [lib]
 name = "wormhole"
@@ -69,8 +83,9 @@ tokio = { version = "1.38.0", default-features = false, features = [
     "rt-multi-thread",
     "time",
     "sync",
+    "signal",
 ] }
-tokio-tungstenite = "0.23"
+tokio-tungstenite = "^0.27"
 futures-util = { version = "0.3.30", default-features = false, features = [
     "sink",
     "std",
@@ -84,9 +99,17 @@ serde_with = "3.11.0"
 parking_lot = "0.12.3"
 sysinfo = "0.34.2"
 custom_error = "1.9.2"
+signal-hook = "0.3.18"
+futures = "0.3"
+gethostname = "1.0.2"
 
 [dev-dependencies]
 assert_fs = "1.1.2"
 dir-diff = "0.3.3"
 serial_test = "3.2.0"
 tokio = { version = "1.38.0", default-features = false, features = ["process"] }
+lazy_static = "1.5.0"
+
+[package.metadata.deb]
+maintainer-scripts = "service/"
+systemd-units = { enable = true, start = true }

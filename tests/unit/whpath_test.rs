@@ -1,9 +1,12 @@
 extern crate wormhole;
+use serial_test::parallel;
+
 use crate::wormhole::pods::whpath::{JoinPath, PathType, WhPath};
 
 use std::ffi::OsStr;
 use std::path::Path;
 
+#[parallel]
 #[test]
 fn test_whpath_kind() {
     let empty = WhPath {
@@ -29,6 +32,7 @@ fn test_whpath_kind() {
     assert_eq!(noprefix.kind(), PathType::NoPrefix);
 }
 
+#[parallel]
 #[test]
 fn test_whpath_new() {
     let path = WhPath::from(OsStr::new("./StarWars/A_New_Hope"));
@@ -76,6 +80,7 @@ where
     assert_eq!(&new_path, result);
 }
 
+#[parallel]
 #[test]
 fn test_whpath_join_with_str() {
     let path1 = WhPath::from("Kaamelott");
@@ -137,6 +142,7 @@ fn test_whpath_join_with_str() {
     whpath_join(path2.clone(), "", &WhPath::from("./Kaamelott/"));
 }
 
+#[parallel]
 #[test]
 fn test_whpath_remove() {
     let mut delete_all = WhPath::from("Film/Orson Welles/Citizen Kane");
@@ -166,6 +172,7 @@ fn test_whpath_remove() {
     );
 }
 
+#[parallel]
 #[test]
 fn test_whpath_rename() {
     let mut empty = WhPath::new();
@@ -188,6 +195,7 @@ fn test_whpath_rename() {
     assert_eq!(path.rename(&modify_path), &WhPath::from("path/modifier"));
 }
 
+#[parallel]
 #[test]
 fn test_whpath_set_relative() {
     let no_prefix = WhPath::from("foo");
@@ -199,6 +207,7 @@ fn test_whpath_set_relative() {
     assert_eq!(empty.set_relative(), WhPath::new());
 }
 
+#[parallel]
 #[test]
 fn test_whpath_set_absolute() {
     let no_prefix = WhPath::from("foo");
@@ -210,6 +219,7 @@ fn test_whpath_set_absolute() {
     assert_eq!(empty.set_absolute(), WhPath::new());
 }
 
+#[parallel]
 #[test]
 fn test_whpath_remove_prefix() {
     let absolute = WhPath::from("/foo");
@@ -221,6 +231,7 @@ fn test_whpath_remove_prefix() {
     assert_eq!(empty.remove_prefix(), WhPath::new());
 }
 
+#[parallel]
 #[test]
 fn test_whpath_is_relative() {
     let relative = WhPath::from("./foo");
@@ -230,6 +241,7 @@ fn test_whpath_is_relative() {
     assert_eq!(not_relative.is_relative(), false);
 }
 
+#[parallel]
 #[test]
 fn test_whpath_is_absolute() {
     let absolute = WhPath::from("/foo");
@@ -238,6 +250,7 @@ fn test_whpath_is_absolute() {
     assert_eq!(absolute.is_absolute(), true);
     assert_eq!(not_absolute.is_absolute(), false);
 }
+#[parallel]
 #[test]
 fn test_whpath_has_no_prefix() {
     let no_prefix = WhPath::from("foo");
@@ -246,6 +259,7 @@ fn test_whpath_has_no_prefix() {
     assert_eq!(no_prefix.has_no_prefix(), true);
     assert_eq!(not_no_prefix.has_no_prefix(), false);
 }
+#[parallel]
 #[test]
 fn test_whpath_is_empty() {
     let empty = WhPath::new();
@@ -255,6 +269,7 @@ fn test_whpath_is_empty() {
     assert_eq!(not_empty.is_empty(), false);
 }
 
+#[parallel]
 #[test]
 fn test_whpath_set_end() {
     let mut set_end_true = WhPath::from("/foo");
@@ -263,6 +278,7 @@ fn test_whpath_set_end() {
     assert_eq!(set_end_false.set_end(false), &WhPath::from("/foo"));
 }
 
+#[parallel]
 #[test]
 fn test_whpath_is_in() {
     let path = WhPath::from("/foo/bar/baz.txt");
@@ -277,6 +293,7 @@ fn test_whpath_is_in() {
     assert_eq!(empty.is_in(""), true);
 }
 
+#[parallel]
 #[test]
 fn test_whpath_get_end() {
     let empty = WhPath::new();
@@ -292,6 +309,7 @@ fn test_whpath_get_end() {
     assert_eq!(no_slash.get_end(), String::from("baz"));
 }
 
+#[parallel]
 #[test]
 fn test_whpath_pop() {
     let mut empty = WhPath::new();

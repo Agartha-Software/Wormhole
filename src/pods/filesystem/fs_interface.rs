@@ -1,4 +1,3 @@
-use crate::config::{types::Config, LocalConfig};
 use crate::error::WhResult;
 use crate::network::message::Address;
 use crate::pods::arbo::{Arbo, FsEntry, Inode, InodeId, Metadata, GLOBAL_CONFIG_INO};
@@ -122,18 +121,11 @@ impl FsInterface {
 
         match inode.entry {
             // REVIEW - is it still useful to create an empty file in this case ?
-            FsEntry::File(hosts)
-                if hosts.contains(
-                    &LocalConfig::read_lock(&self.network_interface.local_config, "recept_inode")?
-                        .general
-                        .address,
-                ) =>
-            {
-                self.disk
-                    .new_file(&new_path, inode.meta.perm)
-                    .map(|_| ())
-                    .map_err(|io| MakeInodeError::LocalCreationFailed { io })
-            }
+            FsEntry::File(hosts) if hosts.contains(&self.network_interface.hostname()?) => self
+                .disk
+                .new_file(&new_path, inode.meta.perm)
+                .map(|_| ())
+                .map_err(|io| MakeInodeError::LocalCreationFailed { io }),
             FsEntry::File(_) => Ok(()),
             FsEntry::Directory(_) => self
                 .disk
@@ -159,25 +151,14 @@ impl FsInterface {
             .expect("disk error");
         // TODO -> in case of failure, other hosts still think this one is valid. Should send error report to the redundancy manager
 
-        let address =
-            LocalConfig::read_lock(&self.network_interface.local_config, "recept_redundancy")?
-                .general
-                .address
-                .clone();
         Arbo::n_write_lock(&self.arbo, "recept_redundancy")?
-            .n_add_inode_hosts(id, vec![address])
+            .n_add_inode_hosts(id, vec![self.network_interface.hostname()?])
             .inspect_err(|e| {
                 log::error!("Can't update (local) hosts for redundancy pulled file ({id}): {e}")
             })
     }
 
     pub fn recept_binary(&self, id: InodeId, binary: Vec<u8>) -> io::Result<()> {
-        let address =
-            LocalConfig::read_lock(&self.network_interface.local_config, "revoke_remote_hosts")
-                .expect("can't read local_config")
-                .general
-                .address
-                .clone();
         let arbo = Arbo::read_lock(&self.arbo, "recept_binary")
             .expect("recept_binary: can't read lock arbo");
         let (path, perms) = match arbo
@@ -193,7 +174,6 @@ impl FsInterface {
             }
         };
         drop(arbo);
-
         let _created = self.disk.new_file(&path, perms);
         let status = self
             .disk
@@ -205,17 +185,20 @@ impl FsInterface {
             .resolve(Callback::Pull(id), status.is_ok());
         status?;
         self.network_interface
-            .add_inode_hosts(id, vec![address])
+            .add_inode_hosts(
+                id,
+                vec![self
+                    .network_interface
+                    .hostname()
+                    .ok()
+                    .ok_or(io::Error::other("deadlock"))?],
+            )
             .expect("can't update inode hosts");
         Ok(())
     }
 
     pub fn recept_edit_hosts(&self, id: InodeId, hosts: Vec<Address>) -> WhResult<()> {
-        if !hosts.contains(
-            &LocalConfig::read_lock(&self.network_interface.local_config, "recept_binary")?
-                .general
-                .address,
-        ) {
+        if !hosts.contains(&self.network_interface.hostname()?) {
             let path =
                 Arbo::n_read_lock(&self.arbo, "recept_edit_hosts")?.n_get_path_from_inode_id(id)?;
             if let Err(e) = self.disk.remove_file(&path) {
@@ -228,13 +211,10 @@ impl FsInterface {
     pub fn recept_revoke_hosts(
         &self,
         id: InodeId,
-        host: Address,
+        host: String,
         meta: Metadata,
     ) -> Result<(), AcknoledgeSetAttrError> {
-        let needs_delete = host
-            != LocalConfig::read_lock(&self.network_interface.local_config, "recept_binary")?
-                .general
-                .address;
+        let needs_delete = host != self.network_interface.hostname()?;
         self.acknowledge_metadata(id, meta)?;
         self.network_interface
             .acknowledge_hosts_edition(id, vec![host])
@@ -257,10 +237,11 @@ impl FsInterface {
 
     pub fn recept_remove_hosts(&self, id: InodeId, hosts: Vec<Address>) -> io::Result<()> {
         if hosts.contains(
-            &LocalConfig::read_lock(&self.network_interface.local_config, "recept_remove_hosts")
-                .map_err(|e| io::Error::new(ErrorKind::Other, e.to_string()))?
-                .general
-                .address,
+            &self
+                .network_interface
+                .hostname()
+                .ok()
+                .ok_or(io::Error::other("deadlock"))?,
         ) {
             if let Err(e) = self.disk.remove_file(
                 &Arbo::read_lock(&self.arbo, "recept_remove_hosts")?.get_path_from_inode_id(id)?,
@@ -303,10 +284,6 @@ impl FsInterface {
             }
         }
         self.network_interface.send_arbo(to, global_config_bytes)
-    }
-
-    pub fn register_new_node(&self, socket: Address, addr: Address) {
-        self.network_interface.register_new_node(socket, addr);
     }
 
     pub fn send_file(&self, inode: InodeId, to: Address) -> io::Result<()> {
