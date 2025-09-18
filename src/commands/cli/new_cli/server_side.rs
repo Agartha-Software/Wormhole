@@ -8,7 +8,8 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use tokio::{
     net::{TcpListener, TcpStream},
-    sync::mpsc::{UnboundedReceiver, UnboundedSender},
+    sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
+    task::JoinHandle,
 };
 use tokio_tungstenite::{
     tungstenite::{protocol::WebSocketConfig, Bytes},
@@ -31,7 +32,7 @@ custom_error::custom_error! {CliRunnerError
     ProvidedIpNotAvailable {ip: IpP, err: std::io::Error} = "The specified address ({ip}) not available ({err})\nThe service is not starting.",
     AboveMaxPort = "Unable to start cli_listener (excedeed max port)",
     AboveMaxTry = "Unable to start cli_listener (exedeed the number of tries)",
-    InvalidRequest = "Invalid request from the client cli (check your client version)",
+    InvalidRequest {req_id: usize} = "Invalid request from the client cli (check your client version)",
     InvalidRegister = "Unable to understand the first client cli message (check your client version)",
     InternalMessageError{pair_name: String} = "Internal tx/rx pair broken: {pair_name}",
 }
@@ -40,22 +41,25 @@ custom_error::custom_error! {CliRunnerError
 struct CliEndpoint {
     pub mode: CliMode,
     writer: SplitSink<WebSocketStream<TcpStream>, tokio_tungstenite::tungstenite::Message>,
-    reader: SplitStream<WebSocketStream<TcpStream>>,
+    reader_fwd: Option<JoinHandle<()>>,
 }
 
 impl CliEndpoint {
     async fn new(
         writer: SplitSink<WebSocketStream<TcpStream>, tokio_tungstenite::tungstenite::Message>,
-        reader: SplitStream<WebSocketStream<TcpStream>>,
+        mut reader: SplitStream<WebSocketStream<TcpStream>>,
+        req_arrival_tx: UnboundedSender<InternalRequest>,
+        id: usize,
     ) -> Result<Self, CliRunnerError> {
         let mut proto = CliEndpoint {
-            writer,
-            reader,
             mode: CliMode::Oneshot,
+            writer,
+            reader_fwd: None,
         };
 
-        if let Ok(Some(CliRequest::Register(mode))) = proto.read().await {
+        if let Ok(Some(CliRequest::Register(mode))) = Self::read(&mut reader).await {
             proto.mode = mode;
+            proto.reader_fwd = Some(tokio::spawn(Self::forwarder(reader, req_arrival_tx, id)));
             Ok(proto)
         } else {
             Err(CliRunnerError::InvalidRegister)
@@ -74,13 +78,37 @@ impl CliEndpoint {
         Ok(())
     }
 
-    async fn read(&mut self) -> Result<Option<CliRequest>, CliRunnerError> {
-        let message_data = match self.reader.next().await {
+    async fn read(
+        reader: &mut SplitStream<WebSocketStream<TcpStream>>,
+    ) -> Result<Option<CliRequest>, CliRunnerError> {
+        let message_data = match reader.next().await {
             Some(Ok(msg)) => msg.into_data(),
             _ => return Ok(None),
         };
 
-        bincode::deserialize(&message_data).map_err(|_| CliRunnerError::InvalidRequest)
+        bincode::deserialize(&message_data)
+            .map_err(|_| CliRunnerError::InvalidRequest { req_id: 0 })
+    }
+
+    async fn forwarder(
+        mut reader: SplitStream<WebSocketStream<TcpStream>>,
+        tx: UnboundedSender<InternalRequest>,
+        id: usize,
+    ) {
+        loop {
+            let message_data = match reader.next().await {
+                Some(Ok(msg)) => msg.into_data(),
+                None => continue,
+                Some(Err(e)) => {
+                    log::error!("cli forwarder unexpected close: {e}");
+                    return;
+                }
+            };
+
+            let request: Result<CliRequest, CliRunnerError> = bincode::deserialize(&message_data)
+                .map_err(|_| CliRunnerError::InvalidRequest { req_id: id });
+            tx.send((id, request)).expect("cli forwarder tx closed");
+        }
     }
 }
 
@@ -126,6 +154,7 @@ async fn create_listener(ip: Option<IpP>) -> Result<(TcpListener, IpP), CliRunne
 async fn cli_accept_watchdog(
     listener: TcpListener,
     endpoints: Arc<RwLock<HashMap<usize, CliEndpoint>>>,
+    req_arrival_tx: UnboundedSender<InternalRequest>,
 ) -> Result<(), CliRunnerError> {
     while let Ok((stream, _)) = listener.accept().await {
         let (writer, reader) = match tokio_tungstenite::accept_async_with_config(
@@ -146,9 +175,10 @@ async fn cli_accept_watchdog(
         }
         .split();
 
-        let new_endpoint = CliEndpoint::new(writer, reader).await?;
         if let Some(mut endpoints) = endpoints.try_write_for(LOCK_TIMEOUT) {
             let key = next_available_key(&endpoints);
+            let new_endpoint =
+                CliEndpoint::new(writer, reader, req_arrival_tx.clone(), key).await?;
             endpoints.insert(key, new_endpoint);
         } else {
             log::error!("cli_accept_watchdog: can't lock endpoints mutex");
@@ -157,34 +187,12 @@ async fn cli_accept_watchdog(
     Ok(())
 }
 
-async fn listen_watchdog(endpoints: Arc<RwLock<HashMap<usize, CliEndpoint>>>) {
-    loop {
-        if let Some(mut endpoints) = endpoints.try_write_for(LOCK_TIMEOUT) {
-            let mut requests: Vec<(usize, CliRequest)> = Vec::new();
-
-            for (key, endp) in endpoints.iter_mut() {
-                match endp.read().await {
-                    Err(e) => {
-                        let _ = endp.send(CliAnswer::Error(e.to_string())).await;
-                        endp.mode = CliMode::ToDelete;
-                        ()
-                    }
-                    Ok(None) => (),
-                    Ok(Some(req)) => requests.push((*key, req)),
-                }
-            }
-        } else {
-            log::error!("listen_watchdog: can't lock endpoints mutex");
-            continue;
-        };
-    }
-}
-
 async fn cli(ip: Option<IpP>) -> Result<(), CliRunnerError> {
     let (listener, ip) = create_listener(ip).await?;
     let endpoints: Arc<RwLock<HashMap<usize, CliEndpoint>>> = Default::default();
+    let (req_arrival_tx, req_arrival_rx) = mpsc::unbounded_channel::<InternalRequest>();
 
-    let accept_watchdog = cli_accept_watchdog(listener, endpoints);
+    let accept_watchdog = cli_accept_watchdog(listener, endpoints, req_arrival_tx);
     Ok(())
 }
 
@@ -195,3 +203,5 @@ fn next_available_key<T>(hashmap: &HashMap<usize, T>) -> usize {
     }
     key
 }
+
+type InternalRequest = (usize, Result<CliRequest, CliRunnerError>);
