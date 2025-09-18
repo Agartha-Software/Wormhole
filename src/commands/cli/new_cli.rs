@@ -1,16 +1,20 @@
 use std::collections::HashMap;
 
-use futures::StreamExt;
+use futures::{stream::SplitSink, SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::{
     net::TcpListener,
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
 };
-use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
+use tokio_tungstenite::{
+    tungstenite::{protocol::WebSocketConfig, Bytes},
+    WebSocketStream,
+};
 
 use crate::{
     error::WhError,
-    network::{ip::IpP, peer_ipc::PeerIPC, server::Server}, pods::whpath::WhPath,
+    network::{ip::IpP, peer_ipc::PeerIPC, server::Server},
+    pods::whpath::WhPath,
 };
 
 const DEFAULT_CLI_ADDRESS: &str = "0.0.0.0:8080";
@@ -23,7 +27,8 @@ custom_error::custom_error! {CliRunnerError
     AboveMaxPort = "Unable to start cli_listener (excedeed max port)",
     AboveMaxTry = "Unable to start cli_listener (exedeed the number of tries)",
     InvalidRequest = "Invalid/Inexistant request from the client cli",
-    InvalidRequestData = "Unable to understand the client cli message (check your client version)"
+    InvalidRequestData = "Unable to understand the client cli message (check your client version)",
+    InternalMessageError{pair_name: String} = "Internal tx/rx pair broken: {pair_name}",
 }
 
 #[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
@@ -65,35 +70,59 @@ pub enum RemoveMode {
     Take,
 }
 
+type PodInfo = (Option<String>, Option<WhPath>);
 #[derive(Debug, Serialize, Deserialize)] // requires `derive` feature
 pub enum CliRequest {
     /// Start the pod (name, path)
-    StartPod(Option<String>, Option<WhPath>),
+    StartPod(PodInfo),
     /// Stop the pod (name, path)
-    StopPod(Option<String>, Option<WhPath>),
+    StopPod(PodInfo),
     /// Create a new pod and join a network if he have peers in arguments or create a new network
     New(PodCreationArgs),
     /// Inspect a pod with its configuration, connections, etc
-    Inspect(Option<String>, Option<WhPath>),
+    Inspect(PodInfo),
     /// Get hosts for a specific file
-    GetHosts(GetHostsArgs),
+    GetHosts(PodInfo),
     /// Tree the folder structure from the given path and show hosts for each file
-    Tree(Option<String>, Option<WhPath>),
+    Tree(PodInfo),
     /// Checks that the service is working (should print it's ip)
-    Status,
+    ServiceStatus,
     /// Remove a pod from its network
-    Remove(Option<String>, Option<WhPath>, RemoveMode),
+    Remove(PodInfo, RemoveMode),
     /// Apply a new configuration to a pod
-    Apply(PodConf),
+    Apply(PodInfo, Vec<String>),
     /// Restore many or a specific file configuration
-    Restore(PodConf),
+    Restore(PodInfo, Vec<String>),
     /// Stops the service
     Interrupt,
 }
 
+#[derive(Debug, Serialize, Deserialize)] // requires `derive` feature
+pub enum CliAnswer {}
+
 struct CliState {
     listener: TcpListener,
     connected_endpoints: HashMap<usize, PeerIPC>,
+}
+
+// NOTE - later could keep the receiver to keep longer connection with the cli client
+struct CliEndpoint {
+    writer:
+        SplitSink<WebSocketStream<tokio::net::TcpStream>, tokio_tungstenite::tungstenite::Message>,
+}
+
+impl CliEndpoint {
+    async fn send(&mut self, message: CliAnswer) -> Result<(), CliRunnerError> {
+        self.writer
+            .send(tokio_tungstenite::tungstenite::Message::Binary(
+                bincode::serialize(&message).unwrap().into(),
+            ))
+            .await
+            .map_err(|_| WhError::NetworkDied {
+                called_from: "CliEndpoint::send".to_owned(),
+            })?;
+        Ok(())
+    }
 }
 
 /// Create the tcp listener for the cli
@@ -136,8 +165,8 @@ async fn create_listener(ip: Option<IpP>) -> Result<(TcpListener, IpP), CliRunne
 async fn cli_accept_job(
     listener: TcpListener,
     mut stop_rx: UnboundedReceiver<()>,
-    ask_job: UnboundedSender<()>,
-) {
+    ask_job: UnboundedSender<(CliRequest, CliEndpoint)>,
+) -> Result<(), CliRunnerError> {
     while let Some(Ok((stream, _))) = tokio::select! {
         v = listener.accept() => Some(v),
         _ = stop_rx.recv() => None,
@@ -168,14 +197,21 @@ async fn cli_accept_job(
             }
         };
 
-        let cmd = match bincode::deserialize(&message_data) {
-            Ok(c) => c,
-            Err(e) => {
+        let request: CliRequest = match bincode::deserialize(&message_data) {
+            Ok(data) => data,
+            Err(_) => {
                 log::error!("{}", CliRunnerError::InvalidRequestData);
-                continue,
+                continue;
             }
         };
+
+        if let Err(_) = ask_job.send((request, CliEndpoint { writer })) {
+            return Err(CliRunnerError::InternalMessageError {
+                pair_name: "ask_job from cli_accept_job".to_owned(),
+            });
+        }
     }
+    Ok(())
 }
 
 async fn cli(ip: Option<IpP>) -> Result<(), CliRunnerError> {
