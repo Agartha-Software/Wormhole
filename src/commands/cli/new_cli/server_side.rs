@@ -27,6 +27,8 @@ const DEFAULT_CLI_ADDRESS: &str = "0.0.0.0:8080";
 const MAX_TRY_PORTS: u16 = 15;
 const MAX_PORT: u16 = 65535;
 
+type InternalRequest = (usize, Result<CliRequest, CliRunnerError>);
+
 custom_error::custom_error! {CliRunnerError
     WhError{source: WhError} = "{source}",
     ProvidedIpNotAvailable {ip: IpP, err: std::io::Error} = "The specified address ({ip}) not available ({err})\nThe service is not starting.",
@@ -151,6 +153,7 @@ async fn create_listener(ip: Option<IpP>) -> Result<(TcpListener, IpP), CliRunne
 
 /// Accepts new connection request from any cli client
 /// Add them in the provided `endpoints`
+/// Messages from those endpoints are forwarded to `req_arrival_tx`
 async fn cli_accept_watchdog(
     listener: TcpListener,
     endpoints: Arc<RwLock<HashMap<usize, CliEndpoint>>>,
@@ -196,6 +199,7 @@ async fn cli(ip: Option<IpP>) -> Result<(), CliRunnerError> {
     Ok(())
 }
 
+/// Find the next available key in the hashmap
 fn next_available_key<T>(hashmap: &HashMap<usize, T>) -> usize {
     let mut key: usize = 0;
     while hashmap.contains_key(&key) {
@@ -203,5 +207,3 @@ fn next_available_key<T>(hashmap: &HashMap<usize, T>) -> usize {
     }
     key
 }
-
-type InternalRequest = (usize, Result<CliRequest, CliRunnerError>);
