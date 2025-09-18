@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 
-use futures::{stream::SplitSink, SinkExt, StreamExt};
+use futures::{
+    stream::{SplitSink, SplitStream},
+    SinkExt, StreamExt,
+};
 use serde::{Deserialize, Serialize};
 use tokio::{
-    net::TcpListener,
+    net::{TcpListener, TcpStream},
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
 };
 use tokio_tungstenite::{
@@ -26,8 +29,8 @@ custom_error::custom_error! {CliRunnerError
     ProvidedIpNotAvailable {ip: IpP, err: std::io::Error} = "The specified address ({ip}) not available ({err})\nThe service is not starting.",
     AboveMaxPort = "Unable to start cli_listener (excedeed max port)",
     AboveMaxTry = "Unable to start cli_listener (exedeed the number of tries)",
-    InvalidRequest = "Invalid/Inexistant request from the client cli",
-    InvalidRequestData = "Unable to understand the client cli message (check your client version)",
+    InvalidRequest = "Invalid request from the client cli (check your client version)",
+    InvalidRegister = "Unable to understand the first client cli message (check your client version)",
     InternalMessageError{pair_name: String} = "Internal tx/rx pair broken: {pair_name}",
 }
 
@@ -70,9 +73,16 @@ pub enum RemoveMode {
     Take,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub enum CliMode {
+    Oneshot,
+    Maintain,
+}
+
 type PodInfo = (Option<String>, Option<WhPath>);
-#[derive(Debug, Serialize, Deserialize)] // requires `derive` feature
+#[derive(Debug, Serialize, Deserialize)]
 pub enum CliRequest {
+    Register(CliMode),
     /// Start the pod (name, path)
     StartPod(PodInfo),
     /// Stop the pod (name, path)
@@ -107,11 +117,30 @@ struct CliState {
 
 // NOTE - later could keep the receiver to keep longer connection with the cli client
 struct CliEndpoint {
-    writer:
-        SplitSink<WebSocketStream<tokio::net::TcpStream>, tokio_tungstenite::tungstenite::Message>,
+    mode: CliMode,
+    writer: SplitSink<WebSocketStream<TcpStream>, tokio_tungstenite::tungstenite::Message>,
+    reader: SplitStream<WebSocketStream<TcpStream>>,
 }
 
 impl CliEndpoint {
+    async fn new(
+        writer: SplitSink<WebSocketStream<TcpStream>, tokio_tungstenite::tungstenite::Message>,
+        reader: SplitStream<WebSocketStream<TcpStream>>,
+    ) -> Result<Self, CliRunnerError> {
+        let mut proto = CliEndpoint {
+            writer,
+            reader,
+            mode: CliMode::Oneshot,
+        };
+
+        if let Ok(Some(CliRequest::Register(mode))) = proto.read().await {
+            proto.mode = mode;
+            Ok(proto)
+        } else {
+            Err(CliRunnerError::InvalidRegister)
+        }
+    }
+
     async fn send(&mut self, message: CliAnswer) -> Result<(), CliRunnerError> {
         self.writer
             .send(tokio_tungstenite::tungstenite::Message::Binary(
@@ -122,6 +151,15 @@ impl CliEndpoint {
                 called_from: "CliEndpoint::send".to_owned(),
             })?;
         Ok(())
+    }
+
+    async fn read(&mut self) -> Result<Option<CliRequest>, CliRunnerError> {
+        let message_data = match self.reader.next().await {
+            Some(Ok(msg)) => msg.into_data(),
+            _ => return Ok(None),
+        };
+
+        bincode::deserialize(&message_data).map_err(|_| CliRunnerError::InvalidRequest)
     }
 }
 
@@ -165,13 +203,13 @@ async fn create_listener(ip: Option<IpP>) -> Result<(TcpListener, IpP), CliRunne
 async fn cli_accept_job(
     listener: TcpListener,
     mut stop_rx: UnboundedReceiver<()>,
-    ask_job: UnboundedSender<(CliRequest, CliEndpoint)>,
+    add_endpoint: UnboundedSender<CliEndpoint>,
 ) -> Result<(), CliRunnerError> {
     while let Some(Ok((stream, _))) = tokio::select! {
         v = listener.accept() => Some(v),
         _ = stop_rx.recv() => None,
     } {
-        let (writer, mut reader) = match tokio_tungstenite::accept_async_with_config(
+        let (writer, reader) = match tokio_tungstenite::accept_async_with_config(
             stream,
             Some(
                 WebSocketConfig::default()
@@ -189,27 +227,12 @@ async fn cli_accept_job(
         }
         .split();
 
-        let message_data = match reader.next().await {
-            Some(Ok(msg)) => msg.into_data(),
-            _ => {
-                log::error!("{}", CliRunnerError::InvalidRequest);
-                continue;
-            }
-        };
-
-        let request: CliRequest = match bincode::deserialize(&message_data) {
-            Ok(data) => data,
-            Err(_) => {
-                log::error!("{}", CliRunnerError::InvalidRequestData);
-                continue;
-            }
-        };
-
-        if let Err(_) = ask_job.send((request, CliEndpoint { writer })) {
-            return Err(CliRunnerError::InternalMessageError {
-                pair_name: "ask_job from cli_accept_job".to_owned(),
-            });
-        }
+        let endpoint = CliEndpoint::new(writer, reader).await?;
+        add_endpoint
+            .send(endpoint)
+            .map_err(|_| CliRunnerError::InternalMessageError {
+                pair_name: "cli_accept_job add_endpoint".to_owned(),
+            })?;
     }
     Ok(())
 }
