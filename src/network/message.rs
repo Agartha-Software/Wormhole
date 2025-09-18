@@ -12,29 +12,73 @@ use crate::{
     pods::arbo::{ArboIndex, Inode, InodeId, Metadata},
 };
 
-/// Message Content
-/// Represent the content of the intern message but is also the struct sent
-/// through the network
+/// Network message content for distribution and synchronization filesystem operations.
+/// Represent both internal messages and data structures sent over the network between peers.
+/// Each variant corresponds to a specific filesystem operation or request.
 #[derive(Serialize, Deserialize, Clone)]
 pub enum MessageContent {
+    /// Remove an inode from the filesystem.
+    /// Contains (file_id).
     Remove(InodeId),
+
+    /// Add or update an inode in the filesystem.
+    /// Contains (file_id).
     Inode(Inode),
+
+    /// Request file data for a specific inode from a peer.
+    /// Contains (file_id, requesting_peer_address).
     RequestFile(InodeId, Address),
+
+    /// Response to RequestFile containing the file data.
+    /// Contains (file_id, file_data).
     PullAnswer(InodeId, Vec<u8>),
+
+    /// Send a redundancy chunk of a file to a peer.
+    /// Contains (file_id, redundancy_data) with Arc for thread-safe.
     RedundancyFile(InodeId, Arc<Vec<u8>>),
-    /// Parent, New Parent, Name, New Name, overwrite
+
+    /// Rename or move an inode within the filesystem.
+    /// Contains (current_parent_id, new_parent_id, current_name, new_name, overwrite
     Rename(InodeId, InodeId, String, String, bool),
+
+    /// Update the list of hosts for a file.
+    /// Contains (file_id, new_hosts).
     EditHosts(InodeId, Vec<Address>),
+
+    /// Revoke file from remote hosts after local modification.
+    /// Contains (file_id, revoking_address, update_metadata).
     RevokeFile(InodeId, Address, Metadata),
+
+    /// Add new hosts to a file's host list.
+    /// Contains (file_id, new_hosts).
     AddHosts(InodeId, Vec<Address>),
+
+    /// Remove hosts from a file's host list.
+    /// Contains (file_id, hosts_to_remove).
     RemoveHosts(InodeId, Vec<Address>),
+
+    /// Update an inode's metadata (permissions, timestamps, etc.).
+    /// Contains (file_id, new_metadata).
     EditMetadata(InodeId, Metadata),
+
+    /// Set extended attribute for an inode.
+    /// Contains (file_id, attribute_name, attribute_data).
     SetXAttr(InodeId, String, Vec<u8>),
+
+    /// Remove extended attribute from an inode.
+    /// Contains (file_id, attribute_name).
     RemoveXAttr(InodeId, String),
+
+    /// Request the full filesystem structure from a peer.
+    /// Used for initial sync when joining the network.
     RequestFs,
+
+    /// Notify peers of disconnection.
+    /// Contains (disconnecting_peer_address).
     Disconnect(Address),
 
-    // (Arbo, peers, global_config)
+    /// Response to RequestFs containing the full filesystem structure.
+    /// Contains (serialized_filesystem, list_of_peers, optional_binary_data).
     FsAnswer(FileSystemSerialized, Vec<Address>, Vec<u8>),
 }
 
@@ -107,22 +151,44 @@ impl fmt::Debug for MessageContent {
     }
 }
 
+/// Message content paired with an optional status callback.
+///
+/// Used for tracking message delivery status. The sender can provide
+/// a callback channel to receive confirmation when the message is processed.
 pub type MessageAndStatus = (MessageContent, Option<UnboundedSender<WhResult<()>>>);
 
+/// Network address representation for peer identification.
+///
+/// Simple string-based address format (e.g., "IP:Port")
+/// used to identify and communicate with peers in the network.
 pub type Address = String;
 
-/// Message Coming from Network
-/// Messages recived by peers, forwared to [crate::network::watchdogs::network_file_actions]
+/// Incoming message from network peers.
+///
+/// Wraps a message with its origin information for processing by the network message handler.
+/// Contains both the sender's address and the message content.
+/// Messages received by peers, forwared to [crate::network::watchdogs::network_file_actions]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FromNetworkMessage {
+    /// Adress of the peer that sent this message
     pub origin: Address,
+
+    /// The actual message content to be processed
     pub content: MessageContent,
 }
 
-/// Message going to the redundancy worker
+/// Commands for the redundancy management worker.
+///
+/// Controls redundancy operations to ensure files are replicated across multiple peers for fault tolerance.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum RedundancyMessage {
+    /// Apply redundancy to a specific inode.
+    /// Ensures the file is replicated to the required number of peers.
+    /// Contains (file_id).
     ApplyTo(InodeId),
+
+    /// Check and fix redundancy for across all files.
+    /// Scans the filesystem and ensures all files meet redundancy requirements.
     CheckIntegrity,
 }
 
@@ -130,7 +196,11 @@ pub enum RedundancyMessage {
 /// Messages sent from fuser to process communicating to the peers
 #[derive(Debug)]
 pub enum ToNetworkMessage {
+    /// Broadcast message to all connected peers.
+    /// Contains (message_content).
     BroadcastMessage(MessageContent),
+    /// Send a message to specific peers.
+    /// Contains (message_and_status, list_of_target_addresses).
     SpecificMessage(MessageAndStatus, Vec<Address>),
 }
 
@@ -153,9 +223,14 @@ impl fmt::Display for ToNetworkMessage {
     }
 }
 
+/// Serialized filesystem state for network transmission.
+/// Used to send the entire filesystem structure to a peer during initial sync.
+/// Contains the filesystem index and the next available inode ID.
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FileSystemSerialized {
+    /// The complete filesystem tree index.
     pub fs_index: ArboIndex,
+    /// The next available inode ID for creating new files/directories.
     pub next_inode: InodeId,
 }
