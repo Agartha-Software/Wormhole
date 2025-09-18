@@ -11,7 +11,6 @@ mod status;
 mod stop;
 mod templates;
 mod tree;
-
 use std::{env, path::Path};
 
 pub use apply::apply;

@@ -1,9 +1,10 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, future::Future, sync::Arc};
 
 use futures::{
     stream::{SplitSink, SplitStream},
     SinkExt, StreamExt,
 };
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -15,9 +16,10 @@ use tokio_tungstenite::{
 };
 
 use crate::{
+    commands::cli::new_cli::common::{CliAnswer, CliMode, CliRequest},
     error::WhError,
     network::{ip::IpP, peer_ipc::PeerIPC, server::Server},
-    pods::whpath::WhPath,
+    pods::{arbo::LOCK_TIMEOUT, whpath::WhPath},
 };
 
 const DEFAULT_CLI_ADDRESS: &str = "0.0.0.0:8080";
@@ -34,90 +36,9 @@ custom_error::custom_error! {CliRunnerError
     InternalMessageError{pair_name: String} = "Internal tx/rx pair broken: {pair_name}",
 }
 
-#[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
-pub struct PodCreationArgs {
-    /// Name of the pod
-    pub name: String,
-    /// mount point to create the pod in. By default creates a pod from the folder in the working directory with the name of the pod
-    #[arg(long = "mount", short = 'm')]
-    pub mountpoint: Option<WhPath>,
-    /// Local port for the pod to use
-    #[arg(long, short = 'p', default_value = "40000")]
-    pub port: String,
-    /// Network to join
-    #[arg(long, short)]
-    pub url: Option<String>,
-    /// Name for this pod to use as a machine name with the network. Defaults to your Machine's name
-    #[arg(long, short = 'H')]
-    pub hostname: Option<String>,
-    /// url this Pod reports to other to reach it
-    #[arg(long, short)]
-    pub listen_url: Option<String>,
-    /// Additional hosts to try to join from as a backup
-    #[arg(raw = true)]
-    pub additional_hosts: Vec<String>,
-}
-
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub enum RemoveMode {
-    /// Simply remove the pod from the network without losing any data from the network
-    /// and leaving behind any data that was stored on the pod
-    Simple,
-    /// Remove the pod from the network without losing any data on the network,
-    /// and clone all data from the network into the folder where the pod was
-    /// making this folder into a real folder
-    Clone,
-    /// Remove the pod from the network and delete any data that was stored in the pod
-    Clean,
-    /// Remove this pod from the network without distributing its data to other nodes
-    Take,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum CliMode {
-    Oneshot,
-    Maintain,
-}
-
-type PodInfo = (Option<String>, Option<WhPath>);
-#[derive(Debug, Serialize, Deserialize)]
-pub enum CliRequest {
-    Register(CliMode),
-    /// Start the pod (name, path)
-    StartPod(PodInfo),
-    /// Stop the pod (name, path)
-    StopPod(PodInfo),
-    /// Create a new pod and join a network if he have peers in arguments or create a new network
-    New(PodCreationArgs),
-    /// Inspect a pod with its configuration, connections, etc
-    Inspect(PodInfo),
-    /// Get hosts for a specific file
-    GetHosts(PodInfo),
-    /// Tree the folder structure from the given path and show hosts for each file
-    Tree(PodInfo),
-    /// Checks that the service is working (should print it's ip)
-    ServiceStatus,
-    /// Remove a pod from its network
-    Remove(PodInfo, RemoveMode),
-    /// Apply a new configuration to a pod
-    Apply(PodInfo, Vec<String>),
-    /// Restore many or a specific file configuration
-    Restore(PodInfo, Vec<String>),
-    /// Stops the service
-    Interrupt,
-}
-
-#[derive(Debug, Serialize, Deserialize)] // requires `derive` feature
-pub enum CliAnswer {}
-
-struct CliState {
-    listener: TcpListener,
-    connected_endpoints: HashMap<usize, PeerIPC>,
-}
-
 // NOTE - later could keep the receiver to keep longer connection with the cli client
 struct CliEndpoint {
-    mode: CliMode,
+    pub mode: CliMode,
     writer: SplitSink<WebSocketStream<TcpStream>, tokio_tungstenite::tungstenite::Message>,
     reader: SplitStream<WebSocketStream<TcpStream>>,
 }
@@ -200,15 +121,13 @@ async fn create_listener(ip: Option<IpP>) -> Result<(TcpListener, IpP), CliRunne
     }
 }
 
-async fn cli_accept_job(
+/// Accepts new connection request from any cli client
+/// Add them in the provided `endpoints`
+async fn cli_accept_watchdog(
     listener: TcpListener,
-    mut stop_rx: UnboundedReceiver<()>,
-    add_endpoint: UnboundedSender<CliEndpoint>,
+    endpoints: Arc<RwLock<HashMap<usize, CliEndpoint>>>,
 ) -> Result<(), CliRunnerError> {
-    while let Some(Ok((stream, _))) = tokio::select! {
-        v = listener.accept() => Some(v),
-        _ = stop_rx.recv() => None,
-    } {
+    while let Ok((stream, _)) = listener.accept().await {
         let (writer, reader) = match tokio_tungstenite::accept_async_with_config(
             stream,
             Some(
@@ -221,23 +140,58 @@ async fn cli_accept_job(
         {
             Ok(s) => s,
             Err(e) => {
-                log::error!("cli_accept_job: can't accept tcp stream: {}", e);
+                log::error!("cli_accept_watchdog: can't accept tcp stream: {}", e);
                 continue;
             }
         }
         .split();
 
-        let endpoint = CliEndpoint::new(writer, reader).await?;
-        add_endpoint
-            .send(endpoint)
-            .map_err(|_| CliRunnerError::InternalMessageError {
-                pair_name: "cli_accept_job add_endpoint".to_owned(),
-            })?;
+        let new_endpoint = CliEndpoint::new(writer, reader).await?;
+        if let Some(mut endpoints) = endpoints.try_write_for(LOCK_TIMEOUT) {
+            let key = next_available_key(&endpoints);
+            endpoints.insert(key, new_endpoint);
+        } else {
+            log::error!("cli_accept_watchdog: can't lock endpoints mutex");
+        }
     }
     Ok(())
 }
 
+async fn listen_watchdog(endpoints: Arc<RwLock<HashMap<usize, CliEndpoint>>>) {
+    loop {
+        if let Some(mut endpoints) = endpoints.try_write_for(LOCK_TIMEOUT) {
+            let mut requests: Vec<(usize, CliRequest)> = Vec::new();
+
+            for (key, endp) in endpoints.iter_mut() {
+                match endp.read().await {
+                    Err(e) => {
+                        let _ = endp.send(CliAnswer::Error(e.to_string())).await;
+                        endp.mode = CliMode::ToDelete;
+                        ()
+                    }
+                    Ok(None) => (),
+                    Ok(Some(req)) => requests.push((*key, req)),
+                }
+            }
+        } else {
+            log::error!("listen_watchdog: can't lock endpoints mutex");
+            continue;
+        };
+    }
+}
+
 async fn cli(ip: Option<IpP>) -> Result<(), CliRunnerError> {
     let (listener, ip) = create_listener(ip).await?;
+    let endpoints: Arc<RwLock<HashMap<usize, CliEndpoint>>> = Default::default();
+
+    let accept_watchdog = cli_accept_watchdog(listener, endpoints);
     Ok(())
+}
+
+fn next_available_key<T>(hashmap: &HashMap<usize, T>) -> usize {
+    let mut key: usize = 0;
+    while hashmap.contains_key(&key) {
+        key += 1;
+    }
+    key
 }
