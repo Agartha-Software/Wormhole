@@ -19,6 +19,11 @@ use crate::{
 };
 
 custom_error! {
+    /// Errors that may occur during a handshake.
+    ///
+    /// This error enum is used to represent local (runtime) handshake errors,
+    /// errors produced by the underlying websocket library (`tungstenite`),
+    /// serialization errors (bincode), and wrapped application-level `WhError`.
     pub HandshakeError
     CouldntConnect = "peer did not respond",
     InvalidHandshake = "peer behaved unexpectedly",
@@ -40,6 +45,9 @@ custom_error! {
 }
 
 impl From<&HandshakeError> for RemoteHandshakeError {
+    /// Convert a local `HandshakeError` reference into a network-safe
+    /// `RemoteHandshakeError` by serializing nested errors into strings
+    /// or forwarding the `Remote` variant.
     fn from(value: &HandshakeError) -> Self {
         type E = HandshakeError;
         type ES = RemoteHandshakeError;
@@ -61,6 +69,9 @@ impl From<&HandshakeError> for RemoteHandshakeError {
 }
 
 impl From<RemoteHandshakeError> for HandshakeError {
+    /// Convert a `RemoteHandshakeError` received from the network into a
+    /// local `HandshakeError`. Unknown or forwarded cases are wrapped into
+    /// the `Remote` variant so the original serialized payload is retained.
     fn from(value: RemoteHandshakeError) -> Self {
         type E = HandshakeError;
         type ES = RemoteHandshakeError;
@@ -75,6 +86,8 @@ impl From<RemoteHandshakeError> for HandshakeError {
 }
 
 impl From<bincode::Error> for HandshakeError {
+    /// Convert a bincode serialization/deserialization error into the
+    /// handshake error type.
     fn from(bincode: bincode::Error) -> Self {
         HandshakeError::Serialization { bincode }
     }
