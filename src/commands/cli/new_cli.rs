@@ -1,17 +1,94 @@
 use std::collections::HashMap;
 
-use tokio::net::TcpListener;
+use futures::StreamExt;
+use serde::{Deserialize, Serialize};
+use tokio::{
+    net::TcpListener,
+    sync::mpsc::{UnboundedReceiver, UnboundedSender},
+};
+use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
-use crate::network::{ip::IpP, peer_ipc::PeerIPC, server::Server};
+use crate::{
+    error::WhError,
+    network::{ip::IpP, peer_ipc::PeerIPC, server::Server}, pods::whpath::WhPath,
+};
 
 const DEFAULT_CLI_ADDRESS: &str = "0.0.0.0:8080";
 const MAX_TRY_PORTS: u16 = 15;
 const MAX_PORT: u16 = 65535;
 
 custom_error::custom_error! {CliRunnerError
+    WhError{source: WhError} = "{source}",
     ProvidedIpNotAvailable {ip: IpP, err: std::io::Error} = "The specified address ({ip}) not available ({err})\nThe service is not starting.",
     AboveMaxPort = "Unable to start cli_listener (excedeed max port)",
     AboveMaxTry = "Unable to start cli_listener (exedeed the number of tries)",
+    InvalidRequest = "Invalid/Inexistant request from the client cli",
+    InvalidRequestData = "Unable to understand the client cli message (check your client version)"
+}
+
+#[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
+pub struct PodCreationArgs {
+    /// Name of the pod
+    pub name: String,
+    /// mount point to create the pod in. By default creates a pod from the folder in the working directory with the name of the pod
+    #[arg(long = "mount", short = 'm')]
+    pub mountpoint: Option<WhPath>,
+    /// Local port for the pod to use
+    #[arg(long, short = 'p', default_value = "40000")]
+    pub port: String,
+    /// Network to join
+    #[arg(long, short)]
+    pub url: Option<String>,
+    /// Name for this pod to use as a machine name with the network. Defaults to your Machine's name
+    #[arg(long, short = 'H')]
+    pub hostname: Option<String>,
+    /// url this Pod reports to other to reach it
+    #[arg(long, short)]
+    pub listen_url: Option<String>,
+    /// Additional hosts to try to join from as a backup
+    #[arg(raw = true)]
+    pub additional_hosts: Vec<String>,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub enum RemoveMode {
+    /// Simply remove the pod from the network without losing any data from the network
+    /// and leaving behind any data that was stored on the pod
+    Simple,
+    /// Remove the pod from the network without losing any data on the network,
+    /// and clone all data from the network into the folder where the pod was
+    /// making this folder into a real folder
+    Clone,
+    /// Remove the pod from the network and delete any data that was stored in the pod
+    Clean,
+    /// Remove this pod from the network without distributing its data to other nodes
+    Take,
+}
+
+#[derive(Debug, Serialize, Deserialize)] // requires `derive` feature
+pub enum CliRequest {
+    /// Start the pod (name, path)
+    StartPod(Option<String>, Option<WhPath>),
+    /// Stop the pod (name, path)
+    StopPod(Option<String>, Option<WhPath>),
+    /// Create a new pod and join a network if he have peers in arguments or create a new network
+    New(PodCreationArgs),
+    /// Inspect a pod with its configuration, connections, etc
+    Inspect(Option<String>, Option<WhPath>),
+    /// Get hosts for a specific file
+    GetHosts(GetHostsArgs),
+    /// Tree the folder structure from the given path and show hosts for each file
+    Tree(Option<String>, Option<WhPath>),
+    /// Checks that the service is working (should print it's ip)
+    Status,
+    /// Remove a pod from its network
+    Remove(Option<String>, Option<WhPath>, RemoveMode),
+    /// Apply a new configuration to a pod
+    Apply(PodConf),
+    /// Restore many or a specific file configuration
+    Restore(PodConf),
+    /// Stops the service
+    Interrupt,
 }
 
 struct CliState {
@@ -53,6 +130,51 @@ async fn create_listener(ip: Option<IpP>) -> Result<(TcpListener, IpP), CliRunne
             listener = TcpListener::bind(&ip.to_string()).await;
         }
         Ok((listener.unwrap(), ip))
+    }
+}
+
+async fn cli_accept_job(
+    listener: TcpListener,
+    mut stop_rx: UnboundedReceiver<()>,
+    ask_job: UnboundedSender<()>,
+) {
+    while let Some(Ok((stream, _))) = tokio::select! {
+        v = listener.accept() => Some(v),
+        _ = stop_rx.recv() => None,
+    } {
+        let (writer, mut reader) = match tokio_tungstenite::accept_async_with_config(
+            stream,
+            Some(
+                WebSocketConfig::default()
+                    .max_message_size(None)
+                    .max_frame_size(None),
+            ),
+        )
+        .await
+        {
+            Ok(s) => s,
+            Err(e) => {
+                log::error!("cli_accept_job: can't accept tcp stream: {}", e);
+                continue;
+            }
+        }
+        .split();
+
+        let message_data = match reader.next().await {
+            Some(Ok(msg)) => msg.into_data(),
+            _ => {
+                log::error!("{}", CliRunnerError::InvalidRequest);
+                continue;
+            }
+        };
+
+        let cmd = match bincode::deserialize(&message_data) {
+            Ok(c) => c,
+            Err(e) => {
+                log::error!("{}", CliRunnerError::InvalidRequestData);
+                continue,
+            }
+        };
     }
 }
 

@@ -2,6 +2,7 @@ mod apply;
 mod get_hosts;
 mod message;
 mod new;
+mod new_cli;
 mod register;
 mod remove;
 mod restore;
