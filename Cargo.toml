@@ -46,7 +46,7 @@ features = ["stable", "windows-rs-error", "delayload"]
 version = "0.11.3"
 
 [target.'cfg(unix)'.dependencies]
-fuser = "0.15.1"
+fuser = "0.16.0"
 openat = "0.1.21"
 
 [patch.crates-io]
