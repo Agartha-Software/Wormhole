@@ -625,6 +625,7 @@ pub fn mount_fuse(
 ) -> io::Result<BackgroundSession> {
     let options = vec![
         MountOption::RW,
+        MountOption::Atime,
         // MountOption::DefaultPermissions,
         MountOption::FSName(format!("wormhole@{}", mount_point.get_end())),
     ];
