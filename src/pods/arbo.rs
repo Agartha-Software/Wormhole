@@ -720,6 +720,7 @@ fn index_folder_recursive(
     host: &String,
 ) -> io::Result<()> {
     let str_path = path.to_string();
+    log::error!("indexing folder {}!", str_path);
     for entry in fs::read_dir(str_path)? {
         let entry = entry.expect("error in filesystem indexion (1)");
         let ftype = entry.file_type().expect("error in filesystem indexion (2)");
@@ -767,15 +768,16 @@ fn index_folder_recursive(
 }
 
 pub fn generate_arbo(path: &WhPath, host: &String) -> io::Result<Arbo> {
-    if let Some(arbo) = recover_serialized_arbo(path) {
-        Ok(arbo)
-    } else {
-        let mut arbo = Arbo::new();
+    // if let Some(arbo) = recover_serialized_arbo(path) {
+    //     log::debug!("decerlialize arbo!");
+    //     Ok(arbo)
+    // } else {
+    let mut arbo = Arbo::new();
 
-        #[cfg(target_os = "linux")]
-        index_folder_recursive(&mut arbo, ROOT, path, host)?;
-        Ok(arbo)
-    }
+    #[cfg(target_os = "linux")]
+    index_folder_recursive(&mut arbo, ROOT, path, host)?;
+    Ok(arbo)
+    // }
 }
 
 /* NOTE
