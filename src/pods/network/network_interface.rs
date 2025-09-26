@@ -18,14 +18,13 @@ use crate::{
     },
     pods::{arbo::Ino, filesystem::make_inode::MakeInodeError},
 };
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
 use crate::pods::{
     arbo::BLOCK_SIZE,
     filesystem::{remove_inode::RemoveInodeError, rename::RenameError},
-    network::callbacks::Callback,
 };
 use crate::pods::{
     arbo::{FsEntry, Metadata},

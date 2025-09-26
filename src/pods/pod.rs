@@ -1,4 +1,3 @@
-use std::time::Duration;
 use std::{io, sync::Arc};
 
 use crate::config::{GlobalConfig, LocalConfig};
@@ -6,9 +5,7 @@ use crate::data::tree_hosts::{CliHostTree, TreeLine};
 use crate::error::{WhError, WhResult};
 #[cfg(target_os = "linux")]
 use crate::fuse::fuse_impl::mount_fuse;
-use crate::network::message::{
-    FileSystemSerialized, FromNetworkMessage, MessageContent, ToNetworkMessage,
-};
+use crate::network::message::{FromNetworkMessage, MessageContent, ToNetworkMessage};
 use crate::network::HandshakeError;
 use crate::pods::arbo::{FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME, LOCAL_CONFIG_INO, ROOT};
 #[cfg(target_os = "windows")]
@@ -22,10 +19,8 @@ use crate::winfsp::winfsp_impl::{mount_fsp, WinfspHost};
 use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use fuser;
-use futures::future::Either;
 use log::info;
 use parking_lot::RwLock;
-use serde::Serialize;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
 

@@ -4,10 +4,7 @@
 
 use tokio::runtime::Runtime;
 
-use crate::{
-    commands::cli_commands::{Cli, GetHostsArgs},
-    error::CliResult,
-};
+use crate::{commands::cli_commands::Cli, error::CliResult};
 
 use super::cli_messager;
 
