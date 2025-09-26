@@ -18,18 +18,14 @@ use crate::{
     },
     pods::{arbo::Ino, filesystem::make_inode::MakeInodeError},
 };
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
+use crate::pods::arbo::{FsEntry, Metadata};
 use crate::pods::{
     arbo::BLOCK_SIZE,
     filesystem::{remove_inode::RemoveInodeError, rename::RenameError},
-    network::callbacks::Callback,
-};
-use crate::pods::{
-    arbo::{FsEntry, Metadata},
-    whpath::WhPath,
 };
 
 use crate::pods::{
@@ -52,7 +48,6 @@ pub fn get_all_peers_address(peers: &Arc<RwLock<Vec<PeerIPC>>>) -> WhResult<Vec<
 #[derive(Debug)]
 pub struct NetworkInterface {
     pub arbo: Arc<RwLock<Arbo>>,
-    pub mount_point: WhPath,
     pub url: Option<String>,
     pub to_network_message_tx: UnboundedSender<ToNetworkMessage>,
     pub to_redundancy_tx: UnboundedSender<RedundancyMessage>,
@@ -65,7 +60,6 @@ pub struct NetworkInterface {
 impl NetworkInterface {
     pub fn new(
         arbo: Arc<RwLock<Arbo>>,
-        mount_point: WhPath,
         url: Option<String>,
         to_network_message_tx: UnboundedSender<ToNetworkMessage>,
         to_redundancy_tx: UnboundedSender<RedundancyMessage>,
@@ -76,7 +70,6 @@ impl NetworkInterface {
         Self {
             arbo,
             url,
-            mount_point,
             to_network_message_tx,
             to_redundancy_tx,
             callbacks: Callbacks {
