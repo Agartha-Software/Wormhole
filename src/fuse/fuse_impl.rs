@@ -292,7 +292,7 @@ impl Filesystem for FuseController {
 
         for (i, entry) in entries.into_iter().enumerate().skip(offset as usize) {
             if reply.add(
-                ino,
+                entry.id,
                 // i + 1 means offset of the next entry
                 i as i64 + 1, // NOTE - in case of error, try i + 1
                 entry.entry.get_filetype().into(),
