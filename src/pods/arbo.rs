@@ -430,33 +430,7 @@ impl Arbo {
         self.entries.get(&ino).ok_or(WhError::InodeNotFound)
     }
 
-    #[deprecated]
     pub fn mv_inode(
-        &mut self,
-        parent: InodeId,
-        new_parent: InodeId,
-        name: &String,
-        new_name: &String,
-    ) -> io::Result<()> {
-        let parent_inode = self.entries.get(&parent).ok_or(io::Error::new(
-            io::ErrorKind::NotFound,
-            "add_inode_from_parameters: parent not existing",
-        ))?;
-        let item_id = match self.get_inode_child_by_name(parent_inode, name) {
-            Ok(item_inode) => item_inode.id,
-            Err(_) => todo!("mv_inode: inode not found"), // TODO
-        };
-
-        self.remove_children(parent, item_id)?;
-
-        let item = self.get_inode_mut(item_id)?;
-        item.name = new_name.clone();
-        item.parent = new_parent;
-
-        self.add_children(new_parent, item_id)
-    }
-
-    pub fn n_mv_inode(
         &mut self,
         parent: InodeId,
         new_parent: InodeId,
