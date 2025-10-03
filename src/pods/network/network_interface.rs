@@ -18,14 +18,13 @@ use crate::{
     },
     pods::{arbo::Ino, filesystem::make_inode::MakeInodeError},
 };
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
 use crate::pods::{
     arbo::BLOCK_SIZE,
     filesystem::{remove_inode::RemoveInodeError, rename::RenameError},
-    network::callbacks::Callback,
 };
 use crate::pods::{
     arbo::{FsEntry, Metadata},
@@ -199,7 +198,7 @@ impl NetworkInterface {
     ) -> Result<(), RenameError> {
         let mut arbo = Arbo::n_write_lock(&self.arbo, "arbo_rename_file")?;
 
-        arbo.n_mv_inode(parent, new_parent, name, new_name)?;
+        arbo.mv_inode(parent, new_parent, name, new_name)?;
 
         self.to_network_message_tx
             .send(ToNetworkMessage::BroadcastMessage(MessageContent::Rename(
@@ -222,7 +221,7 @@ impl NetworkInterface {
     ) -> Result<(), RenameError> {
         let mut arbo = Arbo::n_write_lock(&self.arbo, "arbo_rename_file")?;
 
-        arbo.n_mv_inode(parent, new_parent, name, new_name)
+        arbo.mv_inode(parent, new_parent, name, new_name)
             .map_err(|err| match err {
                 WhError::InodeNotFound => RenameError::DestinationParentNotFound,
                 WhError::InodeIsNotADirectory => RenameError::DestinationParentNotFolder,

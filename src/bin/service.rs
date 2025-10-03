@@ -165,7 +165,7 @@ async fn handle_cli_command(
                 None
             };
 
-            //Apply new confi in the pod and check if the name change
+            //Apply new config in the pod and check if the name change
             let res = if let Some((name, pod)) = opt_pod {
                 pod_conf.path = Some(pod.get_mountpoint().clone());
 

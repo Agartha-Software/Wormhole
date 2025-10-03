@@ -11,7 +11,6 @@ use crate::{
         cli::message::cli_messager,
         cli_commands::{Cli, PodArgs},
     },
-    config::{types::Config, LocalConfig},
     error::{CliError, CliResult},
     pods::{
         arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
