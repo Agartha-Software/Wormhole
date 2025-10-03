@@ -8,7 +8,6 @@ services:
       - '/dev/fuse'
     cap_add:
       - "SYS_ADMIN"
-    privileged: true
     volumes:
       - ./dockertest:/wormhole:rwx
     environment:
@@ -23,7 +22,6 @@ services:
       - '/dev/fuse'
     cap_add:
       - "SYS_ADMIN"
-    privileged: true
     volumes:
       - ./dockertest:/wormhole:rwx
     environment:
