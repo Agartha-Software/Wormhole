@@ -1,59 +1,30 @@
 services:
-  wormhole-base:
-    &base-service
-    user: "root:root"
-    build: .
-    privileged: true
-    security_opt:
-      - seccomp:unconfined  # Désactive SELinux
-    cap_add:
-      - SYS_ADMIN
-      - DAC_OVERRIDE
-      - SYS_PTRACE
+  whone:
+    build:
+      context: .
+      network: host
+    network_mode: "host"
     devices:
       - '/dev/fuse'
+    cap_add:
+      - "SYS_ADMIN"
+    privileged: true
     volumes:
-      - ./shared_mnt:/usr/src/wormhole/virtual:rwx,Z
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    networks:
-      - wormhole-net
-    stdin_open: true
-    tty: true
+      - ./dockertest:/wormhole:rwx
     environment:
-      - VIRTUAL_FS_ROOT=/usr/src/wormhole/virtual
-      - RUST_BACKTRACE=1
-      - FUSE_GROUP_ID=root
-      - RUST_LOG=debug
-    command: "./wormholed"
+      RUST_LOG: "wormhole=trace"
 
-  wormhole1:
-    <<: *base-service
-    container_name: w1
+  whtwo:
+    build:
+      context: .
+      network: host
+    network_mode: "host"
+    devices:
+      - '/dev/fuse'
+    cap_add:
+      - "SYS_ADMIN"
+    privileged: true
     volumes:
-      - ./shared_mnt1:/usr/src/wormhole/virtual:rwx,Z
-    ports:
-      - "8081:8081"
-    networks:
-      wormhole-net:
-        ipv4_address: 172.20.0.2
-    command: "./wormholed"
-
-  wormhole2:
-    <<: *base-service
-    container_name: w2
-    volumes:
-      - ./shared_mnt2:/usr/src/wormhole/virtual:rwx,Z
-    ports:
-      - "8082:8081"
-    networks:
-      wormhole-net:
-        ipv4_address: 172.20.0.3
-    command: "./wormholed"
-
-networks:
-  wormhole-net:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
-          gateway: 172.20.0.1
+      - ./dockertest:/wormhole:rwx
+    environment:
+      RUST_LOG: "wormhole=trace"
