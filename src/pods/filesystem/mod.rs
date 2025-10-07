@@ -1,4 +1,5 @@
 pub mod attrs;
+pub mod diffs;
 pub mod file_handle;
 pub mod fs_interface;
 pub mod make_inode;
@@ -10,3 +11,12 @@ pub mod remove_inode;
 pub mod rename;
 pub mod write;
 pub mod xattrs;
+
+use std::sync::Arc;
+pub struct File(pub Arc<Vec<u8>>);
+
+impl File {
+    pub fn empty() -> Self {
+        Self(Arc::new(Vec::new()))
+    }
+}
