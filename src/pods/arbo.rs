@@ -112,10 +112,6 @@ impl FsEntry {
 
 impl Inode {
     pub fn new(name: String, parent_ino: InodeId, id: InodeId, entry: FsEntry, perm: u16) -> Self {
-        let mut nlink = 1; // link to self
-        if entry.get_filetype() == SimpleFileType::Directory {
-            nlink += 1; // link to previous
-        }
         let meta = Metadata {
             ino: id,
             size: 0,
@@ -126,7 +122,7 @@ impl Inode {
             crtime: SystemTime::now(),
             kind: entry.get_filetype(),
             perm,
-            nlink,
+            nlink: 1 + matches!(entry, FsEntry::Directory(_)) as u32,
             uid: 0,
             gid: 0,
             rdev: 0,
@@ -305,7 +301,6 @@ impl Arbo {
                 meta,
                 xattrs: _,
             }) => {
-                meta.nlink += 1;
                 parent_children.push(inode.id);
                 self.entries.insert(inode.id, inode);
                 Ok(())
@@ -341,8 +336,6 @@ impl Arbo {
             FsEntry::Directory(children) => Ok(children),
         }?;
 
-        parent.meta.nlink -= 1;
-
         children.retain(|v| *v != child);
         Ok(())
     }
@@ -356,8 +349,6 @@ impl Arbo {
             FsEntry::File(_) => panic!("Parent is a file"),
             FsEntry::Directory(children) => Ok(children),
         }?;
-
-        parent.meta.nlink -= 1;
 
         children.retain(|parent_child| *parent_child != child);
         Ok(())
@@ -667,18 +658,14 @@ impl Arbo {
     pub fn set_inode_meta(&mut self, ino: InodeId, meta: Metadata) -> io::Result<()> {
         let inode = self.get_inode_mut(ino)?;
 
-        let old_nlink = inode.meta.nlink; // We always keep the nlink management manual
         inode.meta = meta;
-        inode.meta.nlink = old_nlink;
         Ok(())
     }
 
     pub fn n_set_inode_meta(&mut self, ino: InodeId, meta: Metadata) -> WhResult<()> {
         let inode = self.n_get_inode_mut(ino)?;
 
-        let old_nlink = inode.meta.nlink; // We always keep the nlink management manual
         inode.meta = meta;
-        inode.meta.nlink = old_nlink;
         Ok(())
     }
 
