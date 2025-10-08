@@ -171,7 +171,7 @@ impl Arbo {
                     crtime: SystemTime::now(),
                     kind: SimpleFileType::Directory,
                     perm: 0o755,
-                    nlink: 2, // Start with 2, 1 for link to self (.) and one for previous (..)
+                    nlink: 2, // Start with 2, one for this link (`self/`) and one for self-referential (`self/.`)
                     uid: 0,
                     gid: 0,
                     rdev: 0,
