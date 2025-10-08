@@ -296,9 +296,9 @@ impl Arbo {
             Some(Inode {
                 parent: _,
                 id: _,
-                name,
+                name: _,
                 entry: FsEntry::Directory(parent_children),
-                meta,
+                meta: _,
                 xattrs: _,
             }) => {
                 parent_children.push(inode.id);
