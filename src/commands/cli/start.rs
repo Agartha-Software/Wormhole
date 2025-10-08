@@ -1,5 +1,3 @@
-use std::env;
-
 use tokio::runtime::Runtime;
 
 use crate::{
@@ -11,7 +9,6 @@ use crate::{
         },
     },
     error::CliResult,
-    pods::whpath::WhPath,
 };
 
 use super::cli_messager;
