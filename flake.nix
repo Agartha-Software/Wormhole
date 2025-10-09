@@ -10,15 +10,8 @@
         let pkgs = nixpkgs.legacyPackages.${system};
         in {
           default = pkgs.mkShell {
-            packages = [
-              pkgs.cargo
-              pkgs.rustc
-              pkgs.rustfmt
-              pkgs.pkg-config
-              pkgs.fuse3
-              pkgs.docker
-              pkgs.docker-compose
-            ];
+            packages =
+              [ pkgs.cargo pkgs.rustc pkgs.rustfmt pkgs.pkg-config pkgs.fuse3 ];
             RUST_SRC_PATH =
               "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
           };
