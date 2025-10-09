@@ -401,7 +401,7 @@ impl WhPath {
             return output.replace("/", "\\");
         }
         #[cfg(target_os = "linux")]
-        return self.inner;
+        return &self.inner;
     }
 }
 
