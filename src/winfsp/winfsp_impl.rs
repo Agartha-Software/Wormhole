@@ -54,13 +54,13 @@ impl Drop for FSPController {
     fn drop(&mut self) {
         let (p, n) = self.mount_point.split_folder_file();
         let aliased = WhPath::from(&p).join(&(".".to_string() + &n));
-        if fs::metadata(&aliased.inner).is_ok() {
+        if fs::metadata(&aliased.os_inner()).is_ok() {
             log::debug!(
                 "moving from {} to {} ...",
-                &aliased.inner,
-                &self.mount_point.inner
+                &aliased.os_inner(),
+                &self.mount_point.os_inner()
             );
-            let _ = fs::rename(&aliased.inner, &self.mount_point.inner);
+            let _ = fs::rename(&aliased.os_inner(), &self.mount_point.os_inner());
         }
     }
 }
@@ -101,7 +101,7 @@ pub fn mount_fsp(
         volume_label: Arc::new(RwLock::new("wormhole_fs".into())),
         fs_interface,
         mount_point: path.clone(),
-        dummy_file: "dummy".into(), // dummy_file: (&path.clone().rename(&("dummy_file").to_string()).inner).into(),
+        dummy_file: "dummy".into(), // dummy_file: (&path.clone().rename(&("dummy_file").to_string()).os_inner()).into(),
     };
     log::debug!("creating host...");
     let mut host = FileSystemHost::<FSPController>::new(volume_params, wormhole_context)
@@ -110,14 +110,14 @@ pub fn mount_fsp(
 
     let (p, n) = path.split_folder_file();
     let aliased = WhPath::from(&p).join(&(".".to_string() + &n));
-    if fs::metadata(&path.inner).is_ok() {
-        log::debug!("moving from {} to {} ...", &path.inner, &aliased.inner);
-        fs::rename(&path.inner, &aliased.inner)?;
+    if fs::metadata(&path.os_inner()).is_ok() {
+        log::debug!("moving from {} to {} ...", &path.os_inner(), &aliased.os_inner());
+        fs::rename(&path.os_inner(), &aliased.os_inner())?;
     }
 
-    log::debug!("mounting host @ {} ...", &path.inner);
+    log::debug!("mounting host @ {} ...", &path.os_inner());
     let _ = host
-        .mount(&path.inner)
+        .mount(&path.os_inner())
         .ok()
         .ok_or(Error::other("WinFSP::mount"));
     // mount function throws the wrong error anyway so no point in inspecting it
@@ -156,7 +156,7 @@ impl FileSystemContext for FSPController {
         let file_info: FileInfo =
             (&Arbo::read_lock(&self.fs_interface.arbo, "get_security_by_name")?
                 .get_inode_from_path(&path)
-                .inspect_err(|e| log::trace!("{}:{:?}", &path.inner, e))?
+                .inspect_err(|e| log::trace!("{}:{:?}", &path.os_inner(), e))?
                 .meta)
                 .into();
         // let mut descriptor_size = 0;

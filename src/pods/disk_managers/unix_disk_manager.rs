@@ -18,7 +18,7 @@ impl AsPath for WhPath {
     type Buffer = CString;
 
     fn to_path(self) -> Option<Self::Buffer> {
-        CString::new(self.inner).ok()
+        CString::new(self.os_inner()).ok()
     }
 }
 

@@ -84,5 +84,10 @@ async fn pod_value(args: &PodArgs) -> CliResult<(GlobalConfig, LocalConfig, Arc<
         args.additional_hosts.clone(),
     );
 
+    log::debug!("path before osstr: {:?}", path);
+    log::debug!("and after: {:?}", path.as_os_str());
+    let test: WhPath = path.as_os_str().into();
+    log::debug!("and as a whpath: {:?}", test);
+
     Ok((global_config, local_config, server, path.as_os_str().into()))
 }

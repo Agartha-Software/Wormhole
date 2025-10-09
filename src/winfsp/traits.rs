@@ -45,7 +45,7 @@ impl TryFrom<&winfsp::U16CStr> for WhPath {
 
 impl WhPath {
     pub fn to_winfsp(&self) -> String {
-        self.inner.replace("/", "\\")
+        self.os_inner().replace("/", "\\")
     }
 }
 

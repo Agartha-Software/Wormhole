@@ -29,12 +29,15 @@ pub struct WindowsDiskManager {
 
 impl WindowsDiskManager {
     pub fn new(mount_point: WhPath) -> io::Result<Self> {
+        log::debug!("WindowsDiskManager::new({mount_point:?})");
+
         let (parent, name) = mount_point.split_folder_file();
         let mut mount_point = WhPath::from(&parent);
         mount_point.push(&format!(".{name}"));
 
-        let path = HSTRING::from(OsString::from(&mount_point.inner));
+        let path = HSTRING::from(OsString::from(&mount_point.os_inner()));
 
+        log::debug!("windowsdiskmgr::new open: {:?}", path);
         let handle = unsafe {
             CreateFileW(
                 &path,
@@ -51,6 +54,7 @@ impl WindowsDiskManager {
             return Err(io::ErrorKind::InvalidInput.into());
         }
 
+        log::debug!("windowsdiskmgr::new ok");
         Ok(Self {
             mount_point,
             handle: Win32SafeHandle::from(handle),
@@ -88,42 +92,42 @@ impl WindowsDiskManager {
 /// always takes a WhPath and infers the real disk path
 impl DiskManager for WindowsDiskManager {
     fn new_file(&self, path: &WhPath, permissions: u16) -> io::Result<()> {
-        std::fs::File::create(&self.mount_point.join(path).inner)?;
+        std::fs::File::create(&self.mount_point.join(path).os_inner())?;
         Ok(())
     }
 
     fn remove_file(&self, path: &WhPath) -> io::Result<()> {
-        std::fs::remove_file(&self.mount_point.join(path).inner)
+        std::fs::remove_file(&self.mount_point.join(path).os_inner())
     }
 
     fn remove_dir(&self, path: &WhPath) -> io::Result<()> {
-        std::fs::remove_dir(&self.mount_point.join(path).inner)
+        std::fs::remove_dir(&self.mount_point.join(path).os_inner())
     }
 
     fn write_file(&self, path: &WhPath, binary: &[u8], offset: usize) -> io::Result<usize> {
-        return std::fs::File::open(&self.mount_point.join(path).inner)?
+        return std::fs::File::open(&self.mount_point.join(path).os_inner())?
             .seek_write(binary, offset as u64);
     }
 
     fn set_file_size(&self, path: &WhPath, size: usize) -> io::Result<()> {
-        std::fs::File::open(&self.mount_point.join(path).inner)?.set_len(size as u64)
+        std::fs::File::open(&self.mount_point.join(path).os_inner())?.set_len(size as u64)
     }
 
     fn mv_file(&self, path: &WhPath, new_path: &WhPath) -> io::Result<()> {
         // let mut original_path = path.clone(); // NOTE - Would be better if rename was non mutable
         // original_path.rename(new_name);
         std::fs::rename(
-            &self.mount_point.join(path).inner,
-            &self.mount_point.join(new_path).inner,
+            &self.mount_point.join(path).os_inner(),
+            &self.mount_point.join(new_path).os_inner(),
         )
     }
 
     fn read_file(&self, path: &WhPath, offset: usize, buf: &mut [u8]) -> io::Result<usize> {
-        std::fs::File::open(&self.mount_point.join(path).inner)?.seek_read(buf, offset as u64)
+        std::fs::File::open(&self.mount_point.join(path).os_inner())?.seek_read(buf, offset as u64)
     }
 
     fn new_dir(&self, path: &WhPath, permissions: u16) -> io::Result<()> {
-        std::fs::create_dir(&self.mount_point.join(path).inner)
+        std::fs::create_dir(&self.mount_point.join(path).os_inner())
     }
 
     fn size_info(&self) -> std::io::Result<super::DiskSizeInfo> {

@@ -82,7 +82,7 @@ where
     fn from(path: &T) -> Self {
         let mut wh_path = WhPath {
             #[cfg(target_os = "windows")]
-            inner: path.as_str().to_string().replace("\\", "/"), // todo: properly handle backslashes
+            inner: path.as_str().to_string().trim_start_matches("\\\\?").replace("\\", "/"), // todo: properly handle backslashes
             #[cfg(target_os = "linux")]
             inner: path.as_str().to_string(),
             kind: PathType::Empty,
@@ -94,7 +94,13 @@ where
 
 impl Into<OsString> for &WhPath {
     fn into(self) -> OsString {
-        OsString::from_str(&self.inner).expect("infaillable")
+        #[cfg(target_os = "windows")] {
+            let mut output = self.inner.clone();
+            output.insert_str(0, "\\\\?");
+            return OsString::from_str(&output.replace("/", "\\")).expect("infaillable");
+        }
+        #[cfg(target_os = "linux")]
+        return OsString::from_str(&self.inner).expect("infaillable");
     }
 }
 
@@ -386,6 +392,16 @@ impl WhPath {
         }
         self.update_kind();
         return self;
+    }
+
+    pub fn os_inner(&self) -> String {
+        #[cfg(target_os = "windows")] {
+            let mut output = self.inner.clone();
+            output.insert_str(0, "\\\\?");
+            return output.replace("/", "\\");
+        }
+        #[cfg(target_os = "linux")]
+        return self.inner;
     }
 }
 

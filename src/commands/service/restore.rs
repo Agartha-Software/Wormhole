@@ -24,7 +24,7 @@ pub fn restore(
                     .as_ref()
                     .unwrap_or(&".".into())
                     .join(LOCAL_CONFIG_FNAME)
-                    .inner;
+                    .os_inner();
                 if !Path::new(&path).exists() {
                     File::create(path.clone())?;
                 }
@@ -38,7 +38,7 @@ pub fn restore(
                     .as_ref()
                     .unwrap_or(&".".into())
                     .join(GLOBAL_CONFIG_FNAME)
-                    .inner;
+                    .os_inner();
                 if !Path::new(&path).exists() {
                     File::create(path.clone())?;
                 }

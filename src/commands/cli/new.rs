@@ -19,7 +19,7 @@ use crate::{
 };
 
 // fn mod_file_conf_content(path: WhPath, hostname: String) -> Result<(), CliError> {
-//     let local_path = path.clone().join(LOCAL_CONFIG_FNAME).inner;
+//     let local_path = path.clone().join(LOCAL_CONFIG_FNAME).os_inner();
 //     let local_config = LocalConfig::read(&local_path).ok();
 //     let mut local_config = if let Some(local_config) = local_config {
 //         local_config
@@ -36,7 +36,7 @@ use crate::{
 fn is_new_wh_file_config(path: &WhPath) -> CliResult<()> {
     let files_name = vec![LOCAL_CONFIG_FNAME, GLOBAL_CONFIG_FNAME];
     for file_name in files_name {
-        if fs::metadata(path.clone().push(file_name).inner.clone()).is_err() {
+        if fs::metadata(path.clone().push(file_name).os_inner().clone()).is_err() {
             return Err(CliError::FileConfigName {
                 name: file_name.to_owned(),
             });
