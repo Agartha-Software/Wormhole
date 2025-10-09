@@ -293,7 +293,7 @@ impl FileSystemContext for FSPController {
         log::trace!("winfsp::close({:?});", context);
         let _ = self
             .fs_interface
-            .release(context.handle, context.ino)
+            .release(context.handle)
             .inspect_err(|e| log::warn!("close::{e};"));
     }
 
