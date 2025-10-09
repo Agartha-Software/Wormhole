@@ -1,7 +1,6 @@
 use custom_error::custom_error;
 
 use crate::{
-    config::{types::Config, LocalConfig},
     error::WhError,
     pods::arbo::{Arbo, FsEntry, Inode},
 };

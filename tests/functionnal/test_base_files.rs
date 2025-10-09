@@ -1,6 +1,5 @@
 use crate::{
     functionnal::{
-        append_to_path,
         environment_manager::{
             types::{StartupFiles, SLEEP_TIME},
             utilities::{assert_dirs_are_equal, tree_command},

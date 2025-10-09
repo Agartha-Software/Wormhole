@@ -3,7 +3,7 @@ use crate::{
     pods::arbo::{Arbo, InodeId},
 };
 use custom_error::custom_error;
-use parking_lot::{RwLockReadGuard, RwLockWriteGuard};
+use parking_lot::RwLockWriteGuard;
 
 use super::{
     file_handle::{AccessMode, FileHandle, FileHandleManager, UUID},

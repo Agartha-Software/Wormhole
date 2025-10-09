@@ -26,7 +26,9 @@ use windows::Win32::{
         STATUS_OBJECT_NAME_NOT_FOUND, STATUS_OBJECT_PATH_NOT_FOUND, STATUS_PENDING,
         STATUS_POSSIBLE_DEADLOCK,
     },
-    Storage::FileSystem::{FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_DIRECTORY, SYNCHRONIZE},
+    Storage::FileSystem::{
+        FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_DIRECTORY, FILE_WRITE_ATTRIBUTES, SYNCHRONIZE,
+    },
 };
 use winfsp::{filesystem::FileInfo, FspError};
 
@@ -194,7 +196,7 @@ impl AccessMode {
         {
             return AccessMode::ReadWrite;
         }
-        if access & (GENERIC_WRITE.0 & !SYNCHRONIZE.0) != 0 {
+        if access & ((GENERIC_WRITE.0 | FILE_WRITE_ATTRIBUTES.0) & !SYNCHRONIZE.0) != 0 {
             return AccessMode::Write;
         }
         if access & (GENERIC_EXECUTE.0 & !SYNCHRONIZE.0) != 0 {

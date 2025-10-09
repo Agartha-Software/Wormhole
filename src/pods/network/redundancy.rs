@@ -84,7 +84,7 @@ fn eligible_to_apply(
     };
     if hosts.len() < target_redundancy as usize
         && available_peers > hosts.len()
-        && hosts[0] == *self_addr
+        && hosts.get(0) == Some(self_addr)
     {
         Some(ino)
     } else {
