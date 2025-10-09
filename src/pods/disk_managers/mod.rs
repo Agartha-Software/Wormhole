@@ -2,7 +2,7 @@ use std::io;
 
 use super::whpath::WhPath;
 use std::fmt::Debug;
-pub mod dummy_disk_manager;
+pub mod windows_disk_manager;
 #[cfg(target_os = "linux")]
 pub mod unix_disk_manager;
 
