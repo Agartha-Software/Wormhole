@@ -3,8 +3,10 @@ use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
+    ffi::{OsStr, OsString},
     fs, io,
     ops::RangeFrom,
+    path::PathBuf,
     sync::Arc,
     time::{Duration, SystemTime},
 };
@@ -14,7 +16,6 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
 use crate::error::WhError;
 use crate::pods::filesystem::fs_interface::SimpleFileType;
-use crate::pods::whpath::WhPath;
 
 use super::filesystem::{make_inode::MakeInodeError, remove_inode::RemoveInodeError};
 
@@ -57,7 +58,7 @@ pub type XAttrs = HashMap<String, Vec<u8>>;
 pub struct Inode {
     pub parent: InodeId,
     pub id: InodeId,
-    pub name: String,
+    pub name: OsString,
     pub entry: FsEntry,
     pub meta: Metadata,
     pub xattrs: XAttrs,
@@ -111,7 +112,7 @@ impl FsEntry {
 }
 
 impl Inode {
-    pub fn new(name: String, parent_ino: InodeId, id: InodeId, entry: FsEntry, perm: u16) -> Self {
+    pub fn new(name: &OsStr, parent_ino: InodeId, id: InodeId, entry: FsEntry, perm: u16) -> Self {
         let meta = Metadata {
             ino: id,
             size: 0,
@@ -135,7 +136,7 @@ impl Inode {
         Self {
             parent: parent_ino,
             id: id,
-            name: name,
+            name: name.into(),
             entry: entry,
             meta,
             xattrs,
@@ -159,7 +160,7 @@ impl Arbo {
             Inode {
                 parent: ROOT,
                 id: ROOT,
-                name: "/".to_owned(),
+                name: "/".into(),
                 entry: FsEntry::Directory(vec![]),
                 meta: Metadata {
                     ino: ROOT,
@@ -201,10 +202,10 @@ impl Arbo {
         self.entries.values_mut()
     }
 
-    pub fn get_special(name: &str, parent_ino: u64) -> Option<u64> {
+    pub fn get_special(name: &OsStr, parent_ino: u64) -> Option<u64> {
         match (name, parent_ino) {
-            (GLOBAL_CONFIG_FNAME, 1) => Some(GLOBAL_CONFIG_INO),
-            (LOCAL_CONFIG_FNAME, 1) => Some(LOCAL_CONFIG_INO),
+            (n, 1) if n == GLOBAL_CONFIG_FNAME => Some(GLOBAL_CONFIG_INO),
+            (n, 1) if n == LOCAL_CONFIG_FNAME => Some(LOCAL_CONFIG_INO),
             _ => None,
         }
     }
@@ -313,7 +314,7 @@ impl Arbo {
     /// Create a new [Inode] from the given parameters and insert it inside the local arbo
     pub fn add_inode_from_parameters(
         &mut self,
-        name: String,
+        name: &OsStr,
         id: InodeId, //REVIEW: Renamed id to be more coherent with the Inode struct
         parent_ino: InodeId,
         entry: FsEntry,
@@ -431,8 +432,8 @@ impl Arbo {
         &mut self,
         parent: InodeId,
         new_parent: InodeId,
-        name: &String,
-        new_name: &String,
+        name: &OsStr,
+        new_name: &OsStr,
     ) -> WhResult<()> {
         let parent_inode = self.entries.get(&parent).ok_or(WhError::InodeNotFound)?;
         let item_id = self.n_get_inode_child_by_name(parent_inode, name)?.id;
@@ -440,7 +441,7 @@ impl Arbo {
         self.n_remove_child(parent, item_id)?;
 
         let item = self.n_get_inode_mut(item_id)?;
-        item.name = new_name.clone();
+        item.name = new_name.into();
         item.parent = new_parent;
 
         self.n_add_child(new_parent, item_id)
@@ -464,9 +465,9 @@ impl Arbo {
     }
 
     #[must_use]
-    pub fn get_path_from_inode_id(&self, inode_index: InodeId) -> io::Result<WhPath> {
+    pub fn get_path_from_inode_id(&self, inode_index: InodeId) -> io::Result<PathBuf> {
         if inode_index == ROOT {
-            return Ok(WhPath::from("/"));
+            return Ok(PathBuf::from("/"));
         }
         let inode = match self.entries.get(&inode_index) {
             Some(inode) => inode,
@@ -485,9 +486,9 @@ impl Arbo {
     ///
     /// Possible Errors:
     ///   InodeNotFound: if the inode isn't inside the tree
-    pub fn n_get_path_from_inode_id(&self, inode_index: InodeId) -> WhResult<WhPath> {
+    pub fn n_get_path_from_inode_id(&self, inode_index: InodeId) -> WhResult<PathBuf> {
         if inode_index == ROOT {
-            return Ok(WhPath::from("/"));
+            return Ok(PathBuf::from("/"));
         }
         let inode = self
             .entries
@@ -500,11 +501,11 @@ impl Arbo {
     }
 
     #[must_use]
-    pub fn get_inode_child_by_name(&self, parent: &Inode, name: &String) -> io::Result<&Inode> {
+    pub fn get_inode_child_by_name(&self, parent: &Inode, name: &OsStr) -> io::Result<&Inode> {
         if let Ok(children) = parent.entry.get_children() {
             for child in children.iter() {
                 if let Some(child) = self.entries.get(child) {
-                    if child.name == *name {
+                    if child.name == name {
                         return Ok(child);
                     }
                 }
@@ -519,11 +520,11 @@ impl Arbo {
     }
 
     #[must_use]
-    pub fn n_get_inode_child_by_name(&self, parent: &Inode, name: &String) -> WhResult<&Inode> {
+    pub fn n_get_inode_child_by_name(&self, parent: &Inode, name: &OsStr) -> WhResult<&Inode> {
         if let Ok(children) = parent.entry.get_children() {
             for child in children.iter() {
                 if let Some(child) = self.entries.get(child) {
-                    if child.name == *name {
+                    if child.name == name {
                         return Ok(child);
                     }
                 }
@@ -535,10 +536,10 @@ impl Arbo {
     }
 
     #[must_use]
-    pub fn get_inode_from_path(&self, path: &WhPath) -> io::Result<&Inode> {
+    pub fn get_inode_from_path(&self, path: &PathBuf) -> io::Result<&Inode> {
         let mut actual_inode = self.entries.get(&ROOT).expect("inode_from_path: NO ROOT");
 
-        for name in path.clone().to_vector().iter() {
+        for name in path.iter() {
             actual_inode = self.get_inode_child_by_name(&actual_inode, name)?;
         }
 
@@ -666,25 +667,24 @@ impl Arbo {
 // !SECTION
 
 /// If arbo can be read and deserialized from parent_folder/[ARBO_FILE_NAME] returns Some(Arbo)
-fn recover_serialized_arbo(parent_folder: &WhPath) -> Option<Arbo> {
+fn recover_serialized_arbo(parent_folder: &PathBuf) -> Option<Arbo> {
     // error handling is silent on purpose as it will be recoded with the new error system
     // If an error happens, will just proceed like the arbo was not on disk
     // In the future, we should maybe warn and keep a copy, avoiding the user from losing data
-    bincode::deserialize(&fs::read(parent_folder.join(ARBO_FILE_FNAME).to_string()).ok()?).ok()
+    bincode::deserialize(&fs::read(parent_folder.join(ARBO_FILE_FNAME)).ok()?).ok()
 }
 
 #[cfg(target_os = "linux")]
 fn index_folder_recursive(
     arbo: &mut Arbo,
     parent: Ino,
-    path: &WhPath,
+    path: &PathBuf,
     host: &String,
 ) -> io::Result<()> {
-    let str_path = path.to_string();
-    for entry in fs::read_dir(str_path)? {
+    for entry in fs::read_dir(path)? {
         let entry = entry.expect("error in filesystem indexion (1)");
         let ftype = entry.file_type().expect("error in filesystem indexion (2)");
-        let fname = entry.file_name().to_string_lossy().to_string();
+        let fname = entry.file_name();
         let meta = entry.metadata()?;
 
         let special_ino = Arbo::get_special(&fname, parent);
@@ -704,7 +704,7 @@ fn index_folder_recursive(
         };
 
         arbo.add_inode(Inode::new(
-            fname.clone(),
+            &fname,
             parent,
             used_ino,
             if ftype.is_file() {
@@ -727,7 +727,7 @@ fn index_folder_recursive(
     Ok(())
 }
 
-pub fn generate_arbo(path: &WhPath, host: &String) -> io::Result<Arbo> {
+pub fn generate_arbo(path: &PathBuf, host: &String) -> io::Result<Arbo> {
     if let Some(arbo) = recover_serialized_arbo(path) {
         Ok(arbo)
     } else {
