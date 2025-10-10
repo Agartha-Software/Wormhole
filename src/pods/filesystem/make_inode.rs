@@ -1,3 +1,5 @@
+use std::ffi::OsStr;
+
 use custom_error::custom_error;
 
 use crate::{
@@ -30,7 +32,7 @@ impl FsInterface {
     pub fn create(
         &self,
         parent_ino: u64,
-        name: String,
+        name: &OsStr,
         kind: SimpleFileType,
         flags: OpenFlags,
         access: AccessMode,
@@ -57,7 +59,7 @@ impl FsInterface {
     pub fn make_inode(
         &self,
         parent_ino: u64,
-        name: String,
+        name: &OsStr,
         permissions: u16,
         kind: SimpleFileType,
     ) -> Result<Inode, MakeInodeError> {
@@ -66,7 +68,7 @@ impl FsInterface {
             SimpleFileType::Directory => FsEntry::Directory(Vec::new()),
         };
 
-        let special_ino = Arbo::get_special(&name, parent_ino);
+        let special_ino = Arbo::get_special(name, parent_ino);
         if special_ino.is_some() && kind != SimpleFileType::File {
             return Err(MakeInodeError::ProtectedNameIsFolder);
         }
