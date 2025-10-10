@@ -2,6 +2,7 @@ extern crate wormhole;
 use serial_test::parallel;
 use std::{
     collections::HashMap,
+    ffi::OsStr,
     time::{Duration, SystemTime},
 };
 use wormhole::pods::{
@@ -47,7 +48,7 @@ fn test_inserting_and_retreiving_files() {
 
     assert!(
         arbo.add_inode_from_parameters(
-            "file1".to_owned(),
+            OsStr::new("file1"),
             10,
             ROOT,
             FsEntry::File(Vec::new()),
@@ -58,7 +59,7 @@ fn test_inserting_and_retreiving_files() {
     );
     assert!(
         arbo.add_inode_from_parameters(
-            "file2".to_owned(),
+            OsStr::new("file2"),
             11,
             ROOT,
             FsEntry::File(Vec::new()),
@@ -71,7 +72,7 @@ fn test_inserting_and_retreiving_files() {
     let result_one = Inode {
         id: 10,
         parent: 1,
-        name: "file1".to_owned(),
+        name: OsStr::new("file1").into(),
         entry: FsEntry::File(Vec::new()),
         meta: Metadata {
             ino: 10,
@@ -96,7 +97,7 @@ fn test_inserting_and_retreiving_files() {
     let result_two = Inode {
         id: 11,
         parent: 1,
-        name: "file2".to_owned(),
+        name: OsStr::new("file2").into(),
         entry: FsEntry::File(Vec::new()),
         meta: Metadata {
             ino: 11,
