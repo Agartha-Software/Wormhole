@@ -1,3 +1,6 @@
+#[cfg(target_os = "linux")]
+use std::ffi::OsStr;
+
 use custom_error::custom_error;
 
 use crate::{
@@ -33,16 +36,12 @@ impl From<RemoveInodeError> for RemoveFileError {
 
 impl FsInterface {
     // NOTE - system specific (fuse/winfsp) code that need access to arbo or other classes
-    pub fn fuse_remove_inode(
-        &self,
-        parent: InodeId,
-        name: &std::ffi::OsStr,
-    ) -> Result<(), RemoveFileError> {
+    #[cfg(target_os = "linux")]
+    pub fn fuse_remove_inode(&self, parent: InodeId, name: &OsStr) -> Result<(), RemoveFileError> {
         let target = {
             let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface::fuse_remove_inode")?;
             let parent = arbo.n_get_inode(parent)?;
-            arbo.n_get_inode_child_by_name(parent, &name.to_string_lossy().to_string())?
-                .id
+            arbo.n_get_inode_child_by_name(parent, name)?.id
         };
 
         self.remove_inode(target)
