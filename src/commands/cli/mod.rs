@@ -11,7 +11,10 @@ mod stop;
 mod templates;
 mod tree;
 
-use std::{env, path::Path};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 pub use apply::apply;
 pub use get_hosts::get_hosts;
@@ -26,12 +29,9 @@ pub use stop::stop;
 pub use templates::templates;
 pub use tree::tree;
 
-use crate::{
-    error::{CliError, CliResult},
-    pods::whpath::WhPath,
-};
+use crate::error::{CliError, CliResult};
 
-fn path_or_wd<'a, P: AsRef<Path> + From<&'a str>>(path: Option<P>) -> CliResult<WhPath> {
+fn path_or_wd<'a, P: AsRef<Path> + From<&'a str>>(path: Option<P>) -> CliResult<PathBuf> {
     Ok(match path {
         Some(path) => Ok(env::current_dir()?.join(path)),
         None => env::current_dir(),

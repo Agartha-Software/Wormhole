@@ -2,7 +2,7 @@
 // In code we trust
 // AgarthaSoftware - 2024
 
-use std::fs;
+use std::{fs, path::PathBuf};
 
 use tokio::runtime::Runtime;
 
@@ -12,10 +12,7 @@ use crate::{
         cli_commands::{Cli, PodArgs},
     },
     error::{CliError, CliResult},
-    pods::{
-        arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
-        whpath::WhPath,
-    },
+    pods::arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
 };
 
 // fn mod_file_conf_content(path: WhPath, hostname: String) -> Result<(), CliError> {
@@ -33,10 +30,10 @@ use crate::{
 //     Ok(())
 // }
 
-fn is_new_wh_file_config(path: &WhPath) -> CliResult<()> {
+fn is_new_wh_file_config(path: &PathBuf) -> CliResult<()> {
     let files_name = vec![LOCAL_CONFIG_FNAME, GLOBAL_CONFIG_FNAME];
     for file_name in files_name {
-        if fs::metadata(path.clone().push(file_name).inner.clone()).is_err() {
+        if fs::metadata(path.join(file_name)).is_err() {
             return Err(CliError::FileConfigName {
                 name: file_name.to_owned(),
             });
@@ -49,7 +46,7 @@ fn is_new_wh_file_config(path: &WhPath) -> CliResult<()> {
 pub fn new(ip: &str, mut args: PodArgs) -> CliResult<String> {
     match std::env::current_dir()
         .ok()
-        .and_then(|f| -> Option<WhPath> {
+        .and_then(|f| -> Option<PathBuf> {
             f.join(args.mountpoint.clone().unwrap_or((&args.name).into()))
                 .as_os_str()
                 .try_into()
