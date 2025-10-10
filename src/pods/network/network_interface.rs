@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    ffi::OsStr,
+    ffi::{OsStr, OsString},
     io::{self, ErrorKind},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -578,7 +578,7 @@ impl NetworkInterface {
                 MessageContent::RequestFs => fs_interface.send_filesystem(origin),
                 MessageContent::Rename(parent, new_parent, name, new_name, overwrite) =>
                     fs_interface
-                    .recept_rename(parent, new_parent, &name, &new_name, overwrite)
+                    .recept_rename(parent, new_parent, &OsString::from(name), &OsString::from(new_name), overwrite)
                     .map_err(|err| {
                         std::io::Error::new(
                             std::io::ErrorKind::Other,
