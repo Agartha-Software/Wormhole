@@ -76,13 +76,7 @@ impl FsInterface {
             .ok_or(())
             .or_else(|_| self.network_interface.n_get_next_inode())?;
 
-        let new_inode = Inode::new(
-            name.clone(),
-            parent_ino,
-            new_inode_id,
-            new_entry,
-            permissions,
-        );
+        let new_inode = Inode::new(name, parent_ino, new_inode_id, new_entry, permissions);
 
         let mut new_path;
         {
