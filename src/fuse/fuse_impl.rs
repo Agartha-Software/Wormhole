@@ -12,7 +12,6 @@ use crate::pods::filesystem::rename::RenameError;
 use crate::pods::filesystem::write::WriteError;
 use crate::pods::filesystem::xattrs::GetXAttrError;
 use crate::pods::network::pull_file::PullError;
-use crate::pods::whpath::WhPath;
 use fuser::{
     BackgroundSession, Filesystem, MountOption, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty,
     ReplyEntry, ReplyXattr, Request,
@@ -20,6 +19,8 @@ use fuser::{
 use libc::{EIO, ENOENT, XATTR_CREATE, XATTR_REPLACE};
 use std::ffi::OsStr;
 use std::io;
+use std::os::unix::ffi::OsStrExt;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -35,10 +36,7 @@ impl Filesystem for FuseController {
     // READING
 
     fn lookup(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
-        match self
-            .fs_interface
-            .get_entry_from_name(parent, name.to_string_lossy().to_string())
-        {
+        match self.fs_interface.get_entry_from_name(parent, name) {
             Ok(inode) => {
                 reply.entry(&TTL, &inode.meta.with_ids(req.uid(), req.gid()), 0);
             }
@@ -115,9 +113,7 @@ impl Filesystem for FuseController {
         size: u32,
         reply: ReplyXattr,
     ) {
-        let attr = self
-            .fs_interface
-            .get_inode_xattr(ino, &name.to_string_lossy().to_string());
+        let attr = self.fs_interface.get_inode_xattr(ino, name);
 
         let data = match attr {
             Ok(data) => data,
@@ -153,10 +149,8 @@ impl Filesystem for FuseController {
             return reply.error(libc::ENOSPC);
         }
 
-        let key = name.to_string_lossy().to_string();
-
         if flags == XATTR_CREATE || flags == XATTR_REPLACE {
-            match self.fs_interface.xattr_exists(ino, &key) {
+            match self.fs_interface.xattr_exists(ino, name) {
                 Ok(true) => {
                     if flags == XATTR_CREATE {
                         return reply.error(libc::EEXIST);
@@ -182,7 +176,7 @@ impl Filesystem for FuseController {
         match self
             .fs_interface
             .network_interface
-            .set_inode_xattr(ino, key, data.to_vec())
+            .set_inode_xattr(ino, name, data.to_vec())
         {
             Ok(_) => reply.ok(),
             Err(err) => reply.error(err.to_libc()),
@@ -199,7 +193,7 @@ impl Filesystem for FuseController {
         match self
             .fs_interface
             .network_interface
-            .remove_inode_xattr(ino, name.to_string_lossy().to_string())
+            .remove_inode_xattr(ino, name)
         {
             Ok(_) => reply.ok(),
             Err(err) => reply.error(err.to_libc()),
@@ -212,7 +206,7 @@ impl Filesystem for FuseController {
                 let mut bytes = vec![];
 
                 for key in keys {
-                    bytes.extend(key.bytes());
+                    bytes.extend_from_slice(key.as_bytes());
                     bytes.push(0);
                 }
                 if size == 0 {
@@ -327,12 +321,10 @@ impl Filesystem for FuseController {
             }
         };
 
-        match self.fs_interface.make_inode(
-            parent,
-            name.to_string_lossy().to_string(),
-            permissions,
-            kind,
-        ) {
+        match self
+            .fs_interface
+            .make_inode(parent, name, permissions, kind)
+        {
             Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
             Err(MakeInodeError::LocalCreationFailed { io }) => {
                 reply.error(io.raw_os_error().expect(
@@ -357,12 +349,10 @@ impl Filesystem for FuseController {
         _umask: u32,
         reply: ReplyEntry,
     ) {
-        match self.fs_interface.make_inode(
-            parent,
-            name.to_string_lossy().to_string(),
-            mode as u16,
-            SimpleFileType::Directory,
-        ) {
+        match self
+            .fs_interface
+            .make_inode(parent, name, mode as u16, SimpleFileType::Directory)
+        {
             Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
             Err(MakeInodeError::LocalCreationFailed { io }) => {
                 reply.error(io.raw_os_error().expect(
@@ -418,14 +408,8 @@ impl Filesystem for FuseController {
             .rename(
                 parent,
                 new_parent,
-                &name //TODO move instead of ref because of the clone down the line
-                    .to_owned()
-                    .into_string()
-                    .expect("Don't support non unicode yet"), //TODO support OsString smartly
-                &newname
-                    .to_owned()
-                    .into_string()
-                    .expect("Don't support non unicode yet"),
+                name,
+                newname,
                 flags & libc::RENAME_NOREPLACE == 0,
             )
             .inspect_err(|err| log::error!("rename: {err}"))
@@ -619,15 +603,21 @@ impl Filesystem for FuseController {
 }
 
 pub fn mount_fuse(
-    mount_point: &WhPath,
+    mount_point: &PathBuf,
     fs_interface: Arc<FsInterface>,
 ) -> io::Result<BackgroundSession> {
     let options = vec![
         MountOption::RW,
         // MountOption::DefaultPermissions,
-        MountOption::FSName(format!("wormhole@{}", mount_point.get_end())),
+        MountOption::FSName(format!(
+            "wormhole@{}",
+            mount_point
+                .file_stem()
+                .ok_or(io::ErrorKind::NotADirectory)?
+                .to_string_lossy()
+        )),
     ];
     let ctrl = FuseController { fs_interface };
 
-    fuser::spawn_mount2(ctrl, mount_point.to_string(), &options)
+    fuser::spawn_mount2(ctrl, mount_point, &options)
 }
