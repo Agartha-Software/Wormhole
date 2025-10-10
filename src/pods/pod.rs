@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::{io, sync::Arc};
 
 use crate::config::{GlobalConfig, LocalConfig};
@@ -30,7 +31,6 @@ use crate::pods::{
     arbo::{generate_arbo, Arbo},
     filesystem::fs_interface::FsInterface,
     network::network_interface::NetworkInterface,
-    whpath::WhPath,
 };
 
 use super::arbo::{InodeId, ARBO_FILE_FNAME, ARBO_FILE_INO, GLOBAL_CONFIG_INO};
@@ -40,7 +40,7 @@ use super::arbo::{InodeId, ARBO_FILE_FNAME, ARBO_FILE_INO, GLOBAL_CONFIG_INO};
 pub struct Pod {
     network_interface: Arc<NetworkInterface>,
     fs_interface: Arc<FsInterface>,
-    mountpoint: WhPath,
+    mountpoint: PathBuf,
     pub peers: Arc<RwLock<Vec<PeerIPC>>>,
     #[cfg(target_os = "linux")]
     fuse_handle: fuser::BackgroundSession,
@@ -59,7 +59,7 @@ struct PodPrototype {
     pub peers: Vec<PeerIPC>,
     pub global_config: GlobalConfig,
     pub local_config: LocalConfig,
-    pub mountpoint: WhPath,
+    pub mountpoint: PathBuf,
     pub receiver_out: UnboundedReceiver<FromNetworkMessage>,
     pub receiver_in: UnboundedSender<FromNetworkMessage>,
 }
@@ -71,7 +71,7 @@ custom_error! {pub PodInfoError
 }
 
 async fn initiate_connection(
-    mountpoint: &WhPath,
+    mountpoint: &PathBuf,
     local_config: &LocalConfig,
     global_config: &GlobalConfig,
     receiver_in: &UnboundedSender<FromNetworkMessage>,
@@ -187,16 +187,16 @@ impl Pod {
     pub async fn new(
         global_config: GlobalConfig,
         local_config: LocalConfig,
-        mountpoint: WhPath,
+        mountpoint: &PathBuf,
         server: Arc<Server>,
     ) -> io::Result<Self> {
         let global_config = global_config;
 
-        log::trace!("mount point {}", mountpoint);
+        log::trace!("mount point {:?}", mountpoint);
         let (receiver_in, receiver_out) = mpsc::unbounded_channel();
 
         let proto = match initiate_connection(
-            &mountpoint,
+            mountpoint,
             &local_config,
             &global_config,
             &receiver_in,
@@ -216,14 +216,14 @@ impl Pod {
                         "None of the specified peers could answer",
                     ));
                 }
-                let arbo = generate_arbo(&mountpoint, &local_config.general.hostname)
+                let arbo = generate_arbo(mountpoint, &local_config.general.hostname)
                     .unwrap_or(Arbo::new());
                 PodPrototype {
                     arbo,
                     peers: vec![],
                     global_config,
                     local_config,
-                    mountpoint,
+                    mountpoint: mountpoint.clone(),
                     receiver_out,
                     receiver_in,
                 }
@@ -344,9 +344,9 @@ impl Pod {
 
     // SECTION getting info from the pod (for the cli)
 
-    pub fn get_file_hosts(&self, path: WhPath) -> Result<Vec<Address>, PodInfoError> {
+    pub fn get_file_hosts(&self, path: &PathBuf) -> Result<Vec<Address>, PodInfoError> {
         let entry = Arbo::n_read_lock(&self.network_interface.arbo, "Pod::get_info")?
-            .get_inode_from_path(&path)
+            .get_inode_from_path(path)
             .map_err(|_| PodInfoError::FileNotFound)?
             .entry
             .clone();
@@ -361,11 +361,11 @@ impl Pod {
 
     pub fn get_file_tree_and_hosts(
         &self,
-        path: Option<WhPath>,
+        path: Option<&PathBuf>,
     ) -> Result<CliHostTree, PodInfoError> {
         let arbo = Arbo::n_read_lock(&self.network_interface.arbo, "Pod::get_info")?;
         let ino = if let Some(path) = path {
-            arbo.get_inode_from_path(&path)
+            arbo.get_inode_from_path(path)
                 .map_err(|_| PodInfoError::FileNotFound)?
                 .id
         } else {
@@ -542,7 +542,7 @@ impl Pod {
         Ok(())
     }
 
-    pub fn get_mountpoint(&self) -> &WhPath {
+    pub fn get_mountpoint(&self) -> &PathBuf {
         return &self.mountpoint;
     }
 }
