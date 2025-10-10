@@ -587,7 +587,7 @@ impl NetworkInterface {
                     }),
                 MessageContent::SetXAttr(ino, key, data) => fs_interface
                     .network_interface
-                    .recept_inode_xattr(ino, key, data)
+                    .recept_inode_xattr(ino, OsStr::new(&key), data)
                     .or_else(|err| {
                         Err(std::io::Error::new(
                             std::io::ErrorKind::Other,
@@ -596,7 +596,7 @@ impl NetworkInterface {
                     }),
                 MessageContent::RemoveXAttr(ino, key) => fs_interface
                     .network_interface
-                    .recept_remove_inode_xattr(ino, key)
+                    .recept_remove_inode_xattr(ino, OsStr::new(&key))
                     .or_else(|err| {
                         Err(std::io::Error::new(
                             std::io::ErrorKind::Other,
