@@ -284,7 +284,6 @@ impl Pod {
 
         let network_interface = Arc::new(NetworkInterface::new(
             arbo.clone(),
-            proto.mountpoint.clone(),
             url,
             senders_in.clone(),
             redundancy_tx.clone(),

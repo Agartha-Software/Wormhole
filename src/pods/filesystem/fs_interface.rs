@@ -6,9 +6,10 @@ use crate::pods::filesystem::attrs::AcknoledgeSetAttrError;
 use crate::pods::network::callbacks::Callback;
 use crate::pods::network::network_interface::NetworkInterface;
 
+use futures::io;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::io::{self, ErrorKind};
+use std::io::ErrorKind;
 use std::sync::Arc;
 
 use super::file_handle::FileHandleManager;
@@ -90,21 +91,28 @@ impl FsInterface {
 
     pub fn read_dir(&self, ino: InodeId) -> io::Result<Vec<Inode>> {
         let arbo = Arbo::read_lock(&self.arbo, "fs_interface.read_dir")?;
-        let dir = arbo.get_inode(ino)?;
-        //log::debug!("dir: {dir}?");
-        let mut entries: Vec<Inode> = Vec::new();
+        let mut dir = arbo.get_inode(ino)?.clone();
 
-        if let FsEntry::Directory(children) = &dir.entry {
-            for entry in children {
-                entries.push(arbo.get_inode(*entry)?.clone());
-            }
-            Ok(entries)
-        } else {
-            Err(io::Error::new(
+        let children = match &dir.entry {
+            FsEntry::Directory(children) => children
+                .iter()
+                .map(|entry| arbo.get_inode(*entry).map(|inode| inode.clone()))
+                .collect::<io::Result<Vec<Inode>>>(),
+            _ => Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "read_dir: asked inode is not a dir",
-            ))
-        }
+            )),
+        }?;
+
+        let mut links: Vec<Inode> = Vec::with_capacity(children.len() + 2);
+        let mut parent = arbo.get_inode(dir.parent)?.clone();
+
+        dir.name = ".".to_string();
+        links.push(dir);
+        parent.name = "..".to_string();
+        links.push(parent.clone());
+        links.extend(children);
+        Ok(links)
     }
     // !SECTION
 

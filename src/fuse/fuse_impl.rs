@@ -3,7 +3,6 @@ use crate::fuse::linux_mknod::filetype_from_mode;
 use crate::pods::filesystem::attrs::SetAttrError;
 use crate::pods::filesystem::file_handle::{AccessMode, OpenFlags};
 use crate::pods::filesystem::fs_interface::{FsInterface, SimpleFileType};
-// use crate::pods::filesystem::make_inode::CreateError;
 use crate::pods::filesystem::make_inode::MakeInodeError;
 use crate::pods::filesystem::open::{check_permissions, OpenError};
 use crate::pods::filesystem::read::ReadError;
@@ -123,7 +122,7 @@ impl Filesystem for FuseController {
         let data = match attr {
             Ok(data) => data,
             Err(GetXAttrError::KeyNotFound) => {
-                reply.error(libc::ERANGE);
+                reply.error(libc::ENODATA);
                 return;
             }
             Err(GetXAttrError::WhError { source }) => {
@@ -292,7 +291,7 @@ impl Filesystem for FuseController {
 
         for (i, entry) in entries.into_iter().enumerate().skip(offset as usize) {
             if reply.add(
-                ino,
+                entry.id,
                 // i + 1 means offset of the next entry
                 i as i64 + 1, // NOTE - in case of error, try i + 1
                 entry.entry.get_filetype().into(),
