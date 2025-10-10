@@ -52,7 +52,7 @@ pub enum FsEntry {
     Directory(Vec<InodeId>),
 }
 
-pub type XAttrs = HashMap<String, Vec<u8>>;
+pub type XAttrs = HashMap<OsString, Vec<u8>>;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Inode {
@@ -649,17 +649,17 @@ impl Arbo {
         Ok(())
     }
 
-    pub fn set_inode_xattr(&mut self, ino: InodeId, key: String, data: Vec<u8>) -> WhResult<()> {
+    pub fn set_inode_xattr(&mut self, ino: InodeId, key: &OsStr, data: Vec<u8>) -> WhResult<()> {
         let inode = self.n_get_inode_mut(ino)?;
 
-        inode.xattrs.insert(key, data);
+        inode.xattrs.insert(key.into(), data);
         Ok(())
     }
 
-    pub fn remove_inode_xattr(&mut self, ino: InodeId, key: String) -> WhResult<()> {
+    pub fn remove_inode_xattr(&mut self, ino: InodeId, key: &OsStr) -> WhResult<()> {
         let inode = self.n_get_inode_mut(ino)?;
 
-        inode.xattrs.remove(&key);
+        inode.xattrs.remove(key);
         Ok(())
     }
 }
