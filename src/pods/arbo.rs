@@ -160,7 +160,7 @@ impl Arbo {
             Inode {
                 parent: ROOT,
                 id: ROOT,
-                name: "/".into(),
+                name: "./".into(),
                 entry: FsEntry::Directory(vec![]),
                 meta: Metadata {
                     ino: ROOT,
@@ -467,7 +467,7 @@ impl Arbo {
     #[must_use]
     pub fn get_path_from_inode_id(&self, inode_index: InodeId) -> io::Result<PathBuf> {
         if inode_index == ROOT {
-            return Ok(PathBuf::from("/"));
+            return Ok(PathBuf::from("./"));
         }
         let inode = match self.entries.get(&inode_index) {
             Some(inode) => inode,
@@ -488,7 +488,7 @@ impl Arbo {
     ///   InodeNotFound: if the inode isn't inside the tree
     pub fn n_get_path_from_inode_id(&self, inode_index: InodeId) -> WhResult<PathBuf> {
         if inode_index == ROOT {
-            return Ok(PathBuf::from("/"));
+            return Ok(PathBuf::from("./"));
         }
         let inode = self
             .entries
