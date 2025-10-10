@@ -15,6 +15,7 @@ pub mod data;
 pub mod error;
 pub mod network;
 pub mod pods;
+pub mod ipc;
 #[cfg(target_os = "windows")]
 pub mod winfsp;
 
