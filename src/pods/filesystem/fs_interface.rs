@@ -12,7 +12,7 @@ use futures::io;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::ffi::OsStr;
-use std::io::{self, ErrorKind};
+use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -111,9 +111,9 @@ impl FsInterface {
         let mut links: Vec<Inode> = Vec::with_capacity(children.len() + 2);
         let mut parent = arbo.get_inode(dir.parent)?.clone();
 
-        dir.name = ".".to_string();
+        dir.name = ".".into();
         links.push(dir);
-        parent.name = "..".to_string();
+        parent.name = "..".into();
         links.push(parent.clone());
         links.extend(children);
         Ok(links)
