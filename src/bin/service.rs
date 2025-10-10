@@ -23,7 +23,7 @@ use std::io::IsTerminal;
 
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
-use wormhole::ipc::service::start_cli_listener;
+use wormhole::ipc::service::start_cli_listeners;
 use wormhole::pods::pod::Pod;
 
 #[cfg(target_os = "windows")]
@@ -64,8 +64,7 @@ async fn main() {
         };
     let signals_task = tokio::spawn(handle_signals(signals_tx, interrupt_rx));
     log::trace!("Starting service on {:?}", ip_string);
-    log::info!("Started");
-    let _ = start_cli_listener(&mut pods, ip_string, signals_rx).await;
+    let _ = start_cli_listeners(&mut pods, ip_string, signals_rx).await;
 
     if let Some(terminal_handle) = terminal_handle {
         terminal_handle.abort();

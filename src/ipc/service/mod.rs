@@ -13,7 +13,6 @@ type CliTcpWriter =
     SplitSink<WebSocketStream<tokio::net::TcpStream>, tokio_tungstenite::tungstenite::Message>;
 
 async fn handle_cli_command(
-    ip: &IpP,
     pods: &mut HashMap<String, Pod>,
     command: Cli,
     mut writer: CliTcpWriter,
@@ -240,7 +239,7 @@ async fn handle_cli_command(
         }
         Cli::Template(_template_arg) => todo!(),
         Cli::Inspect => todo!(),
-        Cli::Status => Ok(CliSuccess::Message(format!("{}", ip.to_string()))),
+        Cli::Status => Ok(CliSuccess::Message(format!("ip?"))), // todo: Rework because handle cli should be channel agnostic  
         Cli::Interrupt => todo!(),
     };
     let string_output = response_command
@@ -307,50 +306,51 @@ async fn get_cli_command(stream: tokio::net::TcpStream) -> WhResult<(Cli, CliTcp
 
 const DEFAULT_ADDRESS: &str = "127.0.0.1:8081";
 
+pub async fn generic_tcp_listener() -> Result<(TcpListener, String), CliListenerError> {
+    let mut ip: IpP = IpP::try_from(DEFAULT_ADDRESS).expect("Invalid ip provided");
+
+    let mut port_tries_count = 0;
+    loop {
+        match TcpListener::bind(&ip.to_string()).await {
+            Ok(listener) => break Ok((listener, ip.to_string())),
+            Err(err) => {
+                if ip.port >= MAX_PORT {
+                    break Err(CliListenerError::AboveMainPort { max_port: MAX_PORT });
+                }
+                if port_tries_count > MAX_TRY_PORTS {
+                    break Err(CliListenerError::AboveMaxTry {
+                        max_try_port: MAX_TRY_PORTS,
+                    });
+                }
+                log::warn!("Address {ip} not available due to {err}, switching...",);
+                ip.set_port(ip.port + 1);
+                port_tries_count += 1;
+            },
+        }
+    }
+}
+
 /// Listens for CLI calls and launch one tcp instance per cli command
 /// if `specific_ip` is not given, will try all ports starting from 8081 to 9999, incrementing until success
 /// if `specific_ip` is given, will try the given ip and fail on error.
-pub async fn start_cli_listener(
+pub async fn start_cli_listeners(
     pods: &mut HashMap<String, Pod>,
     specific_ip: Option<String>,
     mut signals_rx: UnboundedReceiver<()>,
 ) -> Result<(), CliListenerError> {
-    let mut ip: IpP = IpP::try_from(&specific_ip.clone().unwrap_or(DEFAULT_ADDRESS.to_string()))
-        .expect("start_cli_listener: invalid ip provided");
-    println!("Starting CLI's Listener on {}", ip.to_string());
-
-    let mut port_tries_count = 0;
-    let mut listener = TcpListener::bind(&ip.to_string()).await;
-    while let Err(e) = listener {
-        if let Some(_) = specific_ip {
-            return Err(CliListenerError::ProvidedIpNotAvailable {
+    let (tcp_listener, ip) = match specific_ip {
+        Some(ip) => (TcpListener::bind(&ip).await.map_err(|err|
+            CliListenerError::ProvidedIpNotAvailable {
                 ip: ip.to_string(),
-                err: e.to_string(),
-            });
-        }
-        if ip.port >= MAX_PORT {
-            return Err(CliListenerError::AboveMainPort { max_port: MAX_PORT });
-        }
-        if port_tries_count > MAX_TRY_PORTS {
-            return Err(CliListenerError::AboveMaxTry {
-                max_try_port: MAX_TRY_PORTS,
-            });
-        }
-        log::warn!(
-            "Address {} not available due to {}, switching...",
-            ip.to_string(),
-            e
-        );
-        ip.set_port(ip.port + 1);
-        port_tries_count += 1;
-        log::debug!("Starting CLI's TcpListener on {}", ip.to_string());
-        listener = TcpListener::bind(&ip.to_string()).await;
-    }
+                err,
+            }
+        )?, ip),
+        None => generic_tcp_listener().await?,
+    };
     log::info!("Started CLI's TcpListener on {}", ip.to_string());
-    let listener = listener.unwrap();
 
     while let Some(Ok((stream, _))) = tokio::select! {
-        v = listener.accept() => Some(v),
+        v = tcp_listener.accept() => Some(v),
         _ = signals_rx.recv() => None,
     } {
         let (command, writer) = match get_cli_command(stream).await {
@@ -360,7 +360,7 @@ pub async fn start_cli_listener(
                 continue;
             }
         };
-        handle_cli_command(&ip, pods, command, writer).await;
+        handle_cli_command(pods, command, writer).await;
     }
     Ok(())
 }
