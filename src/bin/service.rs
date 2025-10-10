@@ -166,7 +166,7 @@ async fn handle_cli_command(
             };
 
             //Apply new config in the pod and check if the name change
-            let res = if let Some((name, pod)) = opt_pod {
+            let res = if let Some((_, pod)) = opt_pod {
                 pod_conf.path = Some(pod.get_mountpoint().clone());
 
                 match commands::service::apply(
@@ -180,7 +180,7 @@ async fn handle_cli_command(
                             &pod.local_config.clone(),
                             "handle_cli_command::apply",
                         ) {
-                            Ok(local) => {
+                            Ok(_) => {
                                 Ok(None)
                                 // if local.general.name != *name {
                                 //     Ok(Some((local.general.name.clone(), name.clone())))
