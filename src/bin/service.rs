@@ -228,7 +228,7 @@ async fn handle_cli_command(
             } else {
                 None
             } {
-                match pod.get_file_hosts(args.path.unwrap_or(".".into())) {
+                match pod.get_file_hosts(&args.path.unwrap_or(".".into())) {
                     Ok(hosts) => Ok(CliSuccess::WithData {
                         message: "Hosts:".to_owned(),
                         data: format!("{:?}", hosts),
@@ -251,13 +251,13 @@ async fn handle_cli_command(
                         log::info!("TREE: pod: {:?}", &pod.get_mountpoint());
                         path.strip_prefix(&pod.get_mountpoint())
                             .ok()
-                            .map(|sub| (pod, Some(sub.into())))
+                            .map(|sub| (pod, Some(sub.to_path_buf())))
                     })
                 } else {
                     None
                 }
             } {
-                match pod.get_file_tree_and_hosts(subpath) {
+                match pod.get_file_tree_and_hosts(subpath.as_ref()) {
                     Ok(tree) => Ok(CliSuccess::WithData {
                         message: "File tree and hosts per file:".to_owned(),
                         data: tree.to_string(),
