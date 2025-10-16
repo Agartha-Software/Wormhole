@@ -257,7 +257,7 @@ async fn handle_cli_command(
                     None
                 }
             } {
-                match pod.get_file_tree_and_hosts(subpath.as_ref()) {
+                match pod.get_file_tree_and_hosts(subpath.as_ref().map(|v| &**v)) {
                     Ok(tree) => Ok(CliSuccess::WithData {
                         message: "File tree and hosts per file:".to_owned(),
                         data: tree.to_string(),
