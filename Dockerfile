@@ -8,6 +8,8 @@ COPY src/ ./src/
 ENV GIT_HASH=1
 
 RUN cargo build --release --bin wormholed
+RUN cargo build --release --bin wormhole
+
 
 
 FROM debian
@@ -15,6 +17,7 @@ FROM debian
 WORKDIR /wormhole
 
 COPY --from=builder /build/target/release/wormholed /bin/wormholed
+COPY --from=builder /build/target/release/wormhole /bin/wormhole
 
 RUN apt update && apt install -y fuse3
 

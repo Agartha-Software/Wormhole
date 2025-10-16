@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wormhole
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wormhole-service
+  namespace: wormhole
+  labels:
+    app: wormhole
+spec:
+  selector:
+    app: wormhole
+  ports:
+    - name: service
+      port: 8081
+      targetPort: 8081
+      protocol: TCP
+    - name: pod-communication-1
+      port: 40001
+      targetPort: 40001
+      protocol: TCP
+    - name: pod-communication-2
+      port: 40002
+      targetPort: 40002
+      protocol: TCP
+    - name: pod-communication-3
+      port: 40003
+      targetPort: 40003
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: wormhole
+  namespace: wormhole
+spec:
+  serviceName: "wormhole"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: wormhole
+  template:
+    metadata:
+      labels:
+        app: wormhole
+    spec:
+      containers:
+        - name: wormhole
+          image: agartha-software/wormhole:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+            capabilities:
+              add:
+                - SYS_ADMIN
+          env:
+            - name: RUST_LOG
+              value: wormhole=trace
+            - name: SERVICE_ADDRESS
+              value: 0.0.0.0:8081
+          ports:
+            - name: service
+              containerPort: 8081
+              protocol: TCP
+            - name: pod-communication-1
+              containerPort: 40001
+              protocol: TCP
+            - name: pod-communication-2
+              containerPort: 40002
+              protocol: TCP
+            - name: pod-communication-3
+              containerPort: 40003
+              protocol: TCP
+          volumeMounts:
+            - name: dev-fuse
+              mountPath: /dev/fuse
+            - name: wormhole-data
+              mountPath: /wormhole
+          command: ["/bin/wormholed", "$(SERVICE_ADDRESS)"]
+      volumes:
+        - name: dev-fuse
+          hostPath:
+            path: /dev/fuse
+            type: CharDevice
+        - name: wormhole-data
+          emptyDir: {}
