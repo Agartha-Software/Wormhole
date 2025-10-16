@@ -25,6 +25,7 @@ use super::filesystem::{make_inode::MakeInodeError, remove_inode::RemoveInodeErr
     other inodes can start wherever we want
 */
 pub const ROOT: InodeId = 1;
+pub const ROOT_PATH: &str = "./";
 pub const LOCK_TIMEOUT: Duration = Duration::new(5, 0);
 
 // !SECTION
@@ -160,7 +161,7 @@ impl Arbo {
             Inode {
                 parent: ROOT,
                 id: ROOT,
-                name: "./".into(),
+                name: ROOT_PATH.into(),
                 entry: FsEntry::Directory(vec![]),
                 meta: Metadata {
                     ino: ROOT,
@@ -467,7 +468,7 @@ impl Arbo {
     #[must_use]
     pub fn get_path_from_inode_id(&self, inode_index: InodeId) -> io::Result<PathBuf> {
         if inode_index == ROOT {
-            return Ok(PathBuf::from("./"));
+            return Ok(PathBuf::from(ROOT_PATH));
         }
         let inode = match self.entries.get(&inode_index) {
             Some(inode) => inode,
@@ -488,7 +489,7 @@ impl Arbo {
     ///   InodeNotFound: if the inode isn't inside the tree
     pub fn n_get_path_from_inode_id(&self, inode_index: InodeId) -> WhResult<PathBuf> {
         if inode_index == ROOT {
-            return Ok(PathBuf::from("./"));
+            return Ok(PathBuf::from(ROOT_PATH));
         }
         let inode = self
             .entries
