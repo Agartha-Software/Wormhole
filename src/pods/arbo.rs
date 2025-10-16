@@ -6,7 +6,7 @@ use std::{
     ffi::{OsStr, OsString},
     fs, io,
     ops::RangeFrom,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, SystemTime},
 };
@@ -537,7 +537,7 @@ impl Arbo {
     }
 
     #[must_use]
-    pub fn get_inode_from_path(&self, path: &PathBuf) -> io::Result<&Inode> {
+    pub fn get_inode_from_path(&self, path: &Path) -> io::Result<&Inode> {
         let mut actual_inode = self.entries.get(&ROOT).expect("inode_from_path: NO ROOT");
 
         for name in path.iter() {
