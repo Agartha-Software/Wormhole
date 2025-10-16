@@ -16,8 +16,7 @@ fn start_log() {
         .try_init();
 }
 
-fn append_to_path(p: &PathBuf, s: &str) -> PathBuf {
-    let mut p = p.as_os_str().to_owned();
-    p.push(s);
-    p.into()
+// TODO - remove as useless ?
+fn append_to_path(p: &Path, s: &str) -> PathBuf {
+    p.join(s)
 }

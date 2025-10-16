@@ -2,7 +2,7 @@
 // In code we trust
 // AgarthaSoftware - 2024
 use std::fs;
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::config::types::Config;
 use crate::config::{GlobalConfig, LocalConfig};
@@ -10,7 +10,7 @@ use crate::error::CliResult;
 use crate::pods::arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME};
 
 #[must_use]
-pub fn templates(path: &PathBuf, _name: &str) -> CliResult<String> {
+pub fn templates(path: &Path, _name: &str) -> CliResult<String> {
     // TODO - name unused
     let global_config = GlobalConfig::default();
     let local_config = LocalConfig::default();

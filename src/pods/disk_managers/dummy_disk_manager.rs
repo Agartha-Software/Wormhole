@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::{Arc, RwLock};
 
 use tokio::io;
@@ -32,18 +32,18 @@ pub struct DummyDiskManager {
 
 // NOTE -> before refactor was using WhPath::set_relative each time
 impl DummyDiskManager {
-    pub fn new(mount_point: &PathBuf) -> io::Result<Self> {
+    pub fn new(mount_point: &Path) -> io::Result<Self> {
         let mut folders = HashMap::new();
         folders.insert(".".into(), VirtualFile::Folder(vec![]));
         folders.insert(PathBuf::new(), VirtualFile::Folder(vec![]));
         Ok(Self {
             files: Arc::new(RwLock::new(folders)),
-            _mount_point: mount_point.clone(),
+            _mount_point: mount_point.to_owned(),
             size: Arc::new(RwLock::new(0)),
         })
     }
 
-    fn mv_recurse(&self, old_path: &PathBuf, new_path: &PathBuf) {
+    fn mv_recurse(&self, old_path: &Path, new_path: &Path) {
         let removed = self
             .files
             .write()
@@ -52,9 +52,9 @@ impl DummyDiskManager {
         if let Some(file) = removed {
             if let VirtualFile::Folder(entries) = &file {
                 entries.iter().for_each(|name| {
-                    let mut old_path = old_path.clone();
+                    let mut old_path = old_path.to_owned();
                     old_path.push(name.file_name().expect("no file name"));
-                    let mut new_path = new_path.clone();
+                    let mut new_path = new_path.to_owned();
                     new_path.push(name.file_name().expect("no file name"));
                     self.mv_recurse(&old_path, &new_path);
                 });
@@ -68,7 +68,7 @@ impl DummyDiskManager {
             self.files
                 .try_write()
                 .expect("VirtDisk::tree rwLock")
-                .insert(new_path.clone(), file);
+                .insert(new_path.to_owned(), file);
         } else {
             log::error!("VirtDisk::mv_recurse: \"{old_path:?}\" not found")
         }
@@ -76,16 +76,16 @@ impl DummyDiskManager {
 }
 
 impl DiskManager for DummyDiskManager {
-    fn new_file(&self, path: &PathBuf, _permissions: u16) -> io::Result<()> {
+    fn new_file(&self, path: &Path, _permissions: u16) -> io::Result<()> {
         let f_path = path.parent().expect("no parent");
         let mut lock = self.files.write().expect("VirtDisk::new_file rwLock");
 
         match lock.get_mut(f_path) {
-            Some(VirtualFile::Folder(vec)) => Ok::<(), io::Error>(vec.push(path.clone())),
+            Some(VirtualFile::Folder(vec)) => Ok::<(), io::Error>(vec.push(path.to_owned())),
             Some(VirtualFile::File(_)) => Err(io::ErrorKind::InvalidData.into()),
             None => Err(io::ErrorKind::NotFound.into()),
         }?;
-        let old = lock.insert(path.clone(), VirtualFile::File(Vec::new()));
+        let old = lock.insert(path.to_owned(), VirtualFile::File(Vec::new()));
         match old {
             None => (),
             Some(VirtualFile::File(data)) => {
@@ -97,7 +97,7 @@ impl DiskManager for DummyDiskManager {
         Ok(())
     }
 
-    fn remove_file(&self, path: &PathBuf) -> io::Result<()> {
+    fn remove_file(&self, path: &Path) -> io::Result<()> {
         let f_path = path.parent().expect("no parent");
 
         let mut total_size = self.size.write().expect("VirtDisk::remove_file rwLock");
@@ -119,7 +119,7 @@ impl DiskManager for DummyDiskManager {
         Ok(())
     }
 
-    fn mv_file(&self, old_path: &PathBuf, new_path: &PathBuf) -> io::Result<()> {
+    fn mv_file(&self, old_path: &Path, new_path: &Path) -> io::Result<()> {
         let f_old_path = old_path.parent().expect("no parent");
         let f_new_path = new_path.parent().expect("no parent");
 
@@ -135,7 +135,7 @@ impl DiskManager for DummyDiskManager {
             }?;
 
             match lock.get_mut(f_new_path) {
-                Some(VirtualFile::Folder(vec)) => Ok::<(), io::Error>(vec.push(new_path.clone())),
+                Some(VirtualFile::Folder(vec)) => Ok::<(), io::Error>(vec.push(new_path.to_owned())),
                 Some(VirtualFile::File(_)) => Err(io::ErrorKind::InvalidData.into()),
                 None => Err(io::ErrorKind::NotFound.into()),
             }?;
@@ -145,7 +145,7 @@ impl DiskManager for DummyDiskManager {
         Ok(())
     }
 
-    fn remove_dir(&self, path: &PathBuf) -> io::Result<()> {
+    fn remove_dir(&self, path: &Path) -> io::Result<()> {
         let f_path = path.parent().expect("no parent");
 
         let mut lock = self.files.write().expect("VirtDisk::remove_dir rwLock");
@@ -159,7 +159,7 @@ impl DiskManager for DummyDiskManager {
         Ok(())
     }
 
-    fn write_file(&self, path: &PathBuf, binary: &[u8], offset: usize) -> io::Result<usize> {
+    fn write_file(&self, path: &Path, binary: &[u8], offset: usize) -> io::Result<usize> {
         if let Some(VirtualFile::File(file)) = self
             .files
             .write()
@@ -182,7 +182,7 @@ impl DiskManager for DummyDiskManager {
         }
     }
 
-    fn set_file_size(&self, path: &PathBuf, size: usize) -> io::Result<()> {
+    fn set_file_size(&self, path: &Path, size: usize) -> io::Result<()> {
         if let Some(VirtualFile::File(file)) = self
             .files
             .write()
@@ -204,7 +204,7 @@ impl DiskManager for DummyDiskManager {
         }
     }
 
-    fn read_file(&self, path: &PathBuf, offset: usize, buf: &mut [u8]) -> io::Result<usize> {
+    fn read_file(&self, path: &Path, offset: usize, buf: &mut [u8]) -> io::Result<usize> {
         if let Some(VirtualFile::File(file)) = self
             .files
             .read()
@@ -222,16 +222,16 @@ impl DiskManager for DummyDiskManager {
         }
     }
 
-    fn new_dir(&self, path: &PathBuf, _permissions: u16) -> io::Result<()> {
+    fn new_dir(&self, path: &Path, _permissions: u16) -> io::Result<()> {
         let f_path = path.parent().expect("no parent");
         let mut lock = self.files.write().expect("VirtDisk::new_file rwLock");
 
         match lock.get_mut(f_path) {
-            Some(VirtualFile::Folder(vec)) => Ok::<(), io::Error>(vec.push(path.clone())),
+            Some(VirtualFile::Folder(vec)) => Ok::<(), io::Error>(vec.push(path.to_owned())),
             Some(VirtualFile::File(_)) => Err(io::ErrorKind::InvalidData.into()),
             None => Err(io::ErrorKind::NotFound.into()),
         }?;
-        lock.insert(path.clone(), VirtualFile::Folder(vec![]));
+        lock.insert(path.to_owned(), VirtualFile::Folder(vec![]));
         Ok(())
     }
 
@@ -247,7 +247,7 @@ impl DiskManager for DummyDiskManager {
         })
     }
 
-    fn log_arbo(&self, path: &PathBuf) -> io::Result<()> {
+    fn log_arbo(&self, path: &Path) -> io::Result<()> {
         let lock = self.files.read().expect("VirtDisk::log_arbo rwLock");
 
         match lock.get(path) {
@@ -266,7 +266,7 @@ impl DiskManager for DummyDiskManager {
         }
     }
 
-    fn set_permisions(&self, _path: &PathBuf, _permissions: u16) -> io::Result<()> {
+    fn set_permisions(&self, _path: &Path, _permissions: u16) -> io::Result<()> {
         Ok(())
     }
 }
