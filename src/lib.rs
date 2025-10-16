@@ -18,6 +18,7 @@ pub mod pods;
 pub mod ipc;
 #[cfg(target_os = "windows")]
 pub mod winfsp;
+pub mod signals;
 
 #[cfg(target_os = "windows")]
 pub const INSTANCE_PATH: &str = "%APPDATA%/local/wormhole";
