@@ -80,20 +80,6 @@ pub const BLOCK_SIZE: u64 = 512;
 // SECTION implementations
 
 impl FsEntry {
-    // pub fn get_path(&self) -> &PathBuf {
-    //     match self {
-    //         FsEntry::File(path) => path,
-    //         FsEntry::Directory(children) => path,
-    //     }
-    // }
-
-    // pub fn get_name(&self) -> io::Result<&OsStr> {
-    //     match Path::new(self.get_path()).file_name() {
-    //         Some(name) => Ok(name),
-    //         None => Err(io::Error::new(io::ErrorKind::Other, "Invalid path ending")),
-    //     }
-    // }
-
     pub fn get_filetype(&self) -> SimpleFileType {
         match self {
             FsEntry::File(_) => SimpleFileType::File,
@@ -668,7 +654,7 @@ impl Arbo {
 // !SECTION
 
 /// If arbo can be read and deserialized from parent_folder/[ARBO_FILE_NAME] returns Some(Arbo)
-fn recover_serialized_arbo(parent_folder: &PathBuf) -> Option<Arbo> {
+fn recover_serialized_arbo(parent_folder: &Path) -> Option<Arbo> {
     // error handling is silent on purpose as it will be recoded with the new error system
     // If an error happens, will just proceed like the arbo was not on disk
     // In the future, we should maybe warn and keep a copy, avoiding the user from losing data
@@ -679,7 +665,7 @@ fn recover_serialized_arbo(parent_folder: &PathBuf) -> Option<Arbo> {
 fn index_folder_recursive(
     arbo: &mut Arbo,
     parent: Ino,
-    path: &PathBuf,
+    path: &Path,
     host: &String,
 ) -> io::Result<()> {
     for entry in fs::read_dir(path)? {
@@ -728,7 +714,7 @@ fn index_folder_recursive(
     Ok(())
 }
 
-pub fn generate_arbo(path: &PathBuf, host: &String) -> io::Result<Arbo> {
+pub fn generate_arbo(path: &Path, host: &String) -> io::Result<Arbo> {
     if let Some(arbo) = recover_serialized_arbo(path) {
         Ok(arbo)
     } else {

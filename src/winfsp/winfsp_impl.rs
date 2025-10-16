@@ -2,12 +2,11 @@ use std::{
     ffi::OsString,
     fs,
     io::{Error, ErrorKind},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, RwLock},
     time::SystemTime,
 };
 
-use clap::builder::OsStr;
 use custom_error::custom_error;
 use nt_time::FileTime;
 use ntapi::ntioapi::FILE_DIRECTORY_FILE;
@@ -56,8 +55,8 @@ custom_error! {AliasedPathError
     NoFolderName = "Can't get folder name",
 }
 
-fn aliased_path(path: &PathBuf) -> Result<PathBuf, AliasedPathError> {
-    let mut buf = path.clone();
+fn aliased_path(path: &Path) -> Result<PathBuf, AliasedPathError> {
+    let mut buf = path.to_owned();
     let mut file_name = OsString::from(".");
 
     file_name.push(path.file_name().ok_or(AliasedPathError::NoFolderName)?);
@@ -103,7 +102,7 @@ impl FSPController {
 }
 
 pub fn mount_fsp(
-    path: &PathBuf,
+    path: &Path,
     fs_interface: Arc<FsInterface>,
 ) -> Result<WinfspHost, std::io::Error> {
     let volume_params = VolumeParams::default();
@@ -112,7 +111,7 @@ pub fn mount_fsp(
     let wormhole_context = FSPController {
         volume_label: Arc::new(RwLock::new("wormhole_fs".into())),
         fs_interface,
-        mount_point: path.clone(),
+        mount_point: path.to_owned(),
         dummy_file: "dummy".into(), // dummy_file: (&path.clone().rename(&("dummy_file").to_string())).into(),
     };
     log::debug!("creating host...");
@@ -269,7 +268,7 @@ impl FileSystemContext for FSPController {
         }
 
         let parent = arbo
-            .get_inode_from_path(path.parent().unwrap_or(&PathBuf::from(ROOT_PATH)))
+            .get_inode_from_path(path.parent().unwrap_or(Path::new(ROOT_PATH)))
             .map_err(|_| STATUS_OBJECT_NAME_NOT_FOUND)?
             .id;
 
@@ -431,12 +430,12 @@ impl FileSystemContext for FSPController {
 
         let path = PathBuf::from(OsString::from(file_name));
         let parent = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::rename")?
-            .get_inode_from_path(path.parent().unwrap_or(&PathBuf::from(ROOT_PATH)))?
+            .get_inode_from_path(path.parent().unwrap_or(Path::new(ROOT_PATH)))?
             .id;
 
         let new_path = PathBuf::from(OsString::from(new_file_name));
         let new_parent = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::rename")?
-            .get_inode_from_path(new_path.parent().unwrap_or(&PathBuf::from(ROOT_PATH)))?
+            .get_inode_from_path(new_path.parent().unwrap_or(Path::new(ROOT_PATH)))?
             .id;
 
         self.fs_interface
@@ -456,7 +455,7 @@ impl FileSystemContext for FSPController {
         &self,
         context: &Self::FileContext,
         _file_attributes: u32,
-        creation_time: u64,
+        _creation_time: u64,
         last_access_time: u64,
         last_write_time: u64,
         change_time: u64,

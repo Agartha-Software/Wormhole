@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{io, sync::Arc};
 
 use crate::config::{GlobalConfig, LocalConfig};
@@ -71,7 +71,7 @@ custom_error! {pub PodInfoError
 }
 
 async fn initiate_connection(
-    mountpoint: &PathBuf,
+    mountpoint: &Path,
     local_config: &LocalConfig,
     global_config: &GlobalConfig,
     receiver_in: &UnboundedSender<FromNetworkMessage>,
@@ -115,7 +115,7 @@ async fn initiate_connection(
                                     peers: other_ipc,
                                     global_config: accept.config,
                                     local_config,
-                                    mountpoint: mountpoint.clone(),
+                                    mountpoint: mountpoint.into(),
                                     receiver_out,
                                     receiver_in: receiver_in.clone(),
                                 })
@@ -187,7 +187,7 @@ impl Pod {
     pub async fn new(
         global_config: GlobalConfig,
         local_config: LocalConfig,
-        mountpoint: &PathBuf,
+        mountpoint: &Path,
         server: Arc<Server>,
     ) -> io::Result<Self> {
         let global_config = global_config;
@@ -223,7 +223,7 @@ impl Pod {
                     peers: vec![],
                     global_config,
                     local_config,
-                    mountpoint: mountpoint.clone(),
+                    mountpoint: mountpoint.into(),
                     receiver_out,
                     receiver_in,
                 }
@@ -344,7 +344,7 @@ impl Pod {
 
     // SECTION getting info from the pod (for the cli)
 
-    pub fn get_file_hosts(&self, path: &PathBuf) -> Result<Vec<Address>, PodInfoError> {
+    pub fn get_file_hosts(&self, path: &Path) -> Result<Vec<Address>, PodInfoError> {
         let entry = Arbo::n_read_lock(&self.network_interface.arbo, "Pod::get_info")?
             .get_inode_from_path(path)
             .map_err(|_| PodInfoError::FileNotFound)?
@@ -361,7 +361,7 @@ impl Pod {
 
     pub fn get_file_tree_and_hosts(
         &self,
-        path: Option<&PathBuf>,
+        path: Option<&Path>,
     ) -> Result<CliHostTree, PodInfoError> {
         let arbo = Arbo::n_read_lock(&self.network_interface.arbo, "Pod::get_info")?;
         let ino = if let Some(path) = path {
@@ -532,7 +532,7 @@ impl Pod {
 
         fs_interface
             .disk
-            .write_file(&ARBO_FILE_FNAME.into(), &arbo_bin, 0)
+            .write_file(Path::new(ARBO_FILE_FNAME), &arbo_bin, 0)
             .map_err(|io| PodStopError::ArboSavingFailed { source: io })?;
 
         *peers.write() = Vec::new(); // dropping PeerIPCs

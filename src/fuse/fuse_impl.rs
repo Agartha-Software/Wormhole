@@ -603,7 +603,7 @@ impl Filesystem for FuseController {
 }
 
 pub fn mount_fuse(
-    mount_point: &PathBuf,
+    mount_point: &Path,
     fs_interface: Arc<FsInterface>,
 ) -> io::Result<BackgroundSession> {
     let options = vec![
