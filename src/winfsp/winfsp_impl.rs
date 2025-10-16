@@ -51,7 +51,7 @@ impl std::fmt::Debug for WinfspHost {
     }
 }
 
-custom_error! {AliasedPathError
+custom_error! {pub AliasedPathError
     NoFolderName = "Can't get folder name",
 }
 
