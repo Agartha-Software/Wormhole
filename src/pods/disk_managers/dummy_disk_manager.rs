@@ -135,7 +135,9 @@ impl DiskManager for DummyDiskManager {
             }?;
 
             match lock.get_mut(f_new_path) {
-                Some(VirtualFile::Folder(vec)) => Ok::<(), io::Error>(vec.push(new_path.to_owned())),
+                Some(VirtualFile::Folder(vec)) => {
+                    Ok::<(), io::Error>(vec.push(new_path.to_owned()))
+                }
                 Some(VirtualFile::File(_)) => Err(io::ErrorKind::InvalidData.into()),
                 None => Err(io::ErrorKind::NotFound.into()),
             }?;
