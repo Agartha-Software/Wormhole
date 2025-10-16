@@ -55,7 +55,7 @@ custom_error! {AliasedPathError
     NoFolderName = "Can't get folder name",
 }
 
-fn aliased_path(path: &Path) -> Result<PathBuf, AliasedPathError> {
+pub fn aliased_path(path: &Path) -> Result<PathBuf, AliasedPathError> {
     let mut buf = path.to_owned();
     let mut file_name = OsString::from(".");
 
