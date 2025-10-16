@@ -2,6 +2,7 @@ use std::{
     ffi::OsString,
     fs,
     io::{Error, ErrorKind},
+    path::PathBuf,
     sync::{Arc, RwLock},
     time::SystemTime,
 };
@@ -12,7 +13,7 @@ use winapi::shared::{
     ntstatus::STATUS_INVALID_DEVICE_REQUEST,
     winerror::{ERROR_ALREADY_EXISTS, ERROR_GEN_FAILURE},
 };
-use windows::Win32::Foundation::{NTSTATUS, STATUS_CANCELLED, STATUS_OBJECT_NAME_NOT_FOUND};
+use windows::Win32::Foundation::{NTSTATUS, STATUS_OBJECT_NAME_NOT_FOUND};
 use winfsp::{
     filesystem::{DirInfo, FileInfo, FileSecurity, FileSystemContext, WideNameInfo},
     host::{FileSystemHost, VolumeParams},
@@ -25,7 +26,6 @@ use crate::pods::{
         file_handle::{AccessMode, OpenFlags},
         fs_interface::{FsInterface, SimpleFileType},
     },
-    whpath::WhPath,
 };
 
 #[derive(PartialEq, Debug)]
@@ -38,7 +38,7 @@ pub struct FSPController {
     pub volume_label: Arc<RwLock<String>>,
     pub fs_interface: Arc<FsInterface>,
     pub dummy_file: OsString,
-    pub mount_point: WhPath,
+    pub mount_point: PathBuf,
     // pub provider: Arc<RwLock<Provider<WindowsFolderHandle>>>,
 }
 
@@ -52,15 +52,14 @@ impl std::fmt::Debug for WinfspHost {
 
 impl Drop for FSPController {
     fn drop(&mut self) {
-        let (p, n) = self.mount_point.split_folder_file();
-        let aliased = WhPath::from(&p).join(&(".".to_string() + &n));
-        if fs::metadata(&aliased.inner).is_ok() {
-            log::debug!(
-                "moving from {} to {} ...",
-                &aliased.inner,
-                &self.mount_point.inner
-            );
-            let _ = fs::rename(&aliased.inner, &self.mount_point.inner);
+        let parent = self.mount_point.parent().unwrap();
+        let mut folder = OsString::from(".");
+        folder.push(self.mount_point.file_name().unwrap());
+        let aliased = parent.join(folder);
+
+        if fs::metadata(&aliased).is_ok() {
+            log::debug!("moving from {:?} to {:?} ...", &aliased, &self.mount_point);
+            let _ = fs::rename(aliased, &self.mount_point);
         }
     }
 }
