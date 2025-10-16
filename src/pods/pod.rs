@@ -10,7 +10,7 @@ use crate::network::message::{FromNetworkMessage, MessageContent, ToNetworkMessa
 use crate::network::HandshakeError;
 use crate::pods::arbo::{FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME, LOCAL_CONFIG_INO, ROOT};
 #[cfg(target_os = "windows")]
-use crate::pods::disk_managers::dummy_disk_manager::DummyDiskManager;
+use crate::pods::disk_managers::windows_disk_manager::WindowsDiskManager;
 #[cfg(target_os = "linux")]
 use crate::pods::disk_managers::unix_disk_manager::UnixDiskManager;
 use crate::pods::disk_managers::DiskManager;
@@ -241,7 +241,7 @@ impl Pod {
         #[cfg(target_os = "linux")]
         let disk_manager = Box::new(UnixDiskManager::new(&proto.mountpoint)?);
         #[cfg(target_os = "windows")]
-        let disk_manager = Box::new(DummyDiskManager::new(&proto.mountpoint)?);
+        let disk_manager = Box::new(WindowsDiskManager::new(&proto.mountpoint)?);
 
         create_all_dirs(&proto.arbo, ROOT, disk_manager.as_ref())
             .inspect_err(|e| log::error!("unable to create_all_dirs: {e}"))?;
@@ -251,9 +251,9 @@ impl Pod {
             .get_inode(GLOBAL_CONFIG_INO)
             .map(|inode| inode.meta.perm)
         {
-            let _ = disk_manager.new_file(&GLOBAL_CONFIG_FNAME.into(), perms);
+            let _ = disk_manager.new_file(Path::new(GLOBAL_CONFIG_FNAME), perms);
             disk_manager.write_file(
-                &GLOBAL_CONFIG_FNAME.into(),
+                Path::new(GLOBAL_CONFIG_FNAME),
                 toml::to_string(&proto.global_config)
                     .expect("infallible")
                     .as_bytes(),
@@ -266,9 +266,9 @@ impl Pod {
             .get_inode(LOCAL_CONFIG_INO)
             .map(|inode| inode.meta.perm)
         {
-            let _ = disk_manager.new_file(&LOCAL_CONFIG_FNAME.into(), perms);
+            let _ = disk_manager.new_file(Path::new(LOCAL_CONFIG_FNAME), perms);
             disk_manager.write_file(
-                &LOCAL_CONFIG_FNAME.into(),
+                Path::new(LOCAL_CONFIG_FNAME),
                 toml::to_string(&proto.local_config)
                     .expect("infallible")
                     .as_bytes(),
