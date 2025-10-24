@@ -2,17 +2,17 @@ use crate::pods::{
     arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
     whpath::WhPath,
 };
-use clap::{Args, Parser, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Parser, Serialize, Deserialize)] // requires `derive` feature
-#[command(name = "wormhole")]
-#[command(bin_name = "wormhole")]
+#[derive(Debug, Parser, Serialize, Deserialize)]
+#[command(version, about, long_about = None)]
+#[command(propagate_version = true)]
 pub enum Cli {
     /// Start the service
-    Start(StatusPodArgs),
+    Start(IdentifyPodArgs),
     /// Stop the service
-    Stop(StatusPodArgs),
+    Stop(IdentifyPodArgs),
     /// Create a new network (template)
     Template(TemplateArg),
     /// Create a new pod and join a network if he have peers in arguments or create a new network
@@ -33,6 +33,25 @@ pub enum Cli {
     Restore(PodConf),
     /// Stops the service
     Interrupt,
+}
+
+#[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
+#[group(required = true, multiple = false)]
+pub struct IdentifyPodArgsGroup {
+    /// Name of the pod. Takes precedence over path
+    #[arg(long, short)]
+    pub name: Option<String>,
+    /// Path of the pod, defaults to working directory
+    #[arg(long, short)]
+    pub path: Option<WhPath>,
+}
+
+#[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
+#[command(version, about, name = "start")]
+pub struct IdentifyPodArgs {
+    /// Group
+    #[clap(flatten)]
+    pub group: IdentifyPodArgsGroup,
 }
 
 #[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
@@ -93,16 +112,6 @@ pub struct PodArgs {
     /// Additional hosts to try to join from as a backup
     #[arg(raw = true)]
     pub additional_hosts: Vec<String>,
-}
-
-#[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
-#[command(version, about, long_about = None)]
-pub struct StatusPodArgs {
-    /// Name of the pod. Takes precedence over path
-    #[arg(long, short, conflicts_with("path"))]
-    pub name: Option<String>,
-    /// Path of the pod, defaults to working directory
-    pub path: Option<WhPath>,
 }
 
 #[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]

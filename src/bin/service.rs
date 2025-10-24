@@ -65,7 +65,10 @@ async fn main() {
         };
     let signals_task = tokio::spawn(handle_signals(signals_tx, interrupt_rx));
     log::trace!("Starting service on {:?}", ip_string);
-    let _ = start_cli_listeners(&mut pods, ip_string, signals_rx).await;
+
+    if let Err(err) = start_cli_listeners(&mut pods, ip_string, signals_rx).await {
+        log::error!("Listener Error: {err}");
+    }
 
     if let Some(terminal_handle) = terminal_handle {
         terminal_handle.abort();

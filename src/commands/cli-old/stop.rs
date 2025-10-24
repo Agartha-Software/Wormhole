@@ -5,7 +5,7 @@ use crate::{
         cli::path_or_wd,
         cli_commands::{
             Cli::{self},
-            StatusPodArgs,
+            IdentifyPodArgs,
         },
     },
     error::CliResult,
@@ -13,7 +13,7 @@ use crate::{
 
 use super::cli_messager;
 
-pub fn stop(ip: &str, mut stop_args: StatusPodArgs) -> CliResult<String> {
+pub fn stop(ip: &str, mut stop_args: IdentifyPodArgs) -> CliResult<String> {
     if stop_args.name.is_none() {
         stop_args.path = Some(path_or_wd(stop_args.path)?)
     }

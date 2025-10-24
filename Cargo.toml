@@ -102,6 +102,7 @@ custom_error = "1.9.2"
 signal-hook = "0.3.18"
 futures = "0.3"
 gethostname = "1.0.2"
+interprocess = { version = "2.2.3", features = ["tokio"] }
 
 [dev-dependencies]
 assert_fs = "1.1.2"

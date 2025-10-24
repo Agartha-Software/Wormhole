@@ -2,91 +2,130 @@
 // In code we trust
 // AgarthaSoftware - 2024
 
-use clap::Parser;
-use std::{env, path::PathBuf};
+use clap::{Arg, Command, Parser, Subcommand};
+use interprocess::local_socket::traits::tokio::Stream;
+use std::env;
+use std::process::ExitCode;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use wormhole::{
-    commands::{self, cli_commands::Cli},
-    error::CliResult,
+    commands::{cli::start, cli_commands::Cli},
+    error::{CliError, CliResult, CliSuccess},
+    ipc::{cli::start_local_socket, CommandAnswer},
 };
 
-fn get_config_path() -> PathBuf {
-    let config_dir =
-        env::var("WORMHOLE_CONFIG_DIR").unwrap_or_else(|_| ".config/wormhole".to_string());
-    PathBuf::from(config_dir).join("config.toml")
-}
-
-/// Parse argument and recover the ip connection to the service or use 127.0.0.1:8081
-fn get_args(args: Vec<String>) -> (String, Vec<String>) {
-    let ip: String;
-    let cli_args: Vec<String>;
-
-    if let Some(first_arg) = args.get(1) {
-        if first_arg.contains(':') {
-            ip = first_arg.clone();
-            cli_args = args.into_iter().skip(1).collect();
-        } else {
-            ip = "127.0.0.1:8081".to_string();
-            cli_args = args;
-        }
-    } else {
-        ip = "127.0.0.1:8081".to_string();
-        cli_args = vec![];
-    }
-    return (ip, cli_args);
-}
-
-fn main() -> CliResult<()> {
+#[tokio::main]
+async fn main() -> ExitCode {
+    // let matches = Command::new("wormhole")
+    //     .version("1.0")
+    //     .author("Kevin K. <kbknapp@gmail.com>")
+    //     .about("Does awesome things")
+    //     .arg(
+    //         Arg::new("CONFIG")
+    //             .short('c')
+    //             .long("config")
+    //             .help("Sets a custom config file"),
+    //     )
+    //     .subcommand(
+    //         Command::new("test")
+    //             .about("controls testing features")
+    //             .version("1.3")
+    //             .author("Someone E. <someone_else@other.com>")
+    //             .arg(
+    //                 Arg::new("verbose")
+    //                     .short('v')
+    //                     .help("print test information verbosely"),
+    //             ),
+    //     )
+    //     .get_matches();
     env_logger::init();
+    log::trace!("Starting cli!");
+    let cmd = Cli::parse();
+    log::debug!("Command found: {cmd:?}");
 
-    // Recover all arguments
-    let args: Vec<String> = env::args().collect();
-    let (ip, cli_args) = get_args(args);
-    let ip = ip.as_str();
-    log::trace!("Starting cli on {}", ip);
-    log::trace!("cli args: {:?}", cli_args);
-
-    let status = match Cli::parse_from(cli_args) {
-        Cli::Start(args) => commands::cli::start(ip, args),
-        Cli::Stop(args) => commands::cli::stop(ip, args),
-        Cli::Template(args) => {
-            log::info!("creating network {:?}", args.name.clone());
-            commands::cli::templates(&args.mountpoint.unwrap_or(".".into()), &args.name)
-        }
-        Cli::New(args) => {
-            log::info!("creating pod");
-            commands::cli::new(ip, args)
-        }
-        Cli::Remove(args) => {
-            log::info!("removing pod");
-            commands::cli::remove(ip, args)
-        }
-        Cli::Inspect => {
-            log::warn!("inspecting pod");
-            todo!("inspect");
-        }
-        Cli::GetHosts(args) => commands::cli::get_hosts(ip, args),
-        Cli::Tree(args) => commands::cli::tree(ip, args),
-        Cli::Apply(args) => {
-            log::warn!("reloading pod");
-            commands::cli::apply(ip, args)
-        }
-        Cli::Status => commands::cli::status(ip),
-        Cli::Restore(args) => {
-            log::info!("retore a specific file config");
-            commands::cli::restore(ip, args)
-        }
-        Cli::Interrupt => {
-            log::warn!("interrupt command");
-            todo!("interrupt");
+    let stream = match start_local_socket().await {
+        Ok(stream) => stream,
+        Err(err) => {
+            eprintln!("Connection to the service failed: {}: {err}", err.kind());
+            return ExitCode::FAILURE;
         }
     };
-    if let Err(e) = &status {
-        log::error!("CLI: error reported: {e}");
-    } else {
-        log::info!("CLI: no error reported")
+
+    let (mut read, mut write) = stream.split();
+    let mut recived_answer = Vec::new();
+
+    let serialized =
+        bincode::serialize(&cmd).expect("Can't serialize cli command, shouldn't be possible .");
+
+    write.write_all(&serialized).await.unwrap();
+    let _recv = read.read_buf(&mut recived_answer).await.unwrap();
+
+    let out = match cmd {
+        Cli::Start(identify_pod_args) => start(identify_pod_args),
+        Cli::Stop(identify_pod_args) => todo!(),
+        Cli::Template(template_arg) => todo!(),
+        Cli::New(pod_args) => todo!(),
+        Cli::Inspect => todo!(),
+        Cli::GetHosts(get_hosts_args) => todo!(),
+        Cli::Tree(tree_args) => todo!(),
+        Cli::Status => todo!(),
+        Cli::Remove(remove_args) => todo!(),
+        Cli::Apply(pod_conf) => todo!(),
+        Cli::Restore(pod_conf) => todo!(),
+        Cli::Interrupt => todo!(),
     };
-    status.map(|s| {
-        println!("{s}");
-        ()
-    })
+
+    let answer = match bincode::deserialize::<Cli>(&recived_answer) {
+        Ok(answer) => answer,
+        Err(err) => {
+            eprintln!("Command recieved isn't recognized: {err}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    return ExitCode::SUCCESS;
 }
+
+// let status = match Cli::parse_from(cli_args) {
+//     Cli::Start(args) => commands::cli::start(ip, args),
+//     Cli::Stop(args) => commands::cli::stop(ip, args),
+//     Cli::Template(args) => {
+//         log::info!("creating network {:?}", args.name.clone());
+//         commands::cli::templates(&args.mountpoint.unwrap_or(".".into()), &args.name)
+//     }
+//     Cli::New(args) => {
+//         log::info!("creating pod");
+//         commands::cli::new(ip, args)
+//     }
+//     Cli::Remove(args) => {
+//         log::info!("removing pod");
+//         commands::cli::remove(ip, args)
+//     }
+//     Cli::Inspect => {
+//         log::warn!("inspecting pod");
+//         todo!("inspect");
+//     }
+//     Cli::GetHosts(args) => commands::cli::get_hosts(ip, args),
+//     Cli::Tree(args) => commands::cli::tree(ip, args),
+//     Cli::Apply(args) => {
+//         log::warn!("reloading pod");
+//         commands::cli::apply(ip, args)
+//     }
+//     Cli::Status => commands::cli::status(ip),
+//     Cli::Restore(args) => {
+//         log::info!("retore a specific file config");
+//         commands::cli::restore(ip, args)
+//     }
+//     Cli::Interrupt => {
+//         log::warn!("interrupt command");
+//         todo!("interrupt");
+//     }
+// };
+// if let Err(e) = &status {
+//     log::error!("CLI: error reported: {e}");
+// } else {
+//     log::info!("CLI: no error reported")
+// };
+// status.map(|s| {
+//     println!("{s}");
+//     ()
+// })
