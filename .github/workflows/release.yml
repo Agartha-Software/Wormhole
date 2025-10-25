@@ -66,6 +66,19 @@ jobs:
           overwrite: true
           file: ./target/debian/wormhole.deb
           asset_name: wormhole.deb
+      - name: Generate .rpm
+        run: |
+         cargo install cargo-generate-rpm
+         cargo build --release
+         cargo generate-rpm
+         mv ./target/generate-rpm/wormhole*.rpm ./target/generate-rpm/wormhole.rpm
+      - name: Upload .rpm
+        uses: svenstaro/upload-release-action@2.11.2
+        with:
+          release_id: ${{ needs.update_release_draft.outputs.release_id }}
+          overwrite: true
+          file: ./target/generate-rpm/wormhole.rpm
+          asset_name: wormhole.rpm
 
 
   build-windows:
