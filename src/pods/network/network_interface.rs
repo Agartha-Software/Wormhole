@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    ffi::{OsStr, OsString},
     io::{self, ErrorKind},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -16,6 +17,7 @@ use crate::{
         peer_ipc::PeerIPC,
         server::Server,
     },
+    osstring_convert,
     pods::{arbo::Ino, filesystem::make_inode::MakeInodeError},
 };
 use parking_lot::RwLock;
@@ -186,8 +188,8 @@ impl NetworkInterface {
         &self,
         parent: InodeId,
         new_parent: InodeId,
-        name: &String,
-        new_name: &String,
+        name: &OsStr,
+        new_name: &OsStr,
         overwrite: bool,
     ) -> Result<(), RenameError> {
         let mut arbo = Arbo::n_write_lock(&self.arbo, "arbo_rename_file")?;
@@ -198,8 +200,8 @@ impl NetworkInterface {
             .send(ToNetworkMessage::BroadcastMessage(MessageContent::Rename(
                 parent,
                 new_parent,
-                name.clone(),
-                new_name.clone(),
+                osstring_convert(name),
+                osstring_convert(new_name),
                 overwrite,
             )))
             .expect("broadcast_rename_file: unable to update modification on the network thread");
@@ -210,8 +212,8 @@ impl NetworkInterface {
         &self,
         parent: InodeId,
         new_parent: InodeId,
-        name: &String,
-        new_name: &String,
+        name: &OsStr,
+        new_name: &OsStr,
     ) -> Result<(), RenameError> {
         let mut arbo = Arbo::n_write_lock(&self.arbo, "arbo_rename_file")?;
 
@@ -576,7 +578,7 @@ impl NetworkInterface {
                 MessageContent::RequestFs => fs_interface.send_filesystem(origin),
                 MessageContent::Rename(parent, new_parent, name, new_name, overwrite) =>
                     fs_interface
-                    .recept_rename(parent, new_parent, &name, &new_name, overwrite)
+                    .recept_rename(parent, new_parent, &OsString::from(name), &OsString::from(new_name), overwrite)
                     .map_err(|err| {
                         std::io::Error::new(
                             std::io::ErrorKind::Other,
@@ -585,7 +587,7 @@ impl NetworkInterface {
                     }),
                 MessageContent::SetXAttr(ino, key, data) => fs_interface
                     .network_interface
-                    .recept_inode_xattr(ino, key, data)
+                    .recept_inode_xattr(ino, OsStr::new(&key), data)
                     .or_else(|err| {
                         Err(std::io::Error::new(
                             std::io::ErrorKind::Other,
@@ -594,7 +596,7 @@ impl NetworkInterface {
                     }),
                 MessageContent::RemoveXAttr(ino, key) => fs_interface
                     .network_interface
-                    .recept_remove_inode_xattr(ino, key)
+                    .recept_remove_inode_xattr(ino, OsStr::new(&key))
                     .or_else(|err| {
                         Err(std::io::Error::new(
                             std::io::ErrorKind::Other,

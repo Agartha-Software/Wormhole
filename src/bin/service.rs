@@ -61,10 +61,12 @@ async fn handle_cli_command(
             } else {
                 let pod_name = pod_args.name.clone();
                 match commands::service::new(pod_args).await {
-                    Ok(pod) => {
+                    Ok((pod, port)) => {
                         pods.insert(pod_name.clone(), pod);
                         Ok(CliSuccess::WithData {
-                            message: String::from("Pod created with success"),
+                            message: String::from(format!(
+                                "Pod created with success on port {port}"
+                            )),
                             data: pod_name,
                         })
                     }
@@ -166,7 +168,7 @@ async fn handle_cli_command(
             };
 
             //Apply new config in the pod and check if the name change
-            let res = if let Some((name, pod)) = opt_pod {
+            let res = if let Some((_, pod)) = opt_pod {
                 pod_conf.path = Some(pod.get_mountpoint().clone());
 
                 match commands::service::apply(
@@ -180,7 +182,7 @@ async fn handle_cli_command(
                             &pod.local_config.clone(),
                             "handle_cli_command::apply",
                         ) {
-                            Ok(local) => {
+                            Ok(_) => {
                                 Ok(None)
                                 // if local.general.name != *name {
                                 //     Ok(Some((local.general.name.clone(), name.clone())))
@@ -228,7 +230,7 @@ async fn handle_cli_command(
             } else {
                 None
             } {
-                match pod.get_file_hosts(args.path.unwrap_or(".".into())) {
+                match pod.get_file_hosts(&args.path.unwrap_or(".".into())) {
                     Ok(hosts) => Ok(CliSuccess::WithData {
                         message: "Hosts:".to_owned(),
                         data: format!("{:?}", hosts),
@@ -251,13 +253,13 @@ async fn handle_cli_command(
                         log::info!("TREE: pod: {:?}", &pod.get_mountpoint());
                         path.strip_prefix(&pod.get_mountpoint())
                             .ok()
-                            .map(|sub| (pod, Some(sub.into())))
+                            .map(|sub| (pod, Some(sub.to_path_buf())))
                     })
                 } else {
                     None
                 }
             } {
-                match pod.get_file_tree_and_hosts(subpath) {
+                match pod.get_file_tree_and_hosts(subpath.as_ref().map(|v| &**v)) {
                     Ok(tree) => Ok(CliSuccess::WithData {
                         message: "File tree and hosts per file:".to_owned(),
                         data: tree.to_string(),

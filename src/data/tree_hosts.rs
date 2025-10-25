@@ -1,11 +1,8 @@
-use std::fmt;
+use std::{fmt, path::PathBuf};
 
-use crate::{
-    network::message::Address,
-    pods::{arbo::InodeId, whpath::WhPath},
-};
+use crate::{network::message::Address, pods::arbo::InodeId};
 
-pub type TreeLine = (u8, InodeId, WhPath, Vec<Address>); // (indentation_level, ino, path, hosts)
+pub type TreeLine = (u8, InodeId, PathBuf, Vec<Address>); // (indentation_level, ino, path, hosts)
 pub struct CliHostTree {
     pub lines: Vec<TreeLine>,
 }
@@ -15,7 +12,7 @@ impl fmt::Display for CliHostTree {
         let mut output = String::new();
         for (indent, ino, path, hosts) in &self.lines {
             output.push_str(&format!(
-                "{}[{ino}] {}    ->    ({}) {:?}\n",
+                "{}[{ino}] {:?}    ->    ({}) {:?}\n",
                 generate_indentation(*indent),
                 path,
                 hosts.len(),

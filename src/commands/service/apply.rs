@@ -21,8 +21,7 @@ pub fn apply(
                         .path
                         .as_ref()
                         .unwrap_or(&".".into())
-                        .join(LOCAL_CONFIG_FNAME)
-                        .inner,
+                        .join(LOCAL_CONFIG_FNAME),
                 )?;
                 {
                     let hostname = &local_config.read().general.hostname;
@@ -44,8 +43,7 @@ pub fn apply(
                         .path
                         .as_ref()
                         .unwrap_or(&".".into())
-                        .join(GLOBAL_CONFIG_FNAME)
-                        .inner,
+                        .join(GLOBAL_CONFIG_FNAME),
                 )?;
                 *GlobalConfig::write_lock(&global_config, "apply::global_conf")? = conf;
             }

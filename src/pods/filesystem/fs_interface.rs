@@ -1,6 +1,8 @@
 use crate::error::WhResult;
 use crate::network::message::Address;
-use crate::pods::arbo::{Arbo, FsEntry, Inode, InodeId, Metadata, GLOBAL_CONFIG_INO};
+use crate::pods::arbo::{
+    Arbo, FsEntry, Inode, InodeId, Metadata, GLOBAL_CONFIG_FNAME, GLOBAL_CONFIG_INO,
+};
 use crate::pods::disk_managers::DiskManager;
 use crate::pods::filesystem::attrs::AcknoledgeSetAttrError;
 use crate::pods::network::callbacks::Callback;
@@ -9,7 +11,9 @@ use crate::pods::network::network_interface::NetworkInterface;
 use futures::io;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use std::ffi::OsStr;
 use std::io::ErrorKind;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::file_handle::FileHandleManager;
@@ -71,9 +75,9 @@ impl FsInterface {
 
     // SECTION - local -> read
 
-    pub fn get_entry_from_name(&self, parent: InodeId, name: String) -> io::Result<Inode> {
+    pub fn get_entry_from_name(&self, parent: InodeId, name: &OsStr) -> io::Result<Inode> {
         let arbo = Arbo::read_lock(&self.arbo, "fs_interface.get_entry_from_name")?;
-        arbo.get_inode_child_by_name(arbo.get_inode(parent)?, &name)
+        arbo.get_inode_child_by_name(arbo.get_inode(parent)?, name)
             .cloned()
     }
 
@@ -107,9 +111,9 @@ impl FsInterface {
         let mut links: Vec<Inode> = Vec::with_capacity(children.len() + 2);
         let mut parent = arbo.get_inode(dir.parent)?.clone();
 
-        dir.name = ".".to_string();
+        dir.name = ".".into();
         links.push(dir);
-        parent.name = "..".to_string();
+        parent.name = "..".into();
         links.push(parent.clone());
         links.extend(children);
         Ok(links)
@@ -271,10 +275,7 @@ impl FsInterface {
             .map(|inode| inode.meta.size)
             .ok();
         let global_config_path = if global_config_file_size.is_some() {
-            Some(
-                arbo.get_path_from_inode_id(GLOBAL_CONFIG_INO)?
-                    .set_relative(),
-            )
+            Some(PathBuf::from(GLOBAL_CONFIG_FNAME))
         } else {
             None
         };
