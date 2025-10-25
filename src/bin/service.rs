@@ -61,10 +61,12 @@ async fn handle_cli_command(
             } else {
                 let pod_name = pod_args.name.clone();
                 match commands::service::new(pod_args).await {
-                    Ok(pod) => {
+                    Ok((pod, port)) => {
                         pods.insert(pod_name.clone(), pod);
                         Ok(CliSuccess::WithData {
-                            message: String::from("Pod created with success"),
+                            message: String::from(format!(
+                                "Pod created with success on port {port}"
+                            )),
                             data: pod_name,
                         })
                     }

@@ -78,8 +78,8 @@ pub struct PodArgs {
     #[arg(long = "mount", short = 'm')]
     pub mountpoint: Option<PathBuf>,
     /// Local port for the pod to use
-    #[arg(long, short = 'p', default_value = "40000")]
-    pub port: String,
+    #[arg(long, short = 'p')]
+    pub port: Option<String>,
     /// Network to join
     #[arg(long, short)]
     pub url: Option<String>,

@@ -31,8 +31,8 @@ pub fn new(ip: &str, mut args: PodArgs) -> CliResult<String> {
             // mod_file_conf_content(path.clone(), args.hostname.clone(), &args.port)?;
             args.mountpoint = Some(path);
             let rt = Runtime::new().unwrap();
-            rt.block_on(cli_messager(ip, Cli::New(args)))?;
-            Ok("ok".to_string())
+            let output = rt.block_on(cli_messager(ip, Cli::New(args)))?;
+            Ok(output)
         }
     }
 }
