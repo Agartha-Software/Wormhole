@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    ipc::{commands::Command, service::commands::start},
+    ipc::{commands::Command, service::commands::unfreeze},
     pods::pod::Pod,
 };
 use serde::Serialize;
@@ -57,7 +57,8 @@ where
     let stream = &mut stream;
 
     match command {
-        Command::Start(data) => start(data, stream).await,
+        Command::Unfreeze(data) => unfreeze(data, stream).await,
+        Command::New(data) => unfreeze(data, stream).await,
     }
 }
 

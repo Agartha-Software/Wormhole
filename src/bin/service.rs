@@ -68,7 +68,7 @@ async fn main() -> ExitCode {
     log::trace!("Starting service on {:?}", ip_string);
 
     if let Err(err) = start_commands_listeners(&mut pods, ip_string, signals_rx).await {
-        log::error!("Listener Error: {err}");
+        eprintln!("{err}");
     }
 
     if let Some(terminal_handle) = terminal_handle {

@@ -6,38 +6,39 @@ use clap::{Args, Parser, ValueEnum};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Parser)]
-#[command(version, about, long_about = None)]
-#[command(propagate_version = true)]
+#[command(version, about, long_about = None, name="wormhole")]
 pub enum Cli {
-    /// Start the service
-    Start(IdentifyPodArgs),
-    /// Stop the service
-    Stop(IdentifyPodArgs),
+    /// Create a new pod and join a network if possible or create a new network
+    New(NewArgs),
+    /// Pause a given pod
+    Freeze(IdentifyPodArgs),
+    /// Restart a given pod
+    UnFreeze(IdentifyPodArgs),
     /// Create a new network (template)
     Template(TemplateArg),
-    /// Create a new pod and join a network if he have peers in arguments or create a new network
-    New(PodArgs),
-    /// Inspect a pod with its configuration, connections, etc
-    Inspect,
+    /// Inspect a pod with its configuration, connections, etc...
+    Inspect(IdentifyPodArgs),
     /// Get hosts for a specific file
     GetHosts(GetHostsArgs),
-    /// Tree the folder structure from the given path and show hosts for each file
-    Tree(TreeArgs),
-    /// Checks that the service is working (should print it's ip)
-    Status,
+    /// Tree the folder structure of the given path and show hosts for each file
+    Tree(IdentifyPodArgs),
     /// Remove a pod from its network
     Remove(RemoveArgs),
     /// Apply a new configuration to a pod
-    Apply(PodConf),
+    Apply(PodConfArgs),
     /// Restore many or a specific file configuration
-    Restore(PodConf),
+    Restore(PodConfArgs),
+    /// Checks that the service is working (print it's ip)
+    Status,
+    /// Start the service
+    Start,
     /// Stops the service
-    Interrupt,
+    Stop,
 }
 
-#[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
+#[derive(Debug, Args, Serialize, Deserialize, Clone)]
 #[group(required = true, multiple = false)]
-pub struct IdentifyPodArgsGroup {
+pub struct IdentifyPodGroup {
     /// Name of the pod. Takes precedence over path
     #[arg(long, short)]
     pub name: Option<String>,
@@ -46,60 +47,43 @@ pub struct IdentifyPodArgsGroup {
     pub path: Option<WhPath>,
 }
 
-#[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
-#[command(version, about, name = "start")]
+#[derive(Debug, Args, Serialize, Deserialize, Clone)]
+#[command(about, name = "start")]
 pub struct IdentifyPodArgs {
-    /// Group
     #[clap(flatten)]
-    pub group: IdentifyPodArgsGroup,
+    pub group: IdentifyPodGroup,
 }
 
-#[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
-#[command(version, about, long_about = None)]
-pub struct PodConf {
-    /// Pod name. Takes precedence over path
-    #[arg(long, short, conflicts_with("path"))]
-    pub name: Option<String>,
+#[derive(Debug, Args, Serialize, Deserialize, Clone)]
+#[command(about, long_about = None)]
+pub struct PodConfArgs {
+    #[clap(flatten)]
+    pub group: IdentifyPodGroup,
 
-    /// Path of the pod, defaults to working directory
-    pub path: Option<WhPath>,
     /// Names of all configuration files that you want to restore
     #[arg(long, short, default_values_t = [String::from(LOCAL_CONFIG_FNAME), String::from(GLOBAL_CONFIG_FNAME)])]
     pub files: Vec<String>,
 }
 
-#[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
-#[command(version, about, long_about = None)]
+#[derive(Debug, Args, Serialize, Deserialize, Clone)]
+#[command(about, long_about = None)]
 pub struct GetHostsArgs {
-    /// Name of the pod. Takes precedence over path
-    #[arg(long, short, conflicts_with("path"))]
-    pub name: Option<String>,
-    /// Path of the pod. defaults to working directory
+    /// Path of the file
     pub path: Option<WhPath>,
 }
 
-#[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
-#[command(version, about, long_about = None)]
-pub struct TreeArgs {
-    /// Name of the pod to enumerate. Takes precedence over path
-    #[arg(long, short, conflicts_with("path"))]
-    pub name: Option<String>,
-    /// Path to enumerate from. Must be within a WH mount
-    pub path: Option<WhPath>,
-}
-
-#[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
-#[command(version, about, long_about = None)]
-pub struct PodArgs {
+#[derive(Debug, Args, Serialize, Deserialize, Clone)]
+#[command(about, long_about = None)]
+pub struct NewArgs {
     /// Name of the pod to create
     // TODO: make optional again when the url can provide the name expected
     pub name: String,
-    /// mount point to create the pod in. By default creates a pod from the folder in the working directory with the name of the pod
-    #[arg(long = "mount", short = 'm')]
-    pub mountpoint: Option<WhPath>,
     /// Local port for the pod to use
-    #[arg(long, short = 'p', default_value = "40000")]
+    #[arg(long, short, required = true)]
     pub port: String,
+    /// Mount point to create the pod in. By default creates a mount point in the working directory with the name of the pod
+    #[arg(long = "mount", short)]
+    pub mountpoint: Option<WhPath>,
     /// Network to join
     #[arg(long, short)]
     pub url: Option<String>,
@@ -114,13 +98,12 @@ pub struct PodArgs {
     pub additional_hosts: Vec<String>,
 }
 
-#[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
-#[command(version, about, long_about = None)]
+#[derive(Debug, Args, Serialize, Deserialize, Clone)]
+#[command(about, long_about = None)]
 pub struct TemplateArg {
-    /// Name of the network and pod to create
-    #[arg(default_value = "wormhole")]
+    /// Name of the pod to create
     pub name: String,
-    /// Path to create the pod in. By default creates a pod from the folder with the name given
+    /// Mount point to create the pod in. By default creates a mount point in the working directory with the name of the pod
     #[arg(long = "mount", short)]
     pub mountpoint: Option<WhPath>,
 }
@@ -143,7 +126,7 @@ pub enum Mode {
 
 // Structure RemoveArgs modifiée
 #[derive(Debug, Args, Serialize, Deserialize, Clone)]
-#[command(version, about, long_about = None)]
+#[command(about, long_about = None)]
 pub struct RemoveArgs {
     /// Name of pod to delete. Takes precedence over path
     #[arg(long, short, required_unless_present = "path", conflicts_with = "path")]
