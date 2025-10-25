@@ -111,3 +111,11 @@ lazy_static = "1.5.0"
 [package.metadata.deb]
 maintainer-scripts = "service/"
 systemd-units = { enable = true, start = true }
+
+[package.metadata.generate-rpm]
+assets = [
+    { source = "target/release/wormhole", dest = "/usr/bin/wormhole"},
+    { source = "target/release/wormholed", dest = "/usr/bin/wormholed"}
+]
+[package.metadata.generate-rpm.requires]
+fuse3 = ">= 3.16"
