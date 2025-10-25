@@ -20,7 +20,7 @@ use libc::{EIO, ENOENT, XATTR_CREATE, XATTR_REPLACE};
 use std::ffi::OsStr;
 use std::io;
 use std::os::unix::ffi::OsStrExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 

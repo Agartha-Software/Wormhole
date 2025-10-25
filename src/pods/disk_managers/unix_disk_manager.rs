@@ -38,7 +38,7 @@ impl UnixDiskManager {
 
         Ok(Self {
             handle: Dir::open(mount_point)?,
-            mount_point: mount_point.clone(),
+            mount_point: mount_point.to_owned(),
         })
     }
 }
