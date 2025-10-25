@@ -33,7 +33,7 @@ jobs:
       - name: Set up Nix
         uses: cachix/install-nix-action@v27
         with:
-          nix_path: nixpkgs=channel:nixos-25.05
+          nix_path: nixpkgs=channel:nixos-unstable
 
       - name: Cachix connexion
         uses: cachix/cachix-action@v14
