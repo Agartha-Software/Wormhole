@@ -1,7 +1,6 @@
-use crate::pods::{
-    arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
-    whpath::WhPath,
-};
+use std::path::PathBuf;
+
+use crate::pods::arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME};
 use clap::{Args, Parser, ValueEnum};
 use serde::{Deserialize, Serialize};
 
@@ -43,7 +42,7 @@ pub struct PodConf {
     pub name: Option<String>,
 
     /// Path of the pod, defaults to working directory
-    pub path: Option<WhPath>,
+    pub path: Option<PathBuf>,
     /// Names of all configuration files that you want to restore
     #[arg(long, short, default_values_t = [String::from(LOCAL_CONFIG_FNAME), String::from(GLOBAL_CONFIG_FNAME)])]
     pub files: Vec<String>,
@@ -56,7 +55,7 @@ pub struct GetHostsArgs {
     #[arg(long, short, conflicts_with("path"))]
     pub name: Option<String>,
     /// Path of the pod. defaults to working directory
-    pub path: Option<WhPath>,
+    pub path: Option<PathBuf>,
 }
 
 #[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
@@ -66,7 +65,7 @@ pub struct TreeArgs {
     #[arg(long, short, conflicts_with("path"))]
     pub name: Option<String>,
     /// Path to enumerate from. Must be within a WH mount
-    pub path: Option<WhPath>,
+    pub path: Option<PathBuf>,
 }
 
 #[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
@@ -77,7 +76,7 @@ pub struct PodArgs {
     pub name: String,
     /// mount point to create the pod in. By default creates a pod from the folder in the working directory with the name of the pod
     #[arg(long = "mount", short = 'm')]
-    pub mountpoint: Option<WhPath>,
+    pub mountpoint: Option<PathBuf>,
     /// Local port for the pod to use
     #[arg(long, short = 'p', default_value = "40000")]
     pub port: String,
@@ -102,7 +101,7 @@ pub struct StatusPodArgs {
     #[arg(long, short, conflicts_with("path"))]
     pub name: Option<String>,
     /// Path of the pod, defaults to working directory
-    pub path: Option<WhPath>,
+    pub path: Option<PathBuf>,
 }
 
 #[derive(Debug, clap::Args, Serialize, Deserialize, Clone)]
@@ -113,7 +112,7 @@ pub struct TemplateArg {
     pub name: String,
     /// Path to create the pod in. By default creates a pod from the folder with the name given
     #[arg(long = "mount", short)]
-    pub mountpoint: Option<WhPath>,
+    pub mountpoint: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ValueEnum)]
@@ -141,7 +140,7 @@ pub struct RemoveArgs {
     pub name: Option<String>,
     /// Path of the pod to remove
     #[arg(long, short, required_unless_present = "name", conflicts_with = "name")]
-    pub path: Option<WhPath>,
+    pub path: Option<PathBuf>,
     /// Mode for pod removal
     #[arg(long, default_value = "simple")]
     pub mode: Mode,

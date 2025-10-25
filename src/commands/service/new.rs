@@ -6,7 +6,6 @@ use crate::{
     pods::{
         arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
         pod::Pod,
-        whpath::WhPath,
     },
 };
 use gethostname::gethostname;
@@ -18,7 +17,7 @@ pub async fn new(args: PodArgs) -> CliResult<Pod> {
         // local_config.general.name.clone(),
         global_config,
         local_config.clone(),
-        mount_point,
+        &mount_point,
         server.clone(),
     )
     .await
@@ -40,13 +39,15 @@ fn add_hosts(
     global_config
 }
 
-async fn pod_value(args: &PodArgs) -> CliResult<(GlobalConfig, LocalConfig, Arc<Server>, WhPath)> {
+async fn pod_value(args: &PodArgs) -> CliResult<(GlobalConfig, LocalConfig, Arc<Server>, PathBuf)> {
     log::info!("args: {args:?}");
     let path = args
         .mountpoint
         .as_ref()
         .and_then(|path| {
-            let (parent, folder) = path.split_folder_file();
+            let parent = path.parent()?;
+            let folder = path.file_name()?;
+
             std::fs::canonicalize(&parent)
                 .ok()
                 .map(|p| PathBuf::from(p).join(folder))

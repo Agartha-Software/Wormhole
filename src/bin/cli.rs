@@ -3,17 +3,11 @@
 // AgarthaSoftware - 2024
 
 use clap::Parser;
-use std::{env, path::PathBuf};
+use std::env;
 use wormhole::{
     commands::{self, cli_commands::Cli},
     error::CliResult,
 };
-
-fn get_config_path() -> PathBuf {
-    let config_dir =
-        env::var("WORMHOLE_CONFIG_DIR").unwrap_or_else(|_| ".config/wormhole".to_string());
-    PathBuf::from(config_dir).join("config.toml")
-}
 
 /// Parse argument and recover the ip connection to the service or use 127.0.0.1:8081
 fn get_args(args: Vec<String>) -> (String, Vec<String>) {
