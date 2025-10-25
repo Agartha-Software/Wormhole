@@ -52,13 +52,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y pkg-config libfuse3-dev libfuse-dev
-      - name: Build project
-        run: cargo build --release
-      - name: Generate .deb
+      - name: Generate binaries
         run: |
+         cargo build --release
          cargo install cargo-deb
+         cargo install cargo-generate-rpm
          cargo deb
+         cargo generate-rpm
          mv ./target/debian/wormhole*.deb ./target/debian/wormhole.deb
+         mv ./target/generate-rpm/wormhole*.rpm ./target/generate-rpm/wormhole.rpm
       - name: Upload .deb
         uses: svenstaro/upload-release-action@2.11.2
         with:
@@ -66,12 +68,6 @@ jobs:
           overwrite: true
           file: ./target/debian/wormhole.deb
           asset_name: wormhole.deb
-      - name: Generate .rpm
-        run: |
-         cargo install cargo-generate-rpm
-         cargo build --release
-         cargo generate-rpm
-         mv ./target/generate-rpm/wormhole*.rpm ./target/generate-rpm/wormhole.rpm
       - name: Upload .rpm
         uses: svenstaro/upload-release-action@2.11.2
         with:
