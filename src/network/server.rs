@@ -71,7 +71,7 @@ fn connect_to_available_port(
 }
 
 impl Server {
-    pub async fn setup(addr: &str, port: Option<String>) -> CliResult<Server> {
+    pub async fn setup(addr: &str, port: Option<String>) -> CliResult<(Server, String)> {
         let socket = TcpSocket::new_v4().map_err(|e| CliError::Server {
             addr: addr.to_owned(),
             err: e,
@@ -80,15 +80,18 @@ impl Server {
             addr: addr.to_owned(),
             err: e,
         })?;
-        connect_to_available_port(&socket, addr, port)?;
+        let port = connect_to_available_port(&socket, addr, port)?;
         let listener = socket.listen(1024).map_err(|e| CliError::Server {
             addr: addr.to_owned(),
             err: e,
         })?;
 
-        Ok(Server {
-            listener: listener,
-            state: PeerMap::new(Mutex::new(HashMap::new())),
-        })
+        Ok((
+            Server {
+                listener: listener,
+                state: PeerMap::new(Mutex::new(HashMap::new())),
+            },
+            port,
+        ))
     }
 }
