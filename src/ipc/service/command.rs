@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    commands::cli_commands::Cli,
-    ipc::error::{CommandError, CommandResult, ConnectionError},
+    ipc::{commands::Command, error::ConnectionError},
     pods::pod::Pod,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt, WriteHalf};
@@ -20,7 +19,7 @@ where
     let mut buffer: Vec<u8> = Vec::new();
     let _size = read.read_buf(&mut buffer).await.unwrap();
 
-    let command = bincode::deserialize::<Cli>(&buffer).map_err(|e| {
+    let command = bincode::deserialize::<Command>(&buffer).map_err(|e| {
         log::error!("{e:?}");
         ConnectionError::ImpossibleCommandRecived
     })?;
@@ -34,10 +33,10 @@ where
 }
 
 async fn handle_command<Stream>(
-    command: Cli,
+    command: Command,
     pods: &mut HashMap<String, Pod>,
     write: WriteHalf<Stream>,
-) -> CommandResult<()>
+) -> Result<(), ConnectionError>
 where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
 {

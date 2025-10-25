@@ -2,10 +2,10 @@ use crate::pods::{
     arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
     whpath::WhPath,
 };
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, ValueEnum};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Parser, Serialize, Deserialize)]
+#[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
 #[command(propagate_version = true)]
 pub enum Cli {

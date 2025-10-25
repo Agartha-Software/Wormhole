@@ -2,41 +2,13 @@
 // In code we trust
 // AgarthaSoftware - 2024
 
-use clap::{Arg, Command, Parser, Subcommand};
-use interprocess::local_socket::traits::tokio::Stream;
-use std::env;
+use clap::Parser;
 use std::process::ExitCode;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use wormhole::{
-    commands::{cli::start, cli_commands::Cli},
-    error::{CliError, CliResult, CliSuccess},
-    ipc::{cli::start_local_socket, CommandAnswer},
-};
+use wormhole::cli::Cli;
+use wormhole::ipc::cli::{command_network, start_local_socket};
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    // let matches = Command::new("wormhole")
-    //     .version("1.0")
-    //     .author("Kevin K. <kbknapp@gmail.com>")
-    //     .about("Does awesome things")
-    //     .arg(
-    //         Arg::new("CONFIG")
-    //             .short('c')
-    //             .long("config")
-    //             .help("Sets a custom config file"),
-    //     )
-    //     .subcommand(
-    //         Command::new("test")
-    //             .about("controls testing features")
-    //             .version("1.3")
-    //             .author("Someone E. <someone_else@other.com>")
-    //             .arg(
-    //                 Arg::new("verbose")
-    //                     .short('v')
-    //                     .help("print test information verbosely"),
-    //             ),
-    //     )
-    //     .get_matches();
     env_logger::init();
     log::trace!("Starting cli!");
     let cmd = Cli::parse();
@@ -50,39 +22,13 @@ async fn main() -> ExitCode {
         }
     };
 
-    let (mut read, mut write) = stream.split();
-    let mut recived_answer = Vec::new();
-
-    let serialized =
-        bincode::serialize(&cmd).expect("Can't serialize cli command, shouldn't be possible .");
-
-    write.write_all(&serialized).await.unwrap();
-    let _recv = read.read_buf(&mut recived_answer).await.unwrap();
-
-    let out = match cmd {
-        Cli::Start(identify_pod_args) => start(identify_pod_args),
-        Cli::Stop(identify_pod_args) => todo!(),
-        Cli::Template(template_arg) => todo!(),
-        Cli::New(pod_args) => todo!(),
-        Cli::Inspect => todo!(),
-        Cli::GetHosts(get_hosts_args) => todo!(),
-        Cli::Tree(tree_args) => todo!(),
-        Cli::Status => todo!(),
-        Cli::Remove(remove_args) => todo!(),
-        Cli::Apply(pod_conf) => todo!(),
-        Cli::Restore(pod_conf) => todo!(),
-        Cli::Interrupt => todo!(),
-    };
-
-    let answer = match bincode::deserialize::<Cli>(&recived_answer) {
-        Ok(answer) => answer,
+    match command_network(cmd, stream).await {
+        Ok(_) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("Command recieved isn't recognized: {err}");
             return ExitCode::FAILURE;
         }
-    };
-
-    return ExitCode::SUCCESS;
+    }
 }
 
 // let status = match Cli::parse_from(cli_args) {

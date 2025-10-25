@@ -19,9 +19,3 @@ custom_error! {pub SocketListenerError
 custom_error! {pub ConnectionError
     ImpossibleCommandRecived = "Command recieved isn't recognized",
 }
-
-custom_error! {pub CommandError
-    Err = "err",
-}
-
-pub type CommandResult<T> = Result<T, CommandError>;
