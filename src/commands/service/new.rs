@@ -13,7 +13,7 @@ use gethostname::gethostname;
 use std::{path::PathBuf, sync::Arc};
 
 pub async fn new(args: PodArgs) -> CliResult<Pod> {
-    let (global_config, local_config, server, mount_point) = pod_value(&args).await?;
+    let (global_config, local_config, server, mount_point) = pod_value(args).await?;
     Pod::new(
         // local_config.general.name.clone(),
         global_config,
@@ -40,7 +40,7 @@ fn add_hosts(
     global_config
 }
 
-async fn pod_value(args: &PodArgs) -> CliResult<(GlobalConfig, LocalConfig, Arc<Server>, WhPath)> {
+async fn pod_value(args: PodArgs) -> CliResult<(GlobalConfig, LocalConfig, Arc<Server>, WhPath)> {
     log::info!("args: {args:?}");
     let path = args
         .mountpoint
@@ -57,7 +57,6 @@ async fn pod_value(args: &PodArgs) -> CliResult<(GlobalConfig, LocalConfig, Arc<
 
     log::info!("canonical: {:?}", path);
 
-    let address = "0.0.0.0:".to_owned() + &args.port;
     let local_cfg_path = path.join(LOCAL_CONFIG_FNAME);
     let global_cfg_path = path.join(GLOBAL_CONFIG_FNAME);
 
@@ -75,7 +74,7 @@ async fn pod_value(args: &PodArgs) -> CliResult<(GlobalConfig, LocalConfig, Arc<
             .unwrap_or(&local_config.general.hostname)
             .clone(),
     );
-    let server: Arc<Server> = Arc::new(Server::setup(&address).await?);
+    let server: Arc<Server> = Arc::new(Server::setup("0.0.0.0", args.port).await?);
 
     let global_config: GlobalConfig = GlobalConfig::read(global_cfg_path).unwrap_or_default();
     let global_config = add_hosts(
