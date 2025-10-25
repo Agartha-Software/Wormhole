@@ -11,6 +11,22 @@ docker-compose up
 
 ---
 
+#### **4. Inspect the Containers**
+```bash
+docker inspect w1
+docker inspect w2
+```
+- **Purpose**: Retrieve `w1` and `w2`s internal addresses for inter-container communication.
+- **Key Data**:
+  ```json
+  "IPAddress": "172.19.0.2",
+  ```
+  ```json
+  "IPAddress": "172.19.0.3",
+  ```
+
+---
+
 #### **2. Create a Network Template on w1**
 ```bash
 docker exec -it w1 ./wormhole template
@@ -26,37 +42,25 @@ docker exec -it w1 ./wormhole template
 
 #### **3. Create a New Pod on w1**
 ```bash
-docker exec -it w1 ./wormhole new test
+docker exec -it w1 ./wormhole 172.19.0.2:8081 new test -p 7781
 ```
 - **Purpose**: Creates a pod named `test` in `w1`'s network.
 - **Expected Events**:
   - A `test` folder is created in `shared_mnt1`.
-  - The `w1` service becomes the primary network node.
+  - The `w1` service hosts a pod listening on port 7781
 
 ---
 
-#### **4. Inspect the w2 Container**
-```bash
-docker inspect w1
-```
-- **Purpose**: Retrieve `w1`'s internal IP for inter-container communication.
-- **Key Data**:
-  ```json
-  "GateWay": "172.19.0.3",
-  ```
 
----
 
 #### **5. Connect w2 to w1's Network**
 ```bash
-docker exec -it w2 ./wormhole new test 172.20.0.3:8081
+docker exec -it w2 ./wormhole 172.19.0.3:8082 new test -p 7782 -- 172.20.0.2:7781
 ```
 - **Purpose**: Join `w2` to the `test` network hosted by `w1`.
-- **Expected Result**:
-  ```bash
-  Pod "test" joined network via 172.20.0.3:8081
-  Syncing with peer... OK
-  ```
+- **Expected Events**:
+  - A `test` folder is created in `shared_mnt1`.
+  - The `w1` service hosts a pod listening on port 7781
 
 ---
 
@@ -64,12 +68,13 @@ docker exec -it w2 ./wormhole new test 172.20.0.3:8081
 ```bash
 # 1. Start services
 docker-compose up
+docker inspect w1 # → Get w1’s IP and port (e.g., GateWay:172.19.0.2)
+docker inspect w2 # → Get w1’s IP and port (e.g., GateWay:172.19.0.3)
 
 # 2. Configure w1 as the primary node
-docker exec -it w1 ./wormhole template
-docker exec -it w1 ./wormhole new test1
+docker exec -it w1 ./wormhole 172.19.0.2:8081 template
+docker exec -it w1 ./wormhole 172.19.0.2:8081 new test -p 7781
 
 # 3. Configure w2 and connect it
-docker inspect w1 # → Get w1’s IP and port (e.g., GateWay:172.20.0.3)
-docker exec -it w2 ./wormhole new test2 172.20.0.3:8081
+docker exec -it w2 ./wormhole 172.19.0.3:8082 new test -p 7782 -- 172.20.0.2:7781
 ```

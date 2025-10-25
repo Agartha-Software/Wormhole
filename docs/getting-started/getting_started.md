@@ -32,24 +32,26 @@ Move the binaries where needed, they can be found under `target/release/wormhole
 
 Launch a new service, the node is started automatically
 ```
-./wormholed 127.0.0.1:8081
-^---------- ^-------------
-Node     Optional address with a default at 127.0.0.1:8081
+wormholed  127.0.0.1:8081
+^--------  ^-------------
+deamon     Optional address with a default of 127.0.0.1:8081
 ```
 
 Create a new Wormhole network
 The new pod being created with any other connection it will automaticaly create a new network
 ```
-./wormhole 127.0.0.1:8081            new      pod_name  --path dir1/ -i 127.0.0.10:8081
-^--------- ^-------------            ^--      ^-----    ^-------        ^-----------------
- CLI       Optional node address     Command  Pod Name  Directory       Pod Address
+./wormhole    127.0.0.1:8081     new      my_pod    -m dir1/   -p 5555
+^---------    ^-------------     ^--      ^-----    ^-------   ^-----------------
+CLI helper    Optional service   Command  Pod Name  optional   Pod port
+               address                              mount path
+
 ```
 
 Join an existing Wormhole network
 ```
-./wormhole 127.0.0.1:8081 new pod_name2  --path dir2/ -i 127.0.0.11:8081 -u 127.0.0.10:8081
-                                                                            ^-----------------
-                                                                            Existing pod address
+./wormhole 127.0.0.1:8081 new my_pod2 -m dir2/ -p 5556 -u 127.0.0.10:8081
+                                                       ^-----------------
+                                                       Existing pod url
 ```
 
 For a step-by-step guide to setting up a simple multi-pod network, see the [CLI Usage Guide](docs/getting-started/memo_cli.md).
@@ -72,6 +74,15 @@ To continue going forward, you can check the available cli commands:
   apply        Apply a new configuration to a pod
   restore      Restore many or a specifique file configuration
   help         Print this message or the help of the given subcommand(s)
+```
+
+## More info
+Both the client and daemon programs are fully documented, you can pass --help to any command or subcommand for more info:
+```
+wormhole --help
+wormhole new --help
+
+wormholed --help
 ```
 
 ## Configuration
