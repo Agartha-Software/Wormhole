@@ -273,39 +273,6 @@ impl NetworkInterface {
         Ok(())
     }
 
-    fn affect_write_locally(&self, id: InodeId, new_size: usize) -> WhResult<Metadata> {
-        let mut arbo = Arbo::n_write_lock(&self.arbo, "network_interface.affect_write_locally")?;
-        let inode = arbo.n_get_inode_mut(id)?;
-        let new_size = (new_size as u64).max(inode.meta.size);
-        inode.meta.size = new_size as u64;
-        inode.meta.blocks = ((new_size + BLOCK_SIZE - 1) / BLOCK_SIZE) as u64;
-
-        inode.meta.mtime = SystemTime::now();
-
-        inode.entry = match &inode.entry {
-            FsEntry::File(_) => FsEntry::File(vec![self.hostname()?]),
-            _ => panic!("Can't edit hosts on folder"),
-        };
-        Ok(inode.meta.clone())
-    }
-
-    pub fn write_file(&self, id: InodeId, new_size: usize) -> WhResult<()> {
-        let meta = self.affect_write_locally(id, new_size)?;
-        let self_hostname = LocalConfig::read_lock(&self.local_config, "affect_write_locally")?
-            .general
-            .hostname
-            .clone();
-
-        if !Arbo::is_local_only(id) {
-            self.to_network_message_tx
-                .send(ToNetworkMessage::BroadcastMessage(
-                    MessageContent::RevokeFile(id, self_hostname, meta),
-                ))
-                .expect("revoke_remote_hosts: unable to update modification on the network thread");
-            // self.apply_redundancy(id);
-        }
-        Ok(())
-    }
 
     pub fn revoke_remote_hosts(&self, id: InodeId) -> WhResult<()> {
         self.update_hosts(id, vec![self.hostname()?])?;

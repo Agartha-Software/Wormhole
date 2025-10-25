@@ -72,6 +72,8 @@ impl FsInterface {
         Ok(())
     }
 
+    /// Remove an [Inode] from the ITree
+    /// Immediately replicated to other peers
     pub fn remove_inode(&self, id: InodeId) -> Result<(), RemoveFileError> {
         self.remove_inode_locally(id)?;
         self.network_interface.unregister_inode(id)?;

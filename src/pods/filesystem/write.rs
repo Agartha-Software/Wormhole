@@ -1,9 +1,11 @@
+use std::{sync::Arc, time::SystemTime};
+
 use crate::{
-    error::WhError,
-    pods::arbo::{Arbo, InodeId},
+    error::{WhError, WhResult},
+    pods::arbo::{Arbo, InodeId, Metadata, BLOCK_SIZE},
 };
 use custom_error::custom_error;
-use parking_lot::{RwLockReadGuard, RwLockWriteGuard};
+use parking_lot::RwLockWriteGuard;
 
 use super::{
     file_handle::{AccessMode, FileHandle, FileHandleManager, UUID},
@@ -63,10 +65,21 @@ impl FsInterface {
         let new_size = offset + data.len();
         let written = self
             .disk
-            .write_file(&path, data, offset)
-            .map_err(|io| WriteError::LocalWriteFailed { io })?;
+            .write_file(&path, data, offset)?;
 
-        self.network_interface.write_file(id, new_size)?;
+        self.affect_write_locally(id, new_size)?;
         Ok(written)
+    }
+
+    fn affect_write_locally(&self, id: InodeId, new_size: usize) -> WhResult<Metadata> {
+        let mut arbo = Arbo::n_write_lock(&self.arbo, "network_interface.affect_write_locally")?;
+        let inode = arbo.n_get_inode_mut(id)?;
+        let new_size = (new_size as u64).max(inode.meta.size);
+        inode.meta.size = new_size;
+        inode.meta.blocks = new_size.div_ceil(BLOCK_SIZE);
+
+        inode.meta.mtime = SystemTime::now();
+
+        Ok(inode.meta.clone())
     }
 }

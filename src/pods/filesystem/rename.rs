@@ -83,9 +83,8 @@ impl FsInterface {
             .expect("already checked")
             .meta
             .clone();
-        let mut data = vec![];
-        data.resize(meta.size as usize, 0u8);
-        self.get_file_data(source_ino, 0, &mut data)
+        let mut data = vec![0; meta.size as usize];
+        self.get_file_data_sync(source_ino, 0, &mut data)
             .map_err(|err| match err {
                 ReadError::WhError { source } => RenameError::WhError { source },
                 err => err.into(),
@@ -119,12 +118,10 @@ impl FsInterface {
             let path = arbo.n_get_path_from_inode_id(dest_ino)?;
             drop(arbo);
 
-            let new_size = data.len();
             self.disk
                 .write_file(&path, &data, 0)
                 .map_err(|io| RenameError::LocalWriteFailed { io })?;
 
-            self.network_interface.write_file(dest_ino, new_size)?;
         }
         self.remove_inode(source_ino).map_err(|err| match err {
             RemoveFileError::WhError { source } => RenameError::WhError { source },
@@ -145,6 +142,7 @@ impl FsInterface {
     ///  - copy/move  contents
     ///  - delete the source inode
     ///
+    /// Immediately replicated to other peers
     pub fn rename(
         &self,
         parent: InodeId,
