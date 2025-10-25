@@ -15,8 +15,3 @@ fn start_log() {
         .is_test(true)
         .try_init();
 }
-
-// TODO - remove as useless ?
-fn append_to_path(p: &Path, s: &str) -> PathBuf {
-    p.join(s)
-}
