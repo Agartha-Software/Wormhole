@@ -14,11 +14,18 @@ use super::{
 
 custom_error! {
     /// Error describing the write syscall
+    #[derive(Clone)]
     pub WriteError
     WhError{source: WhError} = "{source}",
-    LocalWriteFailed{io: std::io::Error} = "Local write failed: {io}",
+    LocalWriteFailed{io: Arc<std::io::Error>} = "Local write failed: {io}",
     NoFileHandle = "The file doesn't have a file handle",
     NoWritePermission = "The permissions doesn't allow to write",
+}
+
+impl From<std::io::Error> for WriteError {
+    fn from(io: std::io::Error) -> Self {
+        Self::LocalWriteFailed { io: Arc::new(io) }
+    }
 }
 
 fn check_file_handle<'a>(
@@ -32,20 +39,24 @@ fn check_file_handle<'a>(
             no_atime: _,
             dirty: _,
             ino: _,
-        }) => return Err(WriteError::NoWritePermission),
+            signature: _,
+        }) => Err(WriteError::NoWritePermission),
         Some(&mut FileHandle {
             perm: AccessMode::Execute,
             direct: _,
             no_atime: _,
             dirty: _,
             ino: _,
-        }) => return Err(WriteError::NoWritePermission),
-        None => return Err(WriteError::NoFileHandle),
+            signature: _,
+        }) => Err(WriteError::NoWritePermission),
+        None => Err(WriteError::NoFileHandle),
         Some(file_handle) => Ok(file_handle),
     }
 }
 
 impl FsInterface {
+    /// modifies the local file on disk
+    /// marks the file handle as dirty, but does not immediately send the change to other peers
     pub fn write(
         &self,
         id: InodeId,

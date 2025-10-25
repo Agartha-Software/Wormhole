@@ -1,4 +1,3 @@
-use std::time::Duration;
 use std::{io, sync::Arc};
 
 use crate::config::{GlobalConfig, LocalConfig};
@@ -7,7 +6,7 @@ use crate::error::{WhError, WhResult};
 #[cfg(target_os = "linux")]
 use crate::fuse::fuse_impl::mount_fuse;
 use crate::network::message::{
-    FileSystemSerialized, FromNetworkMessage, MessageContent, ToNetworkMessage,
+    FromNetworkMessage, MessageContent, ToNetworkMessage,
 };
 use crate::network::HandshakeError;
 use crate::pods::arbo::{FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME, LOCAL_CONFIG_INO, ROOT};
@@ -22,10 +21,8 @@ use crate::winfsp::winfsp_impl::{mount_fsp, WinfspHost};
 use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use fuser;
-use futures::future::Either;
 use log::info;
 use parking_lot::RwLock;
-use serde::Serialize;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
 
@@ -82,7 +79,7 @@ async fn initiate_connection(
     receiver_in: &UnboundedSender<FromNetworkMessage>,
     receiver_out: UnboundedReceiver<FromNetworkMessage>,
 ) -> Result<PodPrototype, UnboundedReceiver<FromNetworkMessage>> {
-    if global_config.general.entrypoints.len() >= 1 {
+    if !global_config.general.entrypoints.is_empty() {
         for first_contact in &global_config.general.entrypoints {
             match PeerIPC::connect(first_contact.to_owned(), local_config, receiver_in.clone())
                 .await
@@ -503,14 +500,7 @@ impl Pod {
         self.network_interface
             .to_network_message_tx
             .send(ToNetworkMessage::BroadcastMessage(
-                MessageContent::Disconnect(
-                    self.network_interface
-                        .local_config
-                        .read()
-                        .general
-                        .hostname
-                        .clone(),
-                ),
+                MessageContent::Disconnect,
             ))
             .expect("to_network_message_tx closed.");
 

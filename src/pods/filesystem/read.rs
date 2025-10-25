@@ -39,15 +39,17 @@ fn check_file_handle<'a>(
             no_atime: _,
             dirty: _,
             ino: _,
-        }) => return Err(ReadError::NoReadPermission),
+            signature: _,
+        }) => Err(ReadError::NoReadPermission),
         Some(&FileHandle {
             perm: AccessMode::Execute,
             direct: _,
             no_atime: _,
             dirty: _,
             ino: _,
-        }) => return Err(ReadError::NoReadPermission),
-        None => return Err(ReadError::NoFileHandle),
+            signature: _,
+        }) => Err(ReadError::NoReadPermission),
+        None => Err(ReadError::NoFileHandle),
         Some(file_handle) => Ok(file_handle),
     }
 }

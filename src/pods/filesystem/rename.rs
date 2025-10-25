@@ -5,8 +5,7 @@ use custom_error::custom_error;
 use crate::{
     error::{WhError, WhResult},
     pods::{
-        arbo::{Arbo, InodeId, Metadata},
-        whpath::WhPath,
+        arbo::{Arbo, InodeId, Metadata}, filesystem::flush::FlushError, whpath::WhPath
     },
 };
 
@@ -30,6 +29,7 @@ custom_error! {
     ProtectedNameIsFolder = "Protected name can't be used for folders",
     ReadFailed{source: ReadError} = "Read failed on copy: {source}",
     LocalWriteFailed{io: std::io::Error} = "Write failed on copy: {io}",
+    FlushError{source: FlushError} = "Couldn't flush changes on special: {source}",
 }
 
 impl FsInterface {
@@ -37,7 +37,7 @@ impl FsInterface {
         let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface.get_begin_path_end_path")?;
         let parent_path = arbo.n_get_path_from_inode_id(parent)?;
 
-        return Ok(parent_path.join(name));
+        Ok(parent_path.join(name))
     }
 
     fn rename_locally(
@@ -74,7 +74,7 @@ impl FsInterface {
     fn rename_special(
         &self,
         new_parent: InodeId,
-        new_name: &String,
+        new_name: String,
         source_ino: u64,
         dest_ino: Option<u64>,
     ) -> Result<(), RenameError> {
@@ -98,7 +98,7 @@ impl FsInterface {
             self.set_meta_size(source_ino, meta)?;
             dest_ino
         } else {
-            self.make_inode(new_parent, new_name.clone(), meta.perm, meta.kind)
+            self.make_inode(new_parent, new_name, meta.perm, meta.kind)
                 .map_err(|err| match err {
                     MakeInodeError::WhError { source } => RenameError::WhError { source },
                     MakeInodeError::AlreadyExist => RenameError::DestinationExists,
@@ -122,6 +122,7 @@ impl FsInterface {
                 .write_file(&path, &data, 0)
                 .map_err(|io| RenameError::LocalWriteFailed { io })?;
 
+            self.flush(dest_ino, None)?;
         }
         self.remove_inode(source_ino).map_err(|err| match err {
             RemoveFileError::WhError { source } => RenameError::WhError { source },
@@ -163,7 +164,7 @@ impl FsInterface {
                     WhError::InodeIsNotADirectory => RenameError::SourceParentNotFolder,
                     source => RenameError::WhError { source },
                 })?,
-                &name,
+                name,
             )
             .map_err(|err| match err {
                 WhError::InodeNotFound => RenameError::SourceParentNotFound,
@@ -172,7 +173,7 @@ impl FsInterface {
             })?
             .id; // assert source file exists
         let dest_ino =
-            match arbo.n_get_inode_child_by_name(arbo.n_get_inode(new_parent)?, &new_name) {
+            match arbo.n_get_inode_child_by_name(arbo.n_get_inode(new_parent)?, new_name) {
                 Ok(inode) => Some(inode.id),
                 Err(WhError::InodeNotFound) => None,
                 Err(source) => return Err(source.into()),
@@ -186,7 +187,7 @@ impl FsInterface {
         if Arbo::get_special(name, parent).is_some()
             || Arbo::get_special(new_name, new_parent).is_some()
         {
-            return self.rename_special(new_parent, new_name, src_ino, dest_ino);
+            return self.rename_special(new_parent, new_name.clone(), src_ino, dest_ino);
         }
 
         if let Some(dest_ino) = dest_ino {
@@ -219,7 +220,7 @@ impl FsInterface {
     ) -> Result<(), RenameError> {
         let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface::remove_inode")?;
         let dest_ino =
-            match arbo.n_get_inode_child_by_name(arbo.n_get_inode(new_parent)?, &new_name) {
+            match arbo.n_get_inode_child_by_name(arbo.n_get_inode(new_parent)?, new_name) {
                 Ok(inode) => Some(inode.id),
                 Err(WhError::InodeNotFound) => None,
                 Err(source) => return Err(source.into()),

@@ -9,7 +9,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     error::WhResult,
-    pods::arbo::{ArboIndex, Inode, InodeId, Metadata},
+    pods::{arbo::{ArboIndex, Ino, Inode, InodeId, Metadata}, filesystem::diffs::{Delta, Signature}},
 };
 
 /// Message Content
@@ -17,25 +17,40 @@ use crate::{
 /// through the network
 #[derive(Serialize, Deserialize, Clone)]
 pub enum MessageContent {
-    Remove(InodeId),
     Inode(Inode),
-    RequestFile(InodeId, Address),
-    PullAnswer(InodeId, Vec<u8>),
+
     RedundancyFile(InodeId, Arc<Vec<u8>>),
-    /// Parent, New Parent, Name, New Name, overwrite
-    Rename(InodeId, InodeId, String, String, bool),
     EditHosts(InodeId, Vec<Address>),
     RevokeFile(InodeId, Address, Metadata),
     AddHosts(InodeId, Vec<Address>),
     RemoveHosts(InodeId, Vec<Address>),
+
+    /// A delta on file write with given base signature
+    FileDelta(Ino, Metadata, Signature, Delta),
+    /// File contents were changed.
+    /// Peers also tracking this file should follow up with a [MessageContent::DeltaRequest]
+    FileChanged(Ino, Metadata),
+    /// Request a file delta from this base signature
+    DeltaRequest(Ino, Signature),
+
+    // RequestFileSignature(Ino),
+    // FileSignature(Ino, Vec<u8>),
+
+    RequestFile(InodeId),
+    PullAnswer(InodeId, Vec<u8>),
+
+    Remove(InodeId),
+    /// Parent, New Parent, Name, New Name, overwrite
+    Rename(InodeId, InodeId, String, String, bool),
     EditMetadata(InodeId, Metadata),
     SetXAttr(InodeId, String, Vec<u8>),
     RemoveXAttr(InodeId, String),
-    RequestFs,
-    Disconnect(Address),
 
     // (Arbo, peers, global_config)
+    RequestFs,
     FsAnswer(FileSystemSerialized, Vec<Address>, Vec<u8>),
+
+    Disconnect,
 }
 
 impl fmt::Display for MessageContent {
@@ -43,7 +58,7 @@ impl fmt::Display for MessageContent {
         let name = match self {
             MessageContent::Remove(_) => "Remove",
             MessageContent::Inode(_) => "Inode",
-            MessageContent::RequestFile(_, _) => "RequestFile",
+            MessageContent::RequestFile(_) => "RequestFile",
             MessageContent::PullAnswer(_, _) => "PullAnswer",
             MessageContent::Rename(_, _, _, _, _) => "Rename",
             MessageContent::EditHosts(_, _) => "EditHosts",
@@ -56,7 +71,12 @@ impl fmt::Display for MessageContent {
             MessageContent::RequestFs => "RequestFs",
             MessageContent::FsAnswer(_, _, _) => "FsAnswer",
             MessageContent::RedundancyFile(_, _) => "RedundancyFile",
-            MessageContent::Disconnect(_) => "Disconnect",
+            MessageContent::Disconnect => "Disconnect",
+            MessageContent::FileDelta(_, _, _, _) => "FileDelta",
+            MessageContent::FileChanged(_, _) => "FileChanged",
+            MessageContent::DeltaRequest(_, _) => "DeltaRequest",
+            // MessageContent::RequestFileSignature(_) => "RequestFileSignature",
+            // MessageContent::FileSignature(_, _) => "FileSignature",
         };
         write!(f, "{}", name)
     }
@@ -66,43 +86,48 @@ impl fmt::Debug for MessageContent {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             MessageContent::Inode(inode) => write!(
-                f,
-                "Inode({{{}, name: {}, parent:{}, {}}})",
-                inode.id,
-                inode.name,
-                inode.parent,
-                match inode.entry {
-                    crate::pods::arbo::FsEntry::File(_) => 'f',
-                    crate::pods::arbo::FsEntry::Directory(_) => 'd',
-                }
-            ),
+                        f,
+                        "Inode({{{}, name: {}, parent:{}, {}}})",
+                        inode.id,
+                        inode.name,
+                        inode.parent,
+                        match inode.entry {
+                            crate::pods::arbo::FsEntry::File(_) => 'f',
+                            crate::pods::arbo::FsEntry::Directory(_) => 'd',
+                        }
+                    ),
             MessageContent::RedundancyFile(id, _) => write!(f, "RedundancyFile({id}, <bin>)"),
             MessageContent::FsAnswer(_, peers, _) => write!(f, "FsAnswer(<bin>, {peers:?}, <bin>"),
             MessageContent::PullAnswer(id, _) => write!(f, "PullAnswer({id}, <bin>)"),
             MessageContent::Remove(id) => write!(f, "Remove({id})"),
-            MessageContent::RequestFile(id, y) => write!(f, "RequestFile({id}, {y})"),
+            MessageContent::RequestFile(id) => write!(f, "RequestFile({id})"),
             MessageContent::Rename(parent, new_parent, name, new_name, overwrite) => write!(
-                f,
-                "Rename(parent: {}, new_parent: {}, name: {}, new_name: {}, overwrite: {})",
-                parent, new_parent, name, new_name, overwrite
-            ),
+                        f,
+                        "Rename(parent: {}, new_parent: {}, name: {}, new_name: {}, overwrite: {})",
+                        parent, new_parent, name, new_name, overwrite
+                    ),
             MessageContent::EditHosts(id, hosts) => write!(f, "EditHosts({id}, {hosts:?})"),
             MessageContent::RevokeFile(id, address, _) => {
-                write!(f, "RevokeFile({id}, {address}, <metadata>)")
-            }
+                        write!(f, "RevokeFile({id}, {address}, <metadata>)")
+                    }
             MessageContent::AddHosts(id, hosts) => write!(f, "AddHosts({id}, {hosts:?})"),
             MessageContent::RemoveHosts(id, hosts) => write!(f, "RemoveHosts({id}, {hosts:?})"),
             MessageContent::EditMetadata(id, metadata) => {
-                write!(f, "EditMetadata({id}, {{ perm: {}}})", metadata.perm)
-            }
+                        write!(f, "EditMetadata({id}, {{ perm: {}}})", metadata.perm)
+                    }
             MessageContent::SetXAttr(id, name, data) => write!(
-                f,
-                "SetXAttr({id}, {name}, {}",
-                String::from_utf8(data.clone()).unwrap_or("<bin>".to_string())
-            ),
+                        f,
+                        "SetXAttr({id}, {name}, {}",
+                        String::from_utf8(data.clone()).unwrap_or("<bin>".to_string())
+                    ),
             MessageContent::RemoveXAttr(id, name) => write!(f, "RemoveXAttr({id}, {name})"),
             MessageContent::RequestFs => write!(f, "RequestFs"),
-            MessageContent::Disconnect(address) => write!(f, "Disconnect({address})"),
+            MessageContent::Disconnect => write!(f, "Disconnect"),
+            MessageContent::FileDelta(ino, meta, _, _) => write!(f, "FileDelta({ino}, {:?})", meta.mtime),
+            MessageContent::FileChanged(ino, meta) => write!(f, "FileChanged({ino}, {:?})", meta.mtime),
+            MessageContent::DeltaRequest(ino, _) => write!(f, "DeltaRequest({ino})"),
+            // MessageContent::RequestFileSignature(ino) => write!(f, "RequestFileSignature({ino}, <bin>)"),
+            // MessageContent::FileSignature(ino, _) => write!(f, "FileSignature({ino}, <bin>)"),
         }
     }
 }
@@ -122,6 +147,8 @@ pub struct FromNetworkMessage {
 /// Message going to the redundancy worker
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum RedundancyMessage {
+    // PeerSignature(Ino, String, Vec<u8>),
+    // WriteDeltas(Ino),
     ApplyTo(InodeId),
     CheckIntegrity,
 }

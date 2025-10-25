@@ -39,7 +39,7 @@ impl FsInterface {
         let path = arbo.n_get_path_from_inode_id(ino)?;
         let inode = arbo.n_get_inode_mut(ino)?;
 
-        if meta.size != inode.meta.size || meta.perm != inode.meta.perm {
+        if meta != inode.meta {
             match &inode.entry {
                 FsEntry::Directory(_) if meta.size != inode.meta.size => {
                     return Err(AcknoledgeSetAttrError::WhError {
@@ -49,12 +49,26 @@ impl FsInterface {
                 FsEntry::Directory(_) => {
                     if meta.perm != inode.meta.perm {
                         self.disk
-                            .set_permisions(&path, meta.perm as u16)
+                            .set_permisions(&path, meta.perm)
                             .map_err(|io| AcknoledgeSetAttrError::SetFileSizeIoError { io })?;
                     }
                 }
                 FsEntry::File(hosts) => {
-                    if hosts.contains(&self.network_interface.hostname()?) {
+                    let hostname = self.network_interface.hostname()?;
+                    if hosts.contains(&hostname) {
+                        let created = match &inode.entry {
+                            FsEntry::File(old_hosts) => !old_hosts.contains(&self.network_interface.hostname()?),
+                            _ => false,
+                        };
+                        if created {
+                            self.disk.new_file(&path, meta.perm).or_else(|io| {
+                                if io.kind() == std::io::ErrorKind::AlreadyExists {
+                                    Ok(())
+                                } else {
+                                    Err(AcknoledgeSetAttrError::SetFileSizeIoError { io })
+                                }
+                            })?;
+                        }
                         if meta.size != inode.meta.size {
                             self.disk
                                 .set_file_size(&path, meta.size as usize)
@@ -62,7 +76,7 @@ impl FsInterface {
                         }
                         if meta.perm != inode.meta.perm {
                             self.disk
-                                .set_permisions(&path, meta.perm as u16)
+                                .set_permisions(&path, meta.perm)
                                 .map_err(|io| AcknoledgeSetAttrError::SetFileSizeIoError { io })?;
                         }
                     }
@@ -74,6 +88,7 @@ impl FsInterface {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn setattr(
         &self,
         ino: InodeId,
@@ -125,7 +140,7 @@ impl FsInterface {
                         .set_file_size(&path, size as usize)
                         .map_err(|io| SetAttrError::SetFileSizeIoError { io })?;
                     meta.size = size;
-                    meta.blocks = (size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                    meta.blocks = size.div_ceil(BLOCK_SIZE);
                 }
             };
         }
@@ -168,6 +183,6 @@ impl FsInterface {
             meta.flags = flags;
         }
         self.network_interface.update_metadata(ino, meta.clone())?;
-        return Ok(meta);
+        Ok(meta)
     }
 }
