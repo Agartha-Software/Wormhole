@@ -1,4 +1,5 @@
-mod command;
+mod commands;
+mod connection;
 mod socket;
 mod tcp;
 
@@ -6,7 +7,7 @@ use crate::{
     ipc::{
         error::{ListenerError, TCPListenerError},
         service::{
-            command::handle_connection, socket::new_socket_listener, tcp::new_free_tcp_listener,
+            connection::handle_connection, socket::new_socket_listener, tcp::new_free_tcp_listener,
         },
     },
     pods::pod::Pod,
@@ -43,8 +44,8 @@ pub async fn start_commands_listeners(
 
     loop {
         if tokio::select! {
-            Ok((stream, _)) = tcp_listener.accept() => handle_connection(pods, stream).await?,
-            Ok(stream) = socket_listener.accept() => handle_connection(pods, stream).await?,
+            Ok((stream, _)) = tcp_listener.accept() => handle_connection(pods, stream).await,
+            Ok(stream) = socket_listener.accept() => handle_connection(pods, stream).await,
             _ = signals_rx.recv() => true,
         } {
             return Ok(());

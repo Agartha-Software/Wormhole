@@ -1,61 +1,64 @@
 use std::collections::HashMap;
 
 use crate::{
-    ipc::{commands::Command, error::ConnectionError},
+    ipc::{commands::Command, service::commands::start},
     pods::pod::Pod,
 };
-use tokio::io::{AsyncReadExt, AsyncWriteExt, WriteHalf};
+use serde::Serialize;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
 
-pub async fn handle_connection<Stream>(
-    pods: &mut HashMap<String, Pod>,
-    stream: Stream,
-) -> Result<bool, ConnectionError>
+pub async fn handle_connection<Stream>(pods: &mut HashMap<String, Pod>, mut stream: Stream) -> bool
 where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
 {
     log::debug!("Connection recieved");
 
-    let (mut read, write) = tokio::io::split(stream);
+    //let mut buffer: Vec<u8> = Vec::with_capacity(std::mem::size_of::<Command>()); TODO: Test
     let mut buffer: Vec<u8> = Vec::new();
-    let _size = read.read_buf(&mut buffer).await.unwrap();
+    let _size = stream
+        .read_buf(&mut buffer)
+        .await
+        .expect("Failed to read recieved command, shouldn't be possible!");
+    match bincode::deserialize::<Command>(&buffer) {
+        Ok(command) => handle_command(command, pods, stream)
+            .await
+            .unwrap_or_else(|e| {
+                log::error!("Network Error: {e:?}"); // TODO verify relevance
+                false
+            }),
+        Err(err) => {
+            log::error!("Command recieved not recognized by the service: {err:?}");
+            eprintln!("Command recieved not recognized by the service.");
+            false
+        }
+    }
+}
 
-    let command = bincode::deserialize::<Command>(&buffer).map_err(|e| {
-        log::error!("{e:?}");
-        ConnectionError::ImpossibleCommandRecived
-    })?;
+pub async fn send_answer<T, Stream>(answer: T, stream: &mut Stream) -> std::io::Result<()>
+where
+    T: Serialize,
+    Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
+{
+    let serialized =
+        bincode::serialize(&answer).expect("Can't serialize cli answer, shouldn't be possible!");
 
-    let answer = handle_command(command, pods, write);
-    // let serialized = bincode::serialize(&answer).unwrap();
-
-    // write.write_all(&serialized).await.unwrap();
-
-    Ok(false)
+    stream.write_all(&serialized).await
 }
 
 async fn handle_command<Stream>(
     command: Command,
-    pods: &mut HashMap<String, Pod>,
-    write: WriteHalf<Stream>,
-) -> Result<(), ConnectionError>
+    _pods: &mut HashMap<String, Pod>,
+    mut stream: Stream,
+) -> std::io::Result<bool>
 where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
 {
-    //     match command {
-    // //        Cli::Start(identify_pod_args) => start(identify_pod_args, pods, write).await,
-    //         // Cli::Stop(identify_pod_args) => todo!(),
-    //         // Cli::Template(template_arg) => todo!(),
-    //         // Cli::New(pod_args) => todo!(),
-    //         // Cli::Inspect => todo!(),
-    //         // Cli::GetHosts(get_hosts_args) => todo!(),
-    //         // Cli::Tree(tree_args) => todo!(),
-    //         // Cli::Status => todo!(),
-    //         // Cli::Remove(remove_args) => todo!(),
-    //         // Cli::Apply(pod_conf) => todo!(),
-    //         // Cli::Restore(pod_conf) => todo!(),
-    //         // Cli::Interrupt => todo!(),
-    //     };
+    let stream = &mut stream;
 
-    return Ok(());
+    match command {
+        Command::Start(data) => start(data, stream).await,
+    }
 }
 
 // async fn new_command<Stream>(

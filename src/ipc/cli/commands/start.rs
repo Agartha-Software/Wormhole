@@ -1,7 +1,7 @@
 use std::io;
 
+use crate::ipc::commands::StartAnswer;
 use interprocess::local_socket::tokio::Stream;
-use serde::{Deserialize, Serialize};
 
 use crate::{
     cli::IdentifyPodArgs,
@@ -10,11 +10,6 @@ use crate::{
         commands::{Command, StartRequest},
     },
 };
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum StartAnswer {
-    Success,
-}
 
 pub async fn start(args: IdentifyPodArgs, mut stream: Stream) -> Result<(), io::Error> {
     let id = if let Some(name) = args.group.name {

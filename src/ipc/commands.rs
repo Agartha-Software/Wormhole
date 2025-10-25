@@ -9,6 +9,11 @@ pub enum StartRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub enum StartAnswer {
+    Success,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Command {
     Start(StartRequest),
 }

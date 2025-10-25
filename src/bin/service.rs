@@ -22,7 +22,6 @@ use std::env;
 use std::io::IsTerminal;
 use std::process::ExitCode;
 
-use clap::builder::Str;
 use tokio::sync::mpsc::{self, UnboundedSender};
 
 use wormhole::ipc::service::start_commands_listeners;
