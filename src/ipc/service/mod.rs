@@ -18,7 +18,7 @@ use tokio::{net::TcpListener, sync::mpsc::UnboundedReceiver};
 /// Listens for CLI calls and launch one tcp instance per cli command
 /// if `specific_ip` is not given, will try all ports starting from 8081 to 9999, incrementing until success
 /// if `specific_ip` is given, will try the given ip and fail on error.
-pub async fn start_cli_listeners(
+pub async fn start_commands_listeners(
     pods: &mut HashMap<String, Pod>,
     specific_ip: Option<String>,
     mut signals_rx: UnboundedReceiver<()>,

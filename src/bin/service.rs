@@ -20,10 +20,12 @@ use std::collections::HashMap;
  */
 use std::env;
 use std::io::IsTerminal;
+use std::process::ExitCode;
 
+use clap::builder::Str;
 use tokio::sync::mpsc::{self, UnboundedSender};
 
-use wormhole::ipc::service::start_cli_listeners;
+use wormhole::ipc::service::start_commands_listeners;
 use wormhole::pods::pod::Pod;
 
 #[cfg(target_os = "windows")]
@@ -33,7 +35,7 @@ use wormhole::signals::handle_signals;
 const DEFAULT_ADDRESS: &str = "127.0.0.1:8081";
 
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
     let (interrupt_tx, interrupt_rx) = mpsc::unbounded_channel::<()>();
     let (signals_tx, signals_rx) = mpsc::unbounded_channel::<()>();
 
@@ -41,17 +43,17 @@ async fn main() {
 
     if env::args().any(|arg| arg == "-h" || arg == "--help") {
         println!("Usage: wormholed <IP>\n\nIP is the node address, default at {DEFAULT_ADDRESS}");
-        return;
+        return ExitCode::SUCCESS;
     }
 
     env_logger::init();
 
     #[cfg(target_os = "windows")]
     match winfsp_init() {
-        Ok(_token) => log::debug!("got fsp token!"),
+        Ok(_token) => log::trace!("Obtained fsp token!"),
         Err(err) => {
-            log::error!("fsp error: {:?}", err);
-            std::process::exit(84)
+            eprintln!("WindowsFSP failed to start, verify your installation: {err}");
+            return ExitCode::FAILURE;
         }
     }
 
@@ -66,7 +68,7 @@ async fn main() {
     let signals_task = tokio::spawn(handle_signals(signals_tx, interrupt_rx));
     log::trace!("Starting service on {:?}", ip_string);
 
-    if let Err(err) = start_cli_listeners(&mut pods, ip_string, signals_rx).await {
+    if let Err(err) = start_commands_listeners(&mut pods, ip_string, signals_rx).await {
         log::error!("Listener Error: {err}");
     }
 
@@ -74,16 +76,27 @@ async fn main() {
         terminal_handle.abort();
     }
 
-    signals_task.await.unwrap();
+    signals_task
+        .await
+        .unwrap_or_else(|e| panic!("Signals handler failed to join: {e}"));
 
     log::info!("Stopping");
+    stop_all_pods(pods).await
+}
+
+async fn stop_all_pods(pods: HashMap<String, Pod>) -> ExitCode {
+    let mut status = ExitCode::SUCCESS;
     for (name, pod) in pods.into_iter() {
         match pod.stop().await {
-            Ok(()) => log::info!("Stopped pod {name}"),
-            Err(e) => log::error!("Pod {name} can't be stopped: {e}"),
+            Ok(()) => log::info!("Stopped pod '{name}'"),
+            Err(e) => {
+                eprintln!("Pod '{name}' failed be stopped: {e}");
+                status = ExitCode::FAILURE
+            }
         }
     }
     log::info!("Stopped");
+    status
 }
 
 // NOTE - old watchdog brought here for debug purposes
