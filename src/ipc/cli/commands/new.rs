@@ -41,10 +41,10 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> Result<(), io::Error> {
 
     match recieve_answer::<NewAnswer>(&mut stream).await? {
         NewAnswer::Success => println!("Pod '{name}' created with success."),
-        NewAnswer::AlreadyExist => todo!(),
-        NewAnswer::InvalidIp => todo!(),
-        NewAnswer::BindImpossible => todo!(),
-        NewAnswer::NoSpecifiedPeersHaveAnswerd => todo!(),
+        NewAnswer::AlreadyExist => eprintln!("Pod '{name}' already exist, couldn't create."),
+        NewAnswer::InvalidIp => eprintln!("Given port is already used."),
+        NewAnswer::BindImpossible(e) => eprintln!("Service failed to bind the pod: {e}"),
+        NewAnswer::FailedToCreatePod(e) => eprintln!("Service failed to create the pod: {e}"),
     }
     Ok(())
 }

@@ -1,6 +1,6 @@
 use std::io;
 
-use crate::ipc::commands::UnfreezeAnswer;
+use crate::ipc::commands::FreezeAnswer;
 use interprocess::local_socket::tokio::Stream;
 
 use crate::{
@@ -11,12 +11,12 @@ use crate::{
     },
 };
 
-pub async fn unfreeze(args: IdentifyPodArgs, mut stream: Stream) -> Result<(), io::Error> {
+pub async fn freeze(args: IdentifyPodArgs, mut stream: Stream) -> Result<(), io::Error> {
     let id = PodId::from(args);
 
     send_command(Command::Unfreeze(id), &mut stream).await?;
-    match recieve_answer::<UnfreezeAnswer>(&mut stream).await? {
-        UnfreezeAnswer::Success => {
+    match recieve_answer::<FreezeAnswer>(&mut stream).await? {
+        FreezeAnswer::Success => {
             println!("Start is not yet implemented! You need to manually restart the service by hand... This feature is coming soon!");
             Ok(())
         }

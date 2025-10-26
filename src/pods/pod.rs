@@ -16,7 +16,6 @@ use crate::pods::disk_managers::DiskManager;
 use crate::pods::network::redundancy::redundancy_worker;
 #[cfg(target_os = "windows")]
 use crate::winfsp::winfsp_impl::{mount_fsp, WinfspHost};
-use clap::builder::Str;
 use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use fuser;
@@ -190,7 +189,7 @@ impl Pod {
         local_config: LocalConfig,
         mountpoint: WhPath,
         server: Arc<Server>,
-    ) -> Result<Self, ()> {
+    ) -> io::Result<Self> {
         let global_config = global_config;
 
         log::trace!("mount point {}", mountpoint);
@@ -212,7 +211,10 @@ impl Pod {
                     // made to help with tests and debug
                     // choice not to fail should later be supported by the cli
                     log::error!("No peers answered. Stopping.");
-                    return Err(());
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "None of the specified peers could answer",
+                    ));
                 }
                 let arbo = generate_arbo(&mountpoint, &local_config.general.hostname)
                     .unwrap_or(Arbo::new());
