@@ -3,6 +3,7 @@ use crate::network::message::Address;
 use crate::pods::arbo::{Arbo, FsEntry, Inode, InodeId, Metadata, GLOBAL_CONFIG_INO};
 use crate::pods::disk_managers::DiskManager;
 use crate::pods::filesystem::attrs::AcknoledgeSetAttrError;
+use crate::pods::filesystem::permissions::has_execute_perm;
 use crate::pods::network::callbacks::Callback;
 use crate::pods::network::network_interface::NetworkInterface;
 
@@ -71,10 +72,17 @@ impl FsInterface {
 
     // SECTION - local -> read
 
-    pub fn get_entry_from_name(&self, parent: InodeId, name: String) -> io::Result<Inode> {
-        let arbo = Arbo::read_lock(&self.arbo, "fs_interface.get_entry_from_name")?;
-        arbo.get_inode_child_by_name(arbo.get_inode(parent)?, &name)
-            .cloned()
+    /// get an entry
+    /// return Ok(None) if no permissions to access entries
+    pub fn get_entry_from_name(&self, parent: InodeId, name: String) -> WhResult<Option<Inode>> {
+        let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface.get_entry_from_name")?;
+        let p_inode = arbo.n_get_inode(parent)?;
+        if !has_execute_perm(p_inode.meta.perm) {
+            return Ok(None);
+        }
+        Ok(Some(
+            arbo.n_get_inode_child_by_name(p_inode, &name)?.clone(),
+        ))
     }
 
     pub fn get_inode_attributes(&self, ino: InodeId) -> io::Result<Metadata> {
@@ -89,31 +97,6 @@ impl FsInterface {
         Ok(arbo.n_get_inode(ino)?.meta.clone())
     }
 
-    pub fn read_dir(&self, ino: InodeId) -> io::Result<Vec<Inode>> {
-        let arbo = Arbo::read_lock(&self.arbo, "fs_interface.read_dir")?;
-        let mut dir = arbo.get_inode(ino)?.clone();
-
-        let children = match &dir.entry {
-            FsEntry::Directory(children) => children
-                .iter()
-                .map(|entry| arbo.get_inode(*entry).map(|inode| inode.clone()))
-                .collect::<io::Result<Vec<Inode>>>(),
-            _ => Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "read_dir: asked inode is not a dir",
-            )),
-        }?;
-
-        let mut links: Vec<Inode> = Vec::with_capacity(children.len() + 2);
-        let mut parent = arbo.get_inode(dir.parent)?.clone();
-
-        dir.name = ".".to_string();
-        links.push(dir);
-        parent.name = "..".to_string();
-        links.push(parent.clone());
-        links.extend(children);
-        Ok(links)
-    }
     // !SECTION
 
     // SECTION - remote -> write

@@ -123,23 +123,25 @@ impl DiskManager for UnixDiskManager {
     }
 
     fn new_dir(&self, path: &WhPath, permissions: u16) -> io::Result<()> {
-        self.handle
-            .create_dir(path.clone().set_relative(), permissions.into()) // TODO look more in c mode_t value
+        self.handle.create_dir(path.clone(), permissions.into()) // TODO look more in c mode_t value
     }
 
     fn set_permisions(&self, path: &WhPath, permissions: u16) -> std::io::Result<()> {
         let raw_fd: RawFd = self.handle.as_raw_fd();
-        let c_string_path = CString::new(path.clone().set_relative().as_str())
+        let c_string_path = CString::new(path.clone().remove_prefix().as_str())
             .expect("panics if there are internal null bytes");
-
         let ptr: *const i8 = c_string_path.as_ptr();
-        unsafe {
+        let result = unsafe {
             // If we just self.handle.open_file...set_permission, the open flags
             // don't allow to modify the permission on a file where we don't have the permission like a 000
             // This is the only convincing way we found
-            libc::fchmodat(raw_fd, ptr, permissions.into(), 0);
+            libc::fchmodat(raw_fd, ptr, permissions.into(), libc::AT_EMPTY_PATH)
+        };
+        if result != 0 {
+            Err(std::io::Error::last_os_error())
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 
     fn size_info(&self) -> std::io::Result<super::DiskSizeInfo> {
