@@ -1,5 +1,4 @@
-use tokio::sync::mpsc::{UnboundedSender, UnboundedReceiver};
-
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 pub async fn handle_signals(tx: UnboundedSender<()>, interrupt_rx: UnboundedReceiver<()>) {
     #[cfg(unix)]
@@ -39,7 +38,10 @@ pub async fn handle_signals_unix(tx: UnboundedSender<()>, mut interrupt_rx: Unbo
 }
 
 #[cfg(windows)]
-pub async fn handle_signals_windows(tx: UnboundedSender<()>, mut interrupt_rx: UnboundedReceiver<()>) {
+pub async fn handle_signals_windows(
+    tx: UnboundedSender<()>,
+    mut interrupt_rx: UnboundedReceiver<()>,
+) {
     log::info!("Windows signal handler initialised…");
 
     let mut sig_c = tokio::signal::windows::ctrl_c().expect("Failed to register ctrl_c");

@@ -18,11 +18,10 @@ use std::collections::HashMap;
  *  reads a message (supposely emitted by a peer) related to files actions
  *  and execute instructions on the disk
  */
-use std::env;
 use std::io::IsTerminal;
 use std::process::ExitCode;
 
-use clap::{Args, Parser};
+use clap::Parser;
 use tokio::sync::mpsc::{self, UnboundedSender};
 
 use wormhole::ipc::service::start_commands_listeners;
@@ -40,7 +39,7 @@ struct ServiceArgs {
     #[arg(short)]
     pub ip: Option<String>,
     #[arg(short)]
-    pub socket: Option<String>
+    pub socket: Option<String>,
 }
 
 #[tokio::main]
@@ -62,13 +61,12 @@ async fn main() -> ExitCode {
         }
     }
 
-    let terminal_handle =
-        if std::io::stdout().is_terminal() || args.nodeamon {
-            Some(tokio::spawn(terminal_watchdog(interrupt_tx)))
-        } else {
-            println!("Starting in deamon mode");
-            None
-        };
+    let terminal_handle = if std::io::stdout().is_terminal() || args.nodeamon {
+        Some(tokio::spawn(terminal_watchdog(interrupt_tx)))
+    } else {
+        println!("Starting in deamon mode");
+        None
+    };
     let signals_task = tokio::spawn(handle_signals(signals_tx, interrupt_rx));
 
     if let Err(err) = start_commands_listeners(&mut pods, args.ip, args.socket, signals_rx).await {
