@@ -8,8 +8,6 @@ services:
       - '/dev/fuse'
     cap_add:
       - "SYS_ADMIN"
-    volumes:
-      - ./dockertest:/wormhole:rwx
     environment:
       RUST_LOG: "wormhole=trace"
 
@@ -22,7 +20,5 @@ services:
       - '/dev/fuse'
     cap_add:
       - "SYS_ADMIN"
-    volumes:
-      - ./dockertest:/wormhole:rwx
     environment:
       RUST_LOG: "wormhole=trace"
