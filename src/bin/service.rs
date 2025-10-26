@@ -98,7 +98,6 @@ async fn stop_all_pods(pods: HashMap<String, Pod>) -> ExitCode {
     status
 }
 
-// NOTE - old watchdog brought here for debug purposes
 pub async fn terminal_watchdog(tx: UnboundedSender<()>) {
     let mut stdin = tokio::io::stdin();
     let mut buf = vec![0; 1024];

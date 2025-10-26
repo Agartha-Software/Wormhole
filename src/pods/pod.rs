@@ -6,7 +6,7 @@ use crate::data::tree_hosts::{CliHostTree, TreeLine};
 use crate::error::{WhError, WhResult};
 #[cfg(target_os = "linux")]
 use crate::fuse::fuse_impl::mount_fuse;
-use crate::ipc::answers::InspectInfo;
+use crate::ipc::answers::{InspectInfo, PeerInfo};
 use crate::network::message::{FromNetworkMessage, MessageContent, ToNetworkMessage};
 use crate::network::HandshakeError;
 use crate::pods::arbo::{
@@ -566,12 +566,15 @@ impl Pod {
     }
 
     pub fn get_inspect_info(&self) -> InspectInfo {
-        let peers_data: Vec<(String, Option<String>)> = self
+        let peers_data: Vec<PeerInfo> = self
             .peers
             .try_read_for(LOCK_TIMEOUT)
             .expect("Can't lock peers")
             .iter()
-            .map(|peer| (peer.hostname.clone(), peer.url.clone()))
+            .map(|peer| PeerInfo {
+                hostname: peer.hostname.clone(),
+                url: peer.url.clone(),
+            })
             .collect();
 
         InspectInfo {

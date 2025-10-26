@@ -17,14 +17,15 @@ pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<(), io
     send_command(Command::Inspect(id), &mut stream).await?;
     match recieve_answer::<InspectAnswer>(&mut stream).await? {
         InspectAnswer::Information(info) => {
-            println!("Informations:");
-            println!("\thostname:\t{}", info.hostname);
-            println!("\tname:\t{}", info.name);
+            println!("Pod informations:");
+            println!("   hostname:\t\t{}", info.hostname);
+            println!("   name:\t\t{}", info.name);
+            println!("   mount:\t\t{:#?}", info.mount);
             println!(
-                "\turl:\t{}",
-                info.url.unwrap_or(String::from("Not Defined"))
+                "   url:\t\t\t{}",
+                info.url.unwrap_or(String::from("Undefined"))
             );
-            println!("\tconnected peers:\t{:?}", info.connected_peers);
+            println!("   connected peers:\t{:#?}", info.connected_peers);
             Ok(())
         }
         InspectAnswer::PodNotFound => Err(io::Error::new(
