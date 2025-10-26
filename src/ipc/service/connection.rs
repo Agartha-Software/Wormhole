@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     ipc::{
         commands::Command,
-        service::commands::{freeze, gethosts, inspect, new, remove, unfreeze},
+        service::commands::{freeze, gethosts, inspect, new, remove, status, unfreeze},
     },
     pods::pod::Pod,
 };
@@ -74,5 +74,6 @@ where
         Command::GetHosts(data) => gethosts(data, pods, stream).await,
         Command::Inspect(data) => inspect(data, pods, stream).await,
         Command::Remove(data) => remove(data, pods, stream).await,
+        Command::Status => status(stream).await,
     }
 }
