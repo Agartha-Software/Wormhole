@@ -244,7 +244,8 @@ impl Pod {
         let disk_manager = Box::new(DummyDiskManager::new(&proto.mountpoint)?);
 
         create_all_dirs(&proto.arbo, ROOT, disk_manager.as_ref())
-            .inspect_err(|e| log::error!("unable to create_all_dirs: {e}"))?;
+            .inspect_err(|e| log::error!("unable to create_all_dirs: {e}"))
+            .map_err(|e| std::io::Error::new(e.kind(), format!("create_all_dirs: {e}")))?;
 
         if let Ok(perms) = proto
             .arbo
@@ -258,7 +259,8 @@ impl Pod {
                     .expect("infallible")
                     .as_bytes(),
                 0,
-            )?;
+            )
+            .map_err(|e| std::io::Error::new(e.kind(), format!("write_file(global_config): {e}")))?;
         }
 
         if let Ok(perms) = proto
@@ -273,7 +275,8 @@ impl Pod {
                     .expect("infallible")
                     .as_bytes(),
                 0,
-            )?;
+            )
+            .map_err(|e| std::io::Error::new(e.kind(), format!("write_file(local_config): {e}")))?;
         }
 
         let url = proto.local_config.general.url.clone();
@@ -330,9 +333,11 @@ impl Pod {
             mountpoint: proto.mountpoint.clone(),
             peers,
             #[cfg(target_os = "linux")]
-            fuse_handle: mount_fuse(&proto.mountpoint, fs_interface.clone())?,
+            fuse_handle: mount_fuse(&proto.mountpoint, fs_interface.clone())
+            .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fuse: {e}")))?,
             #[cfg(target_os = "windows")]
-            fsp_host: mount_fsp(&proto.mountpoint, fs_interface.clone())?,
+            fsp_host: mount_fsp(&proto.mountpoint, fs_interface.clone())
+            .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fsp: {e}")))?,
             network_airport_handle,
             peer_broadcast_handle,
             new_peer_handle,
