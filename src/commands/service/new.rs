@@ -31,14 +31,10 @@ pub async fn new(args: PodArgs) -> CliResult<(Pod, String)> {
 
 fn add_hosts(
     mut global_config: GlobalConfig,
-    url: String,
-    mut additional_hosts: Vec<String>,
+    url: Option<&String>,
+    additional_hosts: Vec<String>,
 ) -> GlobalConfig {
-    if url.is_empty() && additional_hosts.is_empty() {
-        return global_config;
-    }
-
-    additional_hosts.insert(0, url);
+    global_config.general.entrypoints.extend(url.cloned());
     global_config.general.entrypoints.extend(additional_hosts);
     global_config
 }
@@ -85,7 +81,7 @@ async fn pod_value(
     let global_config: GlobalConfig = GlobalConfig::read(global_cfg_path).unwrap_or_default();
     let global_config = add_hosts(
         global_config,
-        args.url.clone().unwrap_or("".to_string()),
+        args.url.as_ref(),
         args.additional_hosts.clone(),
     );
 

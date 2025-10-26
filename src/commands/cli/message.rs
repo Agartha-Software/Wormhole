@@ -31,7 +31,7 @@ pub async fn cli_messager(ip: &str, cli: Cli) -> CliResult<String> {
             } else {
                 println!("{response}");
             }
-            output.push_str(&format!("{response}\n"));
+            output.push_str(&format!("{response}"));
         }
     }
 

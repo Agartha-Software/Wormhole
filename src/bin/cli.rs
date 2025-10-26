@@ -35,7 +35,7 @@ fn get_args(args: Vec<String>) -> (String, Vec<String>) {
     return (ip, cli_args);
 }
 
-fn main() -> CliResult<()> {
+fn main() -> std::process::ExitCode {
     env_logger::init();
 
     // Recover all arguments
@@ -85,8 +85,14 @@ fn main() -> CliResult<()> {
     } else {
         log::info!("CLI: no error reported")
     };
-    status.map(|s| {
-        println!("{s}");
-        ()
-    })
+    if status
+        .inspect_err(|s| {
+            eprintln!("{s}");
+        })
+        .is_ok()
+    {
+        0.into()
+    } else {
+        1.into()
+    }
 }
