@@ -14,7 +14,7 @@ custom_error! {pub TCPListenerError
 }
 
 custom_error! {pub SocketListenerError
-    AddrInUse { name: &'static str } = "Could not start the server because the socket file is occupied. Please check\nif {name} is in use by another process and try again."
+    AddrInUse { name: String } = "Could not start the server because the socket file is occupied. Please check\nif {name} is in use by another process and try again."
 }
 
 fn serialize<S>(kind: &ErrorKind, serializer: S) -> Result<S::Ok, S::Error>

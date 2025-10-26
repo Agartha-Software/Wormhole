@@ -4,9 +4,9 @@ use interprocess::local_socket::{GenericNamespaced, ListenerOptions};
 
 use crate::ipc::error::SocketListenerError;
 
-pub fn new_socket_listener(name: &'static str) -> Result<Listener, SocketListenerError> {
+pub fn new_socket_listener(name: &String) -> Result<Listener, SocketListenerError> {
     let ns_name = if GenericNamespaced::is_supported() {
-        name.to_ns_name::<GenericNamespaced>()
+        name.clone().to_ns_name::<GenericNamespaced>()
     } else {
         format!("/tmp/{name}").to_fs_name::<GenericFilePath>()
     }
@@ -16,7 +16,7 @@ pub fn new_socket_listener(name: &'static str) -> Result<Listener, SocketListene
 
     match opts.create_tokio() {
         Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
-            Err(SocketListenerError::AddrInUse { name })
+            Err(SocketListenerError::AddrInUse { name: name.clone() })
         }
         Err(e) => panic!("Unhandled socket error during listener creation: {e}"),
         Ok(x) => Ok(x),
