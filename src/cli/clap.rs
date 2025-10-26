@@ -82,9 +82,9 @@ pub struct NewArgs {
     /// Name of the pod to create
     // TODO: make optional again when the url can provide the name expected
     pub name: String,
-    /// Local port for the pod to use
-    #[arg(long, short, required = true)]
-    pub port: u16,
+    /// Local port for the pod to use. By default automatically find a port on the range [40000-40100]
+    #[arg(long, short)]
+    pub port: Option<u16>,
     /// Mount point to create the pod in. By default creates a mount point in the working directory with the name of the pod
     #[arg(long = "mount", short, value_parser=canonicalize)]
     pub mountpoint: Option<PathBuf>,

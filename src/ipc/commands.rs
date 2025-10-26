@@ -27,7 +27,7 @@ impl From<IdentifyPodArgs> for PodId {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NewRequest {
     pub name: String,
-    pub port: u16,
+    pub port: Option<u16>,
     pub mountpoint: PathBuf,
     pub url: Option<String>,
     pub hostname: Option<String>,

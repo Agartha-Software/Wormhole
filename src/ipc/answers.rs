@@ -6,7 +6,7 @@ use crate::{ipc::error::IoError, pods::arbo::Hosts};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum NewAnswer {
-    Success,
+    Success(u16),
     AlreadyExist,
     InvalidIp,
     BindImpossible(IoError),

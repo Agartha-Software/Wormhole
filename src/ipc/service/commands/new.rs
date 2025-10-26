@@ -27,8 +27,8 @@ where
         return Ok(false);
     }
 
-    let server = match Server::setup(&format!("0.0.0.0:{}", args.port)).await {
-        Ok(server) => Arc::new(server),
+    let (server, port) = match Server::setup(&"0.0.0.0", args.port).await {
+        Ok((server, port)) => (Arc::new(server), port),
         Err(answer) => {
             send_answer(answer, stream).await?;
             return Ok(false);
@@ -57,11 +57,11 @@ where
     {
         Ok(pod) => {
             pods.insert(args.name, pod);
-            NewAnswer::Success
+            NewAnswer::Success(port)
         }
         Err(err) => NewAnswer::FailedToCreatePod(err.into()),
     };
-    println!("");
+    println!("New pod created successfully at '{port}'");
     send_answer(answer, stream).await?;
     Ok(false)
 }
