@@ -75,33 +75,14 @@ You can then rebuild using `nixos-rebuild switch` and should have access to both
 > [!WARNING]
 > Installation via Cargo is not yet stable. You have to install fuse3 separately. If you do not success to install Wormhole using Cargo, use one of the other provided methods.
 
-**Requirements:**
-
-- [Rust toolchain](https://www.rust-lang.org/tools/install)
-- FUSE must be installed on your system:
-  - **Linux:** `sudo apt install libfuse3-dev` (Debian/Ubuntu) or equivalent for your distro
-  - **Windows:** [WinFsp](https://github.com/winfsp/winfsp/releases)
-  - **NixOS:** FUSE is managed by the package manager
-
-### a) From crates.io
+> [!WARNING]
+> More rarely up to date. Please use the method from Github
 
 ```sh
 cargo install wormhole-fs
 ```
 
 This will install both `wormhole` and `wormholed` binaries.
-
-### b) From GitHub (latest features)
-
-```sh
-git clone https://github.com/Agartha-Software/Wormhole.git
-cd Wormhole
-cargo build --release
-```
-
-Binaries will be in `target/release/` (`wormhole`, `wormholed`).
-
----
 
 ## 4. Ubuntu / Debian
 
@@ -125,7 +106,7 @@ sudo apt update
 sudo apt install -y pkg-config libfuse3-dev libfuse-dev
 ```
 
-- Then follow the Cargo instructions above.
+- Then follow the Build from source instructions below.
 
 ---
 
@@ -164,9 +145,27 @@ Binaries will be in `target\release\` (`wormhole.exe`, `wormholed.exe`).
 
 ---
 
+## Build from source
+
+**Requirements:**
+
+- [Rust toolchain](https://www.rust-lang.org/tools/install)
+- FUSE must be installed on your system:
+  - **Linux:** `sudo apt install libfuse3-dev` (Debian/Ubuntu) or equivalent for your distro
+  - **Windows:** [WinFsp](https://github.com/winfsp/winfsp/releases)
+
+```sh
+git clone https://github.com/Agartha-Software/Wormhole.git
+cd Wormhole
+cargo build --release
+```
+
+Binaries will be in `target/release/` (`wormhole`, `wormholed`).
+
+---
+
 ## Need Help?
 
 - See the [Getting Started Guide](./getting_started.md)
 - For Docker, see [Docker Guide](./docker_guide.md)
-- For CLI usage, see [CLI Memo](./memo_cli.md)
 - For troubleshooting, open an issue on [GitHub](https://github.com/Agartha-Software/Wormhole/issues)
