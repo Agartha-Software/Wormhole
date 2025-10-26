@@ -9,6 +9,6 @@ The docker compose create a network composed of 3 pods
 
 You can go inside each one using
 ```sh
-docker exec -it <container-name>
+docker exec -it <container-name> bash
 ```
 You will find a folder `whfolder` that is connected between the 3 containers.
