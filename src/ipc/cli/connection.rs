@@ -9,7 +9,7 @@ use serde::Deserialize;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-pub async fn start_local_socket(socket: String) -> io::Result<Stream> {
+pub async fn start_local_socket(socket: &str) -> io::Result<Stream> {
     let name = if GenericNamespaced::is_supported() {
         socket.to_ns_name::<GenericNamespaced>()?
     } else {

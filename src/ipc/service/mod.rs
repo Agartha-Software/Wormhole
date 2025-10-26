@@ -16,6 +16,8 @@ use interprocess::local_socket::traits::tokio::Listener;
 use std::collections::HashMap;
 use tokio::{net::TcpListener, sync::mpsc::UnboundedReceiver};
 
+pub static SOCKET_DEFAULT_NAME: &str = "wormhole.sock";
+
 /// Listens for CLI calls and launch one tcp instance per cli command
 /// if `specific_ip` is not given, will try all ports starting from 8081 to 9999, incrementing until success
 /// if `specific_ip` is given, will try the given ip and fail on error.
@@ -39,7 +41,7 @@ pub async fn start_commands_listeners(
     };
     println!("Started Tcp Listener at '{}'", ip.to_string());
 
-    let socket_name = specific_socket.unwrap_or("wormhole.sock".to_string());
+    let socket_name = specific_socket.unwrap_or(SOCKET_DEFAULT_NAME.to_string());
     let socket_listener = new_socket_listener(&socket_name)?;
     println!("Started Socket Listener at '{}'", socket_name);
     println!("Wormhole running!");
