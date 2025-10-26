@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 pub struct Cli {
     #[command(subcommand)]
     pub command: CliCommand,
-    /// Specify a specific service socket in case of multiple services running, Defaults to 'wormhole.sock'.
+    /// Specify a specific service socket in case of multiple services running
     #[arg(short, long, default_value = SOCKET_DEFAULT_NAME)]
     pub socket: String,
 }

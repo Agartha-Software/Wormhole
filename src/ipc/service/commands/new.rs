@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 use crate::{
     config::{types::Config, GlobalConfig, LocalConfig},
@@ -27,17 +27,20 @@ where
         return Ok(false);
     }
 
-    let (server, port) = match Server::setup(&"0.0.0.0", args.port).await {
-        Ok((server, port)) => (Arc::new(server), port),
-        Err(answer) => {
-            send_answer(answer, stream).await?;
+    let mut global_config =
+        GlobalConfig::read(args.mountpoint.join(GLOBAL_CONFIG_FNAME)).unwrap_or_default();
+
+    if let Some(url) = args.url {
+        if let Ok(socket) = url.parse::<SocketAddr>() {
+            //For now this socket addr is only used as a way to verify the host but then it could be used futher
+            global_config = global_config.add_hosts(Some(socket), args.additional_hosts);
+        } else {
+            send_answer(NewAnswer::InvalidUrlIp, stream).await?;
             return Ok(false);
         }
-    };
-
-    let global_config = GlobalConfig::read(args.mountpoint.join(GLOBAL_CONFIG_FNAME))
-        .unwrap_or_default()
-        .add_hosts(args.url.unwrap_or("".to_string()), args.additional_hosts);
+    } else {
+        global_config = global_config.add_hosts(None, args.additional_hosts);
+    }
 
     let mut local_config: LocalConfig =
         LocalConfig::read(args.mountpoint.join(LOCAL_CONFIG_FNAME)).unwrap_or_default();
@@ -46,6 +49,14 @@ where
             .into_string()
             .unwrap_or("wormhole-default-hostname".into()),
     );
+
+    let (server, port) = match Server::setup("0.0.0.0", args.port).await {
+        Ok((server, port)) => (Arc::new(server), port),
+        Err(answer) => {
+            send_answer(answer, stream).await?;
+            return Ok(false);
+        }
+    };
 
     let answer = match Pod::new(
         global_config,

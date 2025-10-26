@@ -59,5 +59,9 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<()> {
             eprintln!("Failed to create the given pod:");
             Err(e.into())
         }
+        NewAnswer::InvalidUrlIp => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Url given to connect to is invalid.",
+        )),
     }
 }

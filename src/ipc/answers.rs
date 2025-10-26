@@ -9,6 +9,7 @@ pub enum NewAnswer {
     Success(u16),
     AlreadyExist,
     InvalidIp,
+    InvalidUrlIp,
     BindImpossible(IoError),
     FailedToCreatePod(IoError),
 }

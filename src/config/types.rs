@@ -1,4 +1,4 @@
-use std::{fs, path::Path, str, sync::Arc};
+use std::{fs, net::SocketAddr, path::Path, str, sync::Arc};
 
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -85,12 +85,15 @@ pub struct GlobalConfig {
 }
 
 impl GlobalConfig {
-    pub fn add_hosts(mut self, url: String, mut additional_hosts: Vec<String>) -> GlobalConfig {
-        if url.is_empty() && additional_hosts.is_empty() {
-            return self;
+    pub fn add_hosts(
+        mut self,
+        url: Option<SocketAddr>,
+        mut additional_hosts: Vec<String>,
+    ) -> GlobalConfig {
+        if let Some(url) = url {
+            additional_hosts.insert(0, url.to_string());
         }
 
-        additional_hosts.insert(0, url);
         self.general.entrypoints.extend(additional_hosts);
         self
     }
