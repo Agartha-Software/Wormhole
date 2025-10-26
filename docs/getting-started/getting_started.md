@@ -51,7 +51,7 @@ Provide the optional service address if your service is not running on the defau
 
 Join an existing Wormhole network
 ```
-./wormhole 127.0.0.1:8081 new my_pod2 -m dir2/ -p 5556 -u 127.0.0.10:8081
+./wormhole 127.0.0.1:8081 new my_pod2 -m dir2/ -p 5556 -u 127.0.0.10:5555
                                                        ^-----------------
                                                        Existing pod url
 ```
