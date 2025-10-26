@@ -32,19 +32,19 @@ impl Server {
 
         let socket = TcpSocket::new_v4().map_err(|e| {
             log::error!("Failed to bind new pod listener: {e}");
-            NewAnswer::BindImpossible(e.to_string())
+            NewAnswer::BindImpossible(e.into())
         })?;
         socket.set_reuseaddr(false).map_err(|e| {
             log::error!("Failed to bind new pod listener: {e}");
-            NewAnswer::BindImpossible(e.to_string())
+            NewAnswer::BindImpossible(e.into())
         })?;
         socket.bind(socket_addr).map_err(|e| {
             log::error!("Failed to bind new pod listener: {e}");
-            NewAnswer::BindImpossible(e.to_string())
+            NewAnswer::BindImpossible(e.into())
         })?;
         let listener = socket.listen(1024).map_err(|e| {
             log::error!("Failed to bind new pod listener: {e}");
-            NewAnswer::BindImpossible(e.to_string())
+            NewAnswer::BindImpossible(e.into())
         })?;
 
         Ok(Server {

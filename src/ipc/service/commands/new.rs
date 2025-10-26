@@ -61,7 +61,7 @@ where
             pods.insert(args.name, pod);
             NewAnswer::Success
         }
-        Err(err) => NewAnswer::FailedToCreatePod(err.to_string()),
+        Err(err) => NewAnswer::FailedToCreatePod(err.into()),
     };
     send_answer(answer, stream).await?;
     Ok(false)

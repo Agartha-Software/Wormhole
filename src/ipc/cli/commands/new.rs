@@ -10,7 +10,7 @@ use crate::{
     },
 };
 
-pub async fn new(args: NewArgs, mut stream: Stream) -> Result<(), io::Error> {
+pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<()> {
     let mut mountpoint = match args.mountpoint {
         Some(mountpoint) => Ok(mountpoint),
         None => std::env::current_dir().map(|path| path.join(args.name.clone())),
@@ -40,11 +40,23 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> Result<(), io::Error> {
     send_command(Command::New(request), &mut stream).await?;
 
     match recieve_answer::<NewAnswer>(&mut stream).await? {
-        NewAnswer::Success => println!("Pod '{name}' created with success."),
-        NewAnswer::AlreadyExist => eprintln!("Pod '{name}' already exist, couldn't create."),
-        NewAnswer::InvalidIp => eprintln!("Given port is already used."),
-        NewAnswer::BindImpossible(e) => eprintln!("Service failed to bind the pod: {e}"),
-        NewAnswer::FailedToCreatePod(e) => eprintln!("Service failed to create the pod: {e}"),
+        NewAnswer::Success => {
+            println!("Pod '{name}' created with success.");
+            Ok(())
+        }
+        NewAnswer::AlreadyExist => Err(io::Error::new(
+            io::ErrorKind::AddrInUse,
+            "Pod already exist, couldn't create.",
+        )),
+        NewAnswer::InvalidIp => Err(io::Error::new(
+            io::ErrorKind::AddrInUse,
+            "Given port is already used.",
+        )),
+        NewAnswer::BindImpossible(e) => {
+            eprintln!("Failed to bind the given pod.");
+            Err(e.into())
+        }
+
+        NewAnswer::FailedToCreatePod(e) => Err(e.into()),
     }
-    Ok(())
 }

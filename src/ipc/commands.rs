@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::cli::IdentifyPodArgs;
+use crate::{cli::IdentifyPodArgs, ipc::error::IoError};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum PodId {
@@ -50,8 +50,8 @@ pub enum NewAnswer {
     Success,
     AlreadyExist,
     InvalidIp,
-    BindImpossible(String),
-    FailedToCreatePod(String),
+    BindImpossible(IoError),
+    FailedToCreatePod(IoError),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
