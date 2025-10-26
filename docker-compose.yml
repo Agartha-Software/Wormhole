@@ -2,11 +2,11 @@ services:
   whone:
     build:
       context: .
-    network: host
+      network: host
     post_start:
       - command: sh -c "sleep 1 &&
-               mkdir whfolder &&
-               wormhole 127.0.0.1:8081 new pod1 -m whfolder"
+                        mkdir whfolder &&
+                        wormhole 127.0.0.1:8081 new pod1 -m whfolder"
     network_mode: "host"
     devices:
       - '/dev/fuse'
@@ -18,11 +18,11 @@ services:
   whtwo:
     build:
       context: .
-    network: host
+      network: host
     post_start:
       - command: sh -c "sleep 2 &&
-               mkdir whfolder &&
-               wormhole 127.0.0.1:8082 new pod2 -m whfolder -u 127.0.0.1:40000"
+                        mkdir whfolder &&
+                        wormhole 127.0.0.1:8082 new pod2 -m whfolder -u 127.0.0.1:40000"
     network_mode: "host"
     devices:
       - '/dev/fuse'
@@ -34,11 +34,11 @@ services:
   whthree:
     build:
       context: .
-    network: host
+      network: host
     post_start:
       - command: sh -c "sleep 3 &&
-               mkdir whfolder &&
-               wormhole 127.0.0.1:8083 new pod3 -m whfolder -u 127.0.0.1:40001"
+                        mkdir whfolder &&
+                        wormhole 127.0.0.1:8083 new pod3 -m whfolder -u 127.0.0.1:40001"
     network_mode: "host"
     devices:
       - '/dev/fuse'
