@@ -1,22 +1,37 @@
 # Installing Wormhole
 
-### Arch
-You can use the AUR.
-Example using yay:
-```
+Wormhole can be installed on Linux (Ubuntu, Debian, Arch, NixOS) and Windows. Below are the main supported methods.
+
+---
+
+## 1. Arch Linux (AUR)
+
+You can use the AUR. Example with yay:
+
+```sh
 yay -S wormhole
 ```
-Should install both `wormhole` and `wormholed` binaries
 
-### Nix / NixOS
-This repo provides a flake for you that can install Wormhole
+This will install both `wormhole` and `wormholed` binaries.
 
-#### To try
-```nix shell --experimental-features 'nix-command flakes' github:Agartha-Software/Wormhole/#default```
+---
+
+## 2. Nix / NixOS
+
+This repository provides a flake for you that can install Wormhole.
+
+### To try
+
+```sh
+nix shell --experimental-features 'nix-command flakes' github:Agartha-Software/Wormhole/#default
+```
+
 You will then get Wormhole on this ephemeral shell.
 
-#### To install
-Add Wormhole in your flake inputs
+### To install
+
+Add Wormhole in your flake inputs:
+
 ```nix
 # flake.nix
 inputs = {
@@ -26,7 +41,8 @@ inputs = {
 };
 ```
 
-Add the package in your configuration
+Add the package in your configuration:
+
 ```nix
 # configuration.nix
 environment.systemPackages = with pkgs; [
@@ -36,7 +52,8 @@ environment.systemPackages = with pkgs; [
 ];
 ```
 
-Add the systemd service if needed
+Add the systemd service if needed:
+
 ```nix
 # flake.nix
 modules = [
@@ -47,5 +64,109 @@ modules = [
     }
   ...
 ]
+```
 
-You can then rebuild using `nixos-rebuild switch" and should have access to both `wormhole` and `wormholed` binaries
+You can then rebuild using `nixos-rebuild switch` and should have access to both `wormhole` and `wormholed` binaries.
+
+---
+
+## 3. Install via Cargo or crates.io (All Platforms)
+
+> [!WARNING]
+> Installation via Cargo is not yet stable. You have to install fuse3 separately. If you do not success to install Wormhole using Cargo, use one of the other provided methods.
+
+**Requirements:**
+
+- [Rust toolchain](https://www.rust-lang.org/tools/install)
+- FUSE must be installed on your system:
+  - **Linux:** `sudo apt install libfuse3-dev` (Debian/Ubuntu) or equivalent for your distro
+  - **Windows:** [WinFsp](https://github.com/winfsp/winfsp/releases)
+  - **NixOS:** FUSE is managed by the package manager
+
+### a) From crates.io
+
+```sh
+cargo install wormhole-fs
+```
+
+This will install both `wormhole` and `wormholed` binaries.
+
+### b) From GitHub (latest features)
+
+```sh
+git clone https://github.com/Agartha-Software/Wormhole.git
+cd Wormhole
+cargo build --release
+```
+
+Binaries will be in `target/release/` (`wormhole`, `wormholed`).
+
+---
+
+## 4. Ubuntu / Debian
+
+### a) Using the .deb package (recommended)
+
+- Download the latest `.deb` from the [GitHub Releases](https://github.com/Agartha-Software/Wormhole/releases)
+- Install with:
+
+```sh
+sudo dpkg -i wormhole.deb
+```
+
+This will install both `wormhole` and `wormholed`.
+
+### b) Manual build (if you want the latest or custom build)
+
+- Install dependencies:
+
+```sh
+sudo apt update
+sudo apt install -y pkg-config libfuse3-dev libfuse-dev
+```
+
+- Then follow the Cargo instructions above.
+
+---
+
+## 5. Fedora
+
+- Download the latest `.rpm` from the [GitHub Releases](https://github.com/Agartha-Software/Wormhole/releases)
+- Install with:
+
+```sh
+sudo dnf install ./wormhole.rpm
+```
+
+> [!WARNING]
+> The package will give you access to `wormhole` and `wormholed` commands. `wormholed` is the service, but the package does not automatically enable it. You have to start it yourself.
+
+## 6. Windows
+
+### a) Using the Installer
+
+- Download `WormholeInstaller.exe` from the [GitHub Releases](https://github.com/Agartha-Software/Wormhole/releases)
+- Run the installer and follow the instructions.
+
+### b) Manual build
+
+- Install [Rust](https://www.rust-lang.org/tools/install)
+- Install [WinFsp](https://github.com/winfsp/winfsp/releases)
+- Clone and build:
+
+```powershell
+git clone https://github.com/Agartha-Software/Wormhole.git
+cd Wormhole
+cargo build --release
+```
+
+Binaries will be in `target\release\` (`wormhole.exe`, `wormholed.exe`).
+
+---
+
+## Need Help?
+
+- See the [Getting Started Guide](./getting_started.md)
+- For Docker, see [Docker Guide](./docker_guide.md)
+- For CLI usage, see [CLI Memo](./memo_cli.md)
+- For troubleshooting, open an issue on [GitHub](https://github.com/Agartha-Software/Wormhole/issues)
