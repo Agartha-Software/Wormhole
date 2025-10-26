@@ -2,10 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     config::{types::Config, GlobalConfig, LocalConfig},
-    ipc::{
-        commands::{NewAnswer, NewRequest},
-        service::connection::send_answer,
-    },
+    ipc::{answers::NewAnswer, commands::NewRequest, service::connection::send_answer},
     network::server::Server,
     pods::{
         arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},

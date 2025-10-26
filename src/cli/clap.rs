@@ -72,8 +72,8 @@ pub struct PodConfArgs {
 #[command(about, long_about = None)]
 pub struct GetHostsArgs {
     /// Path of the file
-    #[arg(long, short, value_parser=canonicalize)]
-    pub path: Option<PathBuf>,
+    #[arg(required = true, value_parser=canonicalize)]
+    pub path: PathBuf,
 }
 
 #[derive(Debug, Args, Serialize, Deserialize, Clone)]

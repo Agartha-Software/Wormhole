@@ -1,7 +1,4 @@
-use crate::ipc::{
-    commands::{FreezeAnswer, PodId},
-    service::connection::send_answer,
-};
+use crate::ipc::{answers::FreezeAnswer, commands::PodId, service::connection::send_answer};
 
 pub async fn freeze<Stream>(_: PodId, stream: &mut Stream) -> std::io::Result<bool>
 where

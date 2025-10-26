@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::{io, sync::Arc};
 
 use crate::config::{GlobalConfig, LocalConfig};
@@ -20,6 +21,7 @@ use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use fuser;
 use log::info;
+use openat::AsPath;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
@@ -544,5 +546,11 @@ impl Pod {
 
     pub fn get_mountpoint(&self) -> &WhPath {
         return &self.mountpoint;
+    }
+
+    pub fn contains(&self, path: &PathBuf) -> bool {
+        let mountpoint = PathBuf::from(self.mountpoint.to_string());
+
+        path.starts_with(mountpoint)
     }
 }

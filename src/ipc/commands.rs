@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{cli::IdentifyPodArgs, ipc::error::IoError};
+use crate::cli::IdentifyPodArgs;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum PodId {
@@ -25,16 +25,6 @@ impl From<IdentifyPodArgs> for PodId {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum UnfreezeAnswer {
-    Success,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum FreezeAnswer {
-    Success,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 pub struct NewRequest {
     pub name: String,
     pub port: u16,
@@ -46,12 +36,8 @@ pub struct NewRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum NewAnswer {
-    Success,
-    AlreadyExist,
-    InvalidIp,
-    BindImpossible(IoError),
-    FailedToCreatePod(IoError),
+pub struct GetHostsRequest {
+    pub path: PathBuf,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -59,4 +45,5 @@ pub enum Command {
     Unfreeze(PodId),
     Freeze(PodId),
     New(NewRequest),
+    GetHosts(GetHostsRequest),
 }

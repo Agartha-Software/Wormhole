@@ -2,7 +2,7 @@ use interprocess::local_socket::tokio::Stream;
 
 use crate::{
     cli::Cli,
-    ipc::cli::commands::{freeze, new, unfreeze},
+    ipc::cli::commands::{freeze, gethosts, new, unfreeze},
 };
 
 pub async fn command_network(cmd: Cli, stream: Stream) -> Result<(), std::io::Error> {
@@ -12,7 +12,7 @@ pub async fn command_network(cmd: Cli, stream: Stream) -> Result<(), std::io::Er
         Cli::UnFreeze(args) => unfreeze(args, stream).await,
         Cli::Template(args) => todo!(),
         Cli::Inspect(args) => todo!(),
-        Cli::GetHosts(args) => todo!(),
+        Cli::GetHosts(args) => gethosts(args, stream).await,
         Cli::Tree(args) => todo!(),
         Cli::Remove(args) => todo!(),
         Cli::Apply(args) => todo!(),

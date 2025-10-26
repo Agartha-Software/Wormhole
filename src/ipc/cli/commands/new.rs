@@ -5,8 +5,9 @@ use interprocess::local_socket::tokio::Stream;
 use crate::{
     cli::NewArgs,
     ipc::{
+        answers::NewAnswer,
         cli::connection::{recieve_answer, send_command},
-        commands::{Command, NewAnswer, NewRequest},
+        commands::{Command, NewRequest},
     },
 };
 

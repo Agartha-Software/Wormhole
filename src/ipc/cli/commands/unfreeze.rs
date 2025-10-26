@@ -1,6 +1,6 @@
 use std::io;
 
-use crate::ipc::commands::UnfreezeAnswer;
+use crate::ipc::answers::UnfreezeAnswer;
 use interprocess::local_socket::tokio::Stream;
 
 use crate::{
