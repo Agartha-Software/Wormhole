@@ -3,6 +3,11 @@ services:
     build:
       context: .
       network: host
+    command: bash -c "
+      sleep 1
+      mkdir whfolder
+      wormhole 127.0.0.1:8081 new pod1 -m whfolder
+    "
     network_mode: "host"
     devices:
       - '/dev/fuse'
@@ -15,6 +20,28 @@ services:
     build:
       context: .
       network: host
+    command: bash -c "
+      sleep 2
+      mkdir whfolder
+      wormhole 127.0.0.1:8082 new pod2 -m whfolder -u 127.0.0.1:40000
+    "
+    network_mode: "host"
+    devices:
+      - '/dev/fuse'
+    cap_add:
+      - "SYS_ADMIN"
+    environment:
+      RUST_LOG: "wormhole=trace"
+  
+  whthree:
+    build:
+      context: .
+      network: host
+    command: bash -c "
+      sleep 3
+      mkdir whfolder
+      wormhole 127.0.0.1:8083 new pod3 -m whfolder -u 127.0.0.1:40001
+    "
     network_mode: "host"
     devices:
       - '/dev/fuse'
