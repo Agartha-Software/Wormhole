@@ -33,6 +33,11 @@ pub enum FreezeAnswer {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub enum StatusAnswer {
+    Success
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PeerInfo {
     pub hostname: String,
     pub url: Option<String>,

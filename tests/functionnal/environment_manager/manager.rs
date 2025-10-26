@@ -61,15 +61,9 @@ impl EnvironmentManager {
         std::thread::sleep(*SLEEP_TIME);
 
         // checks the service viability
-        let (status, out, err) = cli_command(&["-s", &socket_from_id(socket), "status"]);
-        if !out.contains(&socket_from_id(socket)) {
-            log::error!(
-                    "\nService created on {} isn't answering proper status.\n(code {}).\nCli stdout: \"{}\"\n\nCli stderr: \"{}\"\n",
-                    socket,
-                    status,
-                    out,
-                    err,
-                );
+        let (status, _, _) = cli_command(&["-s", &socket_from_id(socket), "status"]);
+        if !status.success() {
+            log::error!("\nCan't reach service on {}", socket_from_id(socket),);
 
             instance.kill().unwrap();
             let _ = instance.wait(); // necessary on some os

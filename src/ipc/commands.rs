@@ -47,4 +47,5 @@ pub enum Command {
     New(NewRequest),
     GetHosts(GetHostsRequest),
     Inspect(PodId),
+    Status,
 }
