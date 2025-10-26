@@ -121,9 +121,9 @@ impl DiskManager for UnixDiskManager {
         buf[0..read_len].swap_with_slice(&mut read);
         Ok(read_len)
     }
-
     fn new_dir(&self, path: &WhPath, permissions: u16) -> io::Result<()> {
-        self.handle.create_dir(path.clone(), permissions.into()) // TODO look more in c mode_t value
+        self.handle
+            .create_dir(path.clone().set_relative(), permissions.into()) // TODO look more in c mode_t value
     }
 
     fn set_permisions(&self, path: &WhPath, permissions: u16) -> std::io::Result<()> {
