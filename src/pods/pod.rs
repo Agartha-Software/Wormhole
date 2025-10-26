@@ -253,14 +253,17 @@ impl Pod {
             .map(|inode| inode.meta.perm)
         {
             let _ = disk_manager.new_file(&GLOBAL_CONFIG_FNAME.into(), perms);
-            disk_manager.write_file(
-                &GLOBAL_CONFIG_FNAME.into(),
-                toml::to_string(&proto.global_config)
-                    .expect("infallible")
-                    .as_bytes(),
-                0,
-            )
-            .map_err(|e| std::io::Error::new(e.kind(), format!("write_file(global_config): {e}")))?;
+            disk_manager
+                .write_file(
+                    &GLOBAL_CONFIG_FNAME.into(),
+                    toml::to_string(&proto.global_config)
+                        .expect("infallible")
+                        .as_bytes(),
+                    0,
+                )
+                .map_err(|e| {
+                    std::io::Error::new(e.kind(), format!("write_file(global_config): {e}"))
+                })?;
         }
 
         if let Ok(perms) = proto
@@ -269,14 +272,17 @@ impl Pod {
             .map(|inode| inode.meta.perm)
         {
             let _ = disk_manager.new_file(&LOCAL_CONFIG_FNAME.into(), perms);
-            disk_manager.write_file(
-                &LOCAL_CONFIG_FNAME.into(),
-                toml::to_string(&proto.local_config)
-                    .expect("infallible")
-                    .as_bytes(),
-                0,
-            )
-            .map_err(|e| std::io::Error::new(e.kind(), format!("write_file(local_config): {e}")))?;
+            disk_manager
+                .write_file(
+                    &LOCAL_CONFIG_FNAME.into(),
+                    toml::to_string(&proto.local_config)
+                        .expect("infallible")
+                        .as_bytes(),
+                    0,
+                )
+                .map_err(|e| {
+                    std::io::Error::new(e.kind(), format!("write_file(local_config): {e}"))
+                })?;
         }
 
         let url = proto.local_config.general.url.clone();
@@ -334,10 +340,10 @@ impl Pod {
             peers,
             #[cfg(target_os = "linux")]
             fuse_handle: mount_fuse(&proto.mountpoint, fs_interface.clone())
-            .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fuse: {e}")))?,
+                .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fuse: {e}")))?,
             #[cfg(target_os = "windows")]
             fsp_host: mount_fsp(&proto.mountpoint, fs_interface.clone())
-            .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fsp: {e}")))?,
+                .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fsp: {e}")))?,
             network_airport_handle,
             peer_broadcast_handle,
             new_peer_handle,
