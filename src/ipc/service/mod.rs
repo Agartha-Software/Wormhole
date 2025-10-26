@@ -22,6 +22,7 @@ use tokio::{net::TcpListener, sync::mpsc::UnboundedReceiver};
 pub async fn start_commands_listeners(
     pods: &mut HashMap<String, Pod>,
     specific_ip: Option<String>,
+    specific_socket: Option<String>,
     mut signals_rx: UnboundedReceiver<()>,
 ) -> Result<(), ListenerError> {
     let (tcp_listener, ip) = match specific_ip {
@@ -38,8 +39,8 @@ pub async fn start_commands_listeners(
     };
     println!("Started Tcp Listener at '{}'", ip.to_string());
 
-    let socket_name = "wormhole.sock";
-    let socket_listener = new_socket_listener(socket_name)?;
+    let socket_name = specific_socket.unwrap_or("wormhole.sock".to_string());
+    let socket_listener = new_socket_listener(&socket_name)?;
     println!("Started Socket Listener at '{}'", socket_name);
     println!("Wormhole running!");
 

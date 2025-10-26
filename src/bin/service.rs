@@ -18,10 +18,10 @@ use std::collections::HashMap;
  *  reads a message (supposely emitted by a peer) related to files actions
  *  and execute instructions on the disk
  */
-use std::env;
 use std::io::IsTerminal;
 use std::process::ExitCode;
 
+use clap::Parser;
 use tokio::sync::mpsc::{self, UnboundedSender};
 
 use wormhole::ipc::service::start_commands_listeners;
@@ -31,19 +31,24 @@ use wormhole::pods::pod::Pod;
 use winfsp::winfsp_init;
 use wormhole::signals::handle_signals;
 
-const DEFAULT_ADDRESS: &str = "127.0.0.1:8081";
+#[derive(Debug, Parser, Clone)]
+#[command(about, long_about = None)]
+struct ServiceArgs {
+    #[arg(long)]
+    pub nodeamon: bool,
+    #[arg(short)]
+    pub ip: Option<String>,
+    #[arg(short)]
+    pub socket: Option<String>,
+}
 
 #[tokio::main]
 async fn main() -> ExitCode {
     let (interrupt_tx, interrupt_rx) = mpsc::unbounded_channel::<()>();
     let (signals_tx, signals_rx) = mpsc::unbounded_channel::<()>();
+    let args = ServiceArgs::parse();
 
     let mut pods: HashMap<String, Pod> = HashMap::new();
-
-    if env::args().any(|arg| arg == "-h" || arg == "--help") {
-        println!("Usage: wormholed <IP>\n\nIP is the node address, default at '{DEFAULT_ADDRESS}'");
-        return ExitCode::SUCCESS;
-    }
 
     env_logger::init();
 
@@ -56,18 +61,15 @@ async fn main() -> ExitCode {
         }
     }
 
-    let ip_string = env::args().filter(|arg| arg != "--nodeamon").nth(1);
-    let terminal_handle =
-        if std::io::stdout().is_terminal() || env::args().any(|arg| arg == "--nodeamon") {
-            Some(tokio::spawn(terminal_watchdog(interrupt_tx)))
-        } else {
-            println!("Starting in deamon mode");
-            None
-        };
+    let terminal_handle = if std::io::stdout().is_terminal() || args.nodeamon {
+        Some(tokio::spawn(terminal_watchdog(interrupt_tx)))
+    } else {
+        println!("Starting in deamon mode");
+        None
+    };
     let signals_task = tokio::spawn(handle_signals(signals_tx, interrupt_rx));
-    log::trace!("Starting service on {:?}", ip_string);
 
-    if let Err(err) = start_commands_listeners(&mut pods, ip_string, signals_rx).await {
+    if let Err(err) = start_commands_listeners(&mut pods, args.ip, args.socket, signals_rx).await {
         eprintln!("{err}");
     }
 
