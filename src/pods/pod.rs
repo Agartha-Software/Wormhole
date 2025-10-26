@@ -152,10 +152,10 @@ async fn initiate_connection(
 
 custom_error! {pub PodStopError
     WhError{source: WhError} = "{source}",
-    ArboSavingFailed{source: io::Error} = "PodStopError: could not write arbo to disk: {source}",
+    ArboSavingFailed{source: io::Error} = "Could not write arbo to disk: {source}",
     PodNotRunning = "No pod with this name was found running.",
-    FileNotReadable{file: InodeId, reason: String} = "PodStopError: could not read file from disk: ({file}) {reason}",
-    FileNotSent{file: InodeId} = "PodStopError: no pod was able to receive this file before stopping: ({file})"
+    FileNotReadable{file: InodeId, reason: String} = "Could not read file from disk: ({file}) {reason}",
+    FileNotSent{file: InodeId} = "No pod was able to receive this file before stopping: ({file})"
 }
 
 /// Create all the directories present in Arbo. (not the files)

@@ -33,6 +33,13 @@ pub enum FreezeAnswer {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub enum RemoveAnswer {
+    Success,
+    PodNotFound,
+    PodStopFailed(String),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PeerInfo {
     pub hostname: String,
     pub url: Option<String>,

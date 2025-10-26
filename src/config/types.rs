@@ -2,7 +2,6 @@ use std::{fs, path::Path, str, sync::Arc};
 
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use tokio::time::Sleep;
 
 use crate::{
     error::{CliError, WhError, WhResult},

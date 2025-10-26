@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use crate::ipc::answers::InspectInfo;
+use crate::ipc::service::commands::find_pod;
 use crate::ipc::{answers::InspectAnswer, commands::PodId, service::connection::send_answer};
 use crate::pods::pod::Pod;
-use crate::pods::whpath::JoinPath;
 
 pub async fn inspect<Stream>(
     args: PodId,
@@ -13,18 +13,11 @@ pub async fn inspect<Stream>(
 where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
 {
-    let pod_opt = match args {
-        PodId::Name(name) => pods.get_key_value(&name),
-        PodId::Path(path) => pods
-            .iter()
-            .find(|(_, pod)| pod.get_mountpoint().as_str() == path.as_str()),
-    };
-
-    match pod_opt {
-        Some((host, pod)) => {
+    match find_pod(args, pods) {
+        Some((name, pod)) => {
             send_answer(
                 InspectAnswer::Information(InspectInfo {
-                    name: host.clone(),
+                    name: name.clone(),
                     ..pod.get_inspect_info()
                 }),
                 stream,

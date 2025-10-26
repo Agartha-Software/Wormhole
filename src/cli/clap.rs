@@ -52,7 +52,7 @@ fn canonicalize(path_str: &str) -> std::io::Result<PathBuf> {
     std::fs::canonicalize(PathBuf::from(path_str))
 }
 
-#[derive(Debug, Args, Serialize, Deserialize, Clone)]
+#[derive(Debug, Args, Clone)]
 #[group(required = true, multiple = false)]
 pub struct IdentifyPodGroup {
     /// Name of the pod. Takes precedence over path
@@ -63,14 +63,14 @@ pub struct IdentifyPodGroup {
     pub path: Option<PathBuf>,
 }
 
-#[derive(Debug, Args, Serialize, Deserialize, Clone)]
+#[derive(Debug, Args, Clone)]
 #[command(about, name = "start")]
 pub struct IdentifyPodArgs {
     #[clap(flatten)]
     pub group: IdentifyPodGroup,
 }
 
-#[derive(Debug, Args, Serialize, Deserialize, Clone)]
+#[derive(Debug, Args, Clone)]
 #[command(about, long_about = None)]
 pub struct PodConfArgs {
     #[clap(flatten)]
@@ -81,7 +81,7 @@ pub struct PodConfArgs {
     pub files: Vec<String>,
 }
 
-#[derive(Debug, Args, Serialize, Deserialize, Clone)]
+#[derive(Debug, Args, Clone)]
 #[command(about, long_about = None)]
 pub struct GetHostsArgs {
     /// Path of the file
@@ -89,7 +89,7 @@ pub struct GetHostsArgs {
     pub path: PathBuf,
 }
 
-#[derive(Debug, Args, Serialize, Deserialize, Clone)]
+#[derive(Debug, Args, Clone)]
 #[command(about, long_about = None)]
 pub struct NewArgs {
     /// Name of the pod to create
@@ -115,7 +115,7 @@ pub struct NewArgs {
     pub additional_hosts: Vec<String>,
 }
 
-#[derive(Debug, Args, Serialize, Deserialize, Clone)]
+#[derive(Debug, Args, Clone)]
 #[command(about, long_about = None)]
 pub struct TemplateArg {
     /// Name of the pod to create
@@ -142,15 +142,11 @@ pub enum Mode {
 }
 
 // Structure RemoveArgs modifiée
-#[derive(Debug, Args, Serialize, Deserialize, Clone)]
+#[derive(Debug, Args, Clone)]
 #[command(about, long_about = None)]
 pub struct RemoveArgs {
-    /// Name of pod to delete. Takes precedence over path
-    #[arg(long, short, required_unless_present = "path", conflicts_with = "path")]
-    pub name: Option<String>,
-    /// Path of the pod to remove
-    #[arg(long, short, required_unless_present = "name", conflicts_with = "name")]
-    pub path: Option<PathBuf>,
+    #[clap(flatten)]
+    pub group: IdentifyPodGroup,
     /// Mode for pod removal
     #[arg(long, default_value = "simple")]
     pub mode: Mode,
