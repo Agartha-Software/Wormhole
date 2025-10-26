@@ -12,3 +12,6 @@ You can go inside each one using
 docker exec -it <container-name> bash
 ```
 You will find a folder `whfolder` that is connected between the 3 containers.
+
+> [!CAUTION]
+> Volumes are not yet supported. Mounting one could result in showing not the wormhole files but the underlying system files (cache, etc)
