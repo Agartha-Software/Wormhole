@@ -46,4 +46,5 @@ pub enum Command {
     Freeze(PodId),
     New(NewRequest),
     GetHosts(GetHostsRequest),
+    Inspect(PodId),
 }

@@ -6,9 +6,12 @@ use crate::data::tree_hosts::{CliHostTree, TreeLine};
 use crate::error::{WhError, WhResult};
 #[cfg(target_os = "linux")]
 use crate::fuse::fuse_impl::mount_fuse;
+use crate::ipc::answers::InspectInfo;
 use crate::network::message::{FromNetworkMessage, MessageContent, ToNetworkMessage};
 use crate::network::HandshakeError;
-use crate::pods::arbo::{FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME, LOCAL_CONFIG_INO, ROOT};
+use crate::pods::arbo::{
+    FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME, LOCAL_CONFIG_INO, LOCK_TIMEOUT, ROOT,
+};
 #[cfg(target_os = "windows")]
 use crate::pods::disk_managers::dummy_disk_manager::DummyDiskManager;
 #[cfg(target_os = "linux")]
@@ -355,14 +358,14 @@ impl Pod {
             })?;
         log::info!("Get file host at local path: {}", path);
 
-        let entry = Arbo::n_read_lock(&self.network_interface.arbo, "Pod::get_info")?
+        let binding = Arbo::n_read_lock(&self.network_interface.arbo, "Pod::get_info")?;
+        let entry = &binding
             .get_inode_from_path(&WhPath::from(path))
             .map_err(|_| PodInfoError::FileNotFound)?
-            .entry
-            .clone();
+            .entry;
 
         match entry {
-            FsEntry::File(hosts) => Ok(hosts),
+            FsEntry::File(hosts) => Ok(hosts.clone()),
             FsEntry::Directory(_) => Err(PodInfoError::WrongFileType {
                 detail: "Asked path is a directory (directories have no hosts)".to_owned(),
             }),
@@ -560,5 +563,26 @@ impl Pod {
         let mountpoint = PathBuf::from(self.mountpoint.to_string());
 
         path.starts_with(mountpoint)
+    }
+
+    pub fn get_inspect_info(&self) -> InspectInfo {
+        let peers_data: Vec<(String, Option<String>)> = self
+            .peers
+            .try_read_for(LOCK_TIMEOUT)
+            .expect("Can't lock peers")
+            .iter()
+            .map(|peer| (peer.hostname.clone(), peer.url.clone()))
+            .collect();
+
+        InspectInfo {
+            url: self.network_interface.url.clone(),
+            hostname: self
+                .network_interface
+                .hostname()
+                .expect("Can't lock network"),
+            name: "".to_string(), //TODO to delete
+            connected_peers: peers_data,
+            mount: PathBuf::from(self.mountpoint.to_string()),
+        }
     }
 }

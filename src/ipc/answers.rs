@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{ipc::error::IoError, pods::arbo::Hosts};
@@ -28,4 +30,19 @@ pub enum UnfreezeAnswer {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum FreezeAnswer {
     Success,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InspectInfo {
+    pub url: Option<String>,
+    pub hostname: String,
+    pub name: String,
+    pub connected_peers: Vec<(String, Option<String>)>,
+    pub mount: PathBuf,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum InspectAnswer {
+    Information(InspectInfo),
+    PodNotFound,
 }
