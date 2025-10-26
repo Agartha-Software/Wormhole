@@ -15,6 +15,7 @@ FROM debian
 WORKDIR /wormhole
 
 COPY --from=builder /build/target/release/wormholed /bin/wormholed
+COPY --from=builder /build/target/release/wormhole /bin/wormhole
 
 RUN apt update && apt install -y fuse3
 
