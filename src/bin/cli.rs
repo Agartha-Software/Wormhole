@@ -25,7 +25,7 @@ async fn main() -> ExitCode {
     match command_network(cmd, stream).await {
         Ok(_) => ExitCode::SUCCESS,
         Err(err) => {
-            eprintln!("Command recieved isn't recognized: {err}");
+            eprintln!("{err}");
             return ExitCode::FAILURE;
         }
     }

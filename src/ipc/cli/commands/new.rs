@@ -6,16 +6,45 @@ use crate::{
     cli::NewArgs,
     ipc::{
         cli::connection::{recieve_answer, send_command},
-        commands::Command,
+        commands::{Command, NewAnswer, NewRequest},
     },
 };
 
 pub async fn new(args: NewArgs, mut stream: Stream) -> Result<(), io::Error> {
-    // send_command(Command::Start(id), &mut stream).await?;
-    // match recieve_answer::<StartAnswer>(&mut stream).await? {
-    //     StartAnswer::Success => {
-    //         println!("Start is not yet implemented! You need to manually restart the service by hand... This feature is coming soon!");
-    //     }
-    // }
+    let mut mountpoint = match args.mountpoint {
+        Some(mountpoint) => Ok(mountpoint),
+        None => std::env::current_dir().map(|path| path.join(args.name.clone())),
+    }?;
+
+    mountpoint = std::fs::canonicalize(mountpoint)?;
+
+    let NewArgs {
+        name,
+        port,
+        url,
+        hostname,
+        listen_url,
+        additional_hosts,
+        ..
+    } = args;
+
+    let request = NewRequest {
+        mountpoint,
+        name: name.clone(),
+        port,
+        url,
+        hostname,
+        listen_url,
+        additional_hosts,
+    };
+    send_command(Command::New(request), &mut stream).await?;
+
+    match recieve_answer::<NewAnswer>(&mut stream).await? {
+        NewAnswer::Success => println!("Pod '{name}' created with success."),
+        NewAnswer::AlreadyExist => todo!(),
+        NewAnswer::InvalidIp => todo!(),
+        NewAnswer::BindImpossible => todo!(),
+        NewAnswer::NoSpecifiedPeersHaveAnswerd => todo!(),
+    }
     Ok(())
 }

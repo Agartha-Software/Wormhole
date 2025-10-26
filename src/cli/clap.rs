@@ -1,7 +1,6 @@
-use crate::pods::{
-    arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
-    whpath::WhPath,
-};
+use std::path::PathBuf;
+
+use crate::pods::arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME};
 use clap::{Args, Parser, ValueEnum};
 use serde::{Deserialize, Serialize};
 
@@ -36,6 +35,10 @@ pub enum Cli {
     Stop,
 }
 
+fn canonicalize(path_str: &str) -> std::io::Result<PathBuf> {
+    std::fs::canonicalize(PathBuf::from(path_str))
+}
+
 #[derive(Debug, Args, Serialize, Deserialize, Clone)]
 #[group(required = true, multiple = false)]
 pub struct IdentifyPodGroup {
@@ -43,8 +46,8 @@ pub struct IdentifyPodGroup {
     #[arg(long, short)]
     pub name: Option<String>,
     /// Path of the pod, defaults to working directory
-    #[arg(long, short)]
-    pub path: Option<WhPath>,
+    #[arg(long, short, value_parser=canonicalize)]
+    pub path: Option<PathBuf>,
 }
 
 #[derive(Debug, Args, Serialize, Deserialize, Clone)]
@@ -69,7 +72,8 @@ pub struct PodConfArgs {
 #[command(about, long_about = None)]
 pub struct GetHostsArgs {
     /// Path of the file
-    pub path: Option<WhPath>,
+    #[arg(long, short, value_parser=canonicalize)]
+    pub path: Option<PathBuf>,
 }
 
 #[derive(Debug, Args, Serialize, Deserialize, Clone)]
@@ -80,10 +84,10 @@ pub struct NewArgs {
     pub name: String,
     /// Local port for the pod to use
     #[arg(long, short, required = true)]
-    pub port: String,
+    pub port: u16,
     /// Mount point to create the pod in. By default creates a mount point in the working directory with the name of the pod
-    #[arg(long = "mount", short)]
-    pub mountpoint: Option<WhPath>,
+    #[arg(long = "mount", short, value_parser=canonicalize)]
+    pub mountpoint: Option<PathBuf>,
     /// Network to join
     #[arg(long, short)]
     pub url: Option<String>,
@@ -104,8 +108,8 @@ pub struct TemplateArg {
     /// Name of the pod to create
     pub name: String,
     /// Mount point to create the pod in. By default creates a mount point in the working directory with the name of the pod
-    #[arg(long = "mount", short)]
-    pub mountpoint: Option<WhPath>,
+    #[arg(long = "mount", short, value_parser=canonicalize)]
+    pub mountpoint: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ValueEnum)]
@@ -133,7 +137,7 @@ pub struct RemoveArgs {
     pub name: Option<String>,
     /// Path of the pod to remove
     #[arg(long, short, required_unless_present = "name", conflicts_with = "name")]
-    pub path: Option<WhPath>,
+    pub path: Option<PathBuf>,
     /// Mode for pod removal
     #[arg(long, default_value = "simple")]
     pub mode: Mode,

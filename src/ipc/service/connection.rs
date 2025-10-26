@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
-    ipc::{commands::Command, service::commands::unfreeze},
+    ipc::{
+        commands::Command,
+        service::commands::{new, unfreeze},
+    },
     pods::pod::Pod,
 };
 use serde::Serialize;
@@ -48,7 +51,7 @@ where
 
 async fn handle_command<Stream>(
     command: Command,
-    _pods: &mut HashMap<String, Pod>,
+    pods: &mut HashMap<String, Pod>,
     mut stream: Stream,
 ) -> std::io::Result<bool>
 where
@@ -58,7 +61,7 @@ where
 
     match command {
         Command::Unfreeze(data) => unfreeze(data, stream).await,
-        Command::New(data) => unfreeze(data, stream).await,
+        Command::New(data) => new(data, pods, stream).await,
     }
 }
 

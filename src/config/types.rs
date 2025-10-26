@@ -2,6 +2,7 @@ use std::{fs, path::Path, str, sync::Arc};
 
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use tokio::time::Sleep;
 
 use crate::{
     error::{CliError, WhError, WhResult},
@@ -84,6 +85,18 @@ pub struct GlobalConfig {
     pub redundancy: RedundancyConfig,
 }
 
+impl GlobalConfig {
+    pub fn add_hosts(mut self, url: String, mut additional_hosts: Vec<String>) -> GlobalConfig {
+        if url.is_empty() && additional_hosts.is_empty() {
+            return self;
+        }
+
+        additional_hosts.insert(0, url);
+        self.general.entrypoints.extend(additional_hosts);
+        self
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct GeneralGlobalConfig {
     /// name of the network
@@ -92,10 +105,6 @@ pub struct GeneralGlobalConfig {
     pub entrypoints: Vec<String>,
     /// hostnames of known peers
     pub hosts: Vec<String>,
-    /// paths not tracked by wormhole
-    pub ignore_paths: Vec<String>, //FIXME - What is this ???
-    /// ?
-    pub pods_names: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -106,38 +115,5 @@ pub struct RedundancyConfig {
 impl Default for RedundancyConfig {
     fn default() -> Self {
         Self { number: 2 }
-    }
-}
-
-impl GlobalConfig {
-    // pub fn constructor(&mut self, global: Self) -> Result<(), CliError> {
-    //     self.general.ignore_paths = global.general.ignore_paths;
-    //     self.general.pods_names = global.general.pods_names;
-    //     if global.general.entrypoints != self.general.entrypoints {
-    //         log::warn!("Global Config: Impossible to modify peers' ip address");
-    //         return Err(CliError::Unimplemented {
-    //             arg: "Global Config: Impossible to modify peers' ip address".to_owned(),
-    //         });
-    //     }
-    //     self.redundancy.number = global.redundancy.number;
-
-    //     Ok(())
-    // }
-}
-
-//OLD
-//OLD
-//OLD
-//OLD
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct Network {
-    pub name: String,
-    pub peers: Vec<String>,
-}
-
-impl Network {
-    pub fn new(peers: Vec<String>, name: String) -> Self {
-        Self { name, peers }
     }
 }

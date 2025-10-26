@@ -1,6 +1,7 @@
 use super::message::ToNetworkMessage;
 use crate::{
     error::{CliError, CliResult},
+    ipc::commands::NewAnswer,
     pods::pod::Pod,
 };
 use std::{
@@ -26,27 +27,24 @@ pub struct Server {
 }
 
 impl Server {
-    pub async fn setup(addr: &str) -> CliResult<Server> {
-        let socket_addr: SocketAddr = addr.parse().map_err(|_| CliError::Server {
-            addr: addr.to_owned(),
-            err: std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid ip address"),
-        })?;
+    pub async fn setup(addr: &str) -> Result<Server, NewAnswer> {
+        let socket_addr: SocketAddr = addr.parse().map_err(|_| NewAnswer::InvalidIp)?;
 
-        let socket = TcpSocket::new_v4().map_err(|e| CliError::Server {
-            addr: addr.to_owned(),
-            err: e,
+        let socket = TcpSocket::new_v4().map_err(|e| {
+            log::error!("Failed to bind new pod listener: {e}");
+            NewAnswer::BindImpossible
         })?;
-        socket.set_reuseaddr(false).map_err(|e| CliError::Server {
-            addr: addr.to_owned(),
-            err: e,
+        socket.set_reuseaddr(false).map_err(|e| {
+            log::error!("Failed to bind new pod listener: {e}");
+            NewAnswer::BindImpossible
         })?;
-        socket.bind(socket_addr).map_err(|e| CliError::Server {
-            addr: addr.to_owned(),
-            err: e,
+        socket.bind(socket_addr).map_err(|e| {
+            log::error!("Failed to bind new pod listener: {e}");
+            NewAnswer::BindImpossible
         })?;
-        let listener = socket.listen(1024).map_err(|e| CliError::Server {
-            addr: addr.to_owned(),
-            err: e,
+        let listener = socket.listen(1024).map_err(|e| {
+            log::error!("Failed to bind new pod listener: {e}");
+            NewAnswer::BindImpossible
         })?;
 
         Ok(Server {
