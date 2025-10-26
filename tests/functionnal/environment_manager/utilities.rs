@@ -88,9 +88,8 @@ pub fn cli_pod_creation_command(
             log::error!("'new' cli command: {}", status);
             log::error!("\n{}", stderr);
         } else {
-            assert_eq!(
-                None,
-                status.success().then_some(status),
+            assert!(
+                status.success(),
                 "'new' cli command failed and max port reached"
             );
         }
