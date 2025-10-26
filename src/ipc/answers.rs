@@ -78,3 +78,10 @@ pub enum InspectAnswer {
     Information(InspectInfo),
     PodNotFound,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum TreeAnswer {
+    Tree(String),
+    PodNotFound,
+    PodTreeFailed(IoError),
+}

@@ -60,5 +60,6 @@ pub enum Command {
     New(NewRequest),
     GetHosts(GetHostsRequest),
     Inspect(PodId),
+    Tree(PodId),
     Status,
 }

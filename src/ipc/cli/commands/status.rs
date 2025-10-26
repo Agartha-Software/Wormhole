@@ -13,7 +13,7 @@ pub async fn status(mut stream: Stream) -> io::Result<()> {
 
     match recieve_answer::<StatusAnswer>(&mut stream).await? {
         StatusAnswer::Success => {
-            println!("Service existing");
+            println!("Service online.");
             Ok(())
         }
     }
