@@ -21,11 +21,11 @@ pub async fn gethosts(args: GetHostsArgs, mut stream: Stream) -> Result<(), io::
         }
         GetHostsAnswer::FileNotInsideARunningPod => Err(io::Error::new(
             io::ErrorKind::NotConnected,
-            "The given path does not descend a pod",
+            "The given path does isn't inside a pod.",
         )),
         GetHostsAnswer::FileNotFound => Err(io::Error::new(
             io::ErrorKind::NotFound,
-            "The given path couldn't be found inside the pod",
+            "The given path couldn't be found inside the pod.",
         )),
         GetHostsAnswer::WrongFileType(_) => Err(io::Error::new(
             io::ErrorKind::IsADirectory,

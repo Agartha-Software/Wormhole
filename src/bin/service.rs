@@ -41,7 +41,7 @@ async fn main() -> ExitCode {
     let mut pods: HashMap<String, Pod> = HashMap::new();
 
     if env::args().any(|arg| arg == "-h" || arg == "--help") {
-        println!("Usage: wormholed <IP>\n\nIP is the node address, default at {DEFAULT_ADDRESS}");
+        println!("Usage: wormholed <IP>\n\nIP is the node address, default at '{DEFAULT_ADDRESS}'");
         return ExitCode::SUCCESS;
     }
 

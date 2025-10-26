@@ -21,7 +21,6 @@ use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use fuser;
 use log::info;
-use openat::AsPath;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
@@ -347,8 +346,17 @@ impl Pod {
     // SECTION getting info from the pod (for the cli)
 
     pub fn get_file_hosts(&self, path: WhPath) -> Result<Vec<Address>, PodInfoError> {
+        let path_string = path.to_string();
+        log::info!("Get file host at: {}", path_string);
+        let path = path_string
+            .strip_prefix(&self.mountpoint.to_string())
+            .ok_or(PodInfoError::WrongFileType {
+                detail: "Asked path is a directory (directories have no hosts)".to_owned(),
+            })?;
+        log::info!("Get file host at local path: {}", path);
+
         let entry = Arbo::n_read_lock(&self.network_interface.arbo, "Pod::get_info")?
-            .get_inode_from_path(&path)
+            .get_inode_from_path(&WhPath::from(path))
             .map_err(|_| PodInfoError::FileNotFound)?
             .entry
             .clone();
