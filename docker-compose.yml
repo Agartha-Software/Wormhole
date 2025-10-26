@@ -6,7 +6,7 @@ services:
     post_start:
       - command: sh -c "sleep 1 &&
                         mkdir whfolder &&
-                        wormhole 127.0.0.1:8081 new pod1 -m whfolder"
+                        wormhole new pod1 -p 5000 -m whfolder"
     network_mode: "host"
     devices:
       - '/dev/fuse'
@@ -22,7 +22,7 @@ services:
     post_start:
       - command: sh -c "sleep 2 &&
                         mkdir whfolder &&
-                        wormhole 127.0.0.1:8082 new pod2 -m whfolder -u 127.0.0.1:40000"
+                        wormhole new pod2 -p 5001 -m whfolder -u 127.0.0.1:5000"
     network_mode: "host"
     devices:
       - '/dev/fuse'
@@ -38,7 +38,7 @@ services:
     post_start:
       - command: sh -c "sleep 3 &&
                         mkdir whfolder &&
-                        wormhole 127.0.0.1:8083 new pod3 -m whfolder -u 127.0.0.1:40001"
+                        wormhole new pod3 -p 5002 -m whfolder -u 127.0.0.1:5001"
     network_mode: "host"
     devices:
       - '/dev/fuse'
