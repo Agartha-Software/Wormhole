@@ -9,10 +9,10 @@ Wormhole uses two binaries:
  Wormhole being still in heavy developpement, the project still require to build the project from source.
 
 ## Install
-See the [install guide](docs/getting-started/install.md). This is the simplest way to directly install Wormhole
+See the [install guide](./install.md). This is the simplest way to directly install Wormhole
 
 ## Build for source
-If the [install guide](docs/getting-started/install.md) does not cover your system.
+If the [install guide](./install.md) does not cover your system.
 ### Prerequisites
 
 - [Rust](https://www.rust-lang.org/tools/install) installed.

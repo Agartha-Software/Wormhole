@@ -72,6 +72,9 @@ You can then rebuild using `nixos-rebuild switch` and should have access to both
 
 ## 3. Install via Cargo or crates.io (All Platforms)
 
+> [!WARNING]
+> Installation via Cargo is not yet stable. You have to install fuse3 separately. If you do not success to install Wormhole using Cargo, use one of the other provided methods.
+
 **Requirements:**
 
 - [Rust toolchain](https://www.rust-lang.org/tools/install)
@@ -126,14 +129,26 @@ sudo apt install -y pkg-config libfuse3-dev libfuse-dev
 
 ---
 
-## 5. Windows
+## 5. Fedora
+
+- Download the latest `.rpm` from the [GitHub Releases](https://github.com/Agartha-Software/Wormhole/releases)
+- Install with:
+
+```sh
+sudo dnf install ./wormhole.rpm
+```
+
+> [!WARNING]
+> The package will give you access to `wormhole` and `wormholed` commands. `wormholed` is the service, but the package does not automatically enable it. You have to start it yourself.
+
+## 6. Windows
 
 ### a) Using the Installer
 
 - Download `WormholeInstaller.exe` from the [GitHub Releases](https://github.com/Agartha-Software/Wormhole/releases)
 - Run the installer and follow the instructions.
 
-### b) Manual build (advanced)
+### b) Manual build
 
 - Install [Rust](https://www.rust-lang.org/tools/install)
 - Install [WinFsp](https://github.com/winfsp/winfsp/releases)
