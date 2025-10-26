@@ -34,7 +34,7 @@ pub enum FreezeAnswer {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum StatusAnswer {
-    Success
+    Success,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
