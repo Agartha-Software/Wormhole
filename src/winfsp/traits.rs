@@ -11,6 +11,7 @@ use crate::{
             read::ReadError,
             rename::RenameError,
             write::WriteError,
+            readdir::ReadDirError,
         },
         network::pull_file::PullError,
         whpath::WhPath,
