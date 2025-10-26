@@ -36,11 +36,12 @@ pub async fn start_commands_listeners(
         ),
         None => new_free_tcp_listener().await?,
     };
-    log::info!("Started Tcp Listener on {}", ip.to_string());
+    println!("Started Tcp Listener at '{}'", ip.to_string());
 
     let socket_name = "wormhole.sock";
     let socket_listener = new_socket_listener(socket_name)?;
-    log::info!("Started Socket Listener on {}", socket_name);
+    println!("Started Socket Listener at '{}'", socket_name);
+    println!("Wormhole running!");
 
     loop {
         if tokio::select! {

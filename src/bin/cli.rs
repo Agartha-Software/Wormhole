@@ -15,12 +15,15 @@ async fn main() -> ExitCode {
     log::debug!("Command found: {cmd:?}");
 
     let stream = match start_local_socket().await {
+        //TODO: don't open stream on local cmd
         Ok(stream) => stream,
         Err(err) => {
             eprintln!("Connection to the service failed: {}: {err}", err.kind());
+            eprintln!("Check if the service is running.");
             return ExitCode::FAILURE;
         }
     };
+    log::trace!("Connection with the service open.");
 
     match command_network(cmd, stream).await {
         Ok(_) => ExitCode::SUCCESS,

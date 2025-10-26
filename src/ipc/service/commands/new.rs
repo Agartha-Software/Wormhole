@@ -24,6 +24,7 @@ where
         .any(|p| p.get_mountpoint().as_str() == args.mountpoint.as_str())
     {
         send_answer(NewAnswer::AlreadyExist, stream).await?;
+        return Ok(false);
     }
 
     let server = match Server::setup(&format!("0.0.0.0:{}", args.port)).await {

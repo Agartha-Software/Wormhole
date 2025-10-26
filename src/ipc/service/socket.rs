@@ -1,13 +1,16 @@
 use interprocess::local_socket::tokio::Listener;
-use interprocess::local_socket::ToNsName;
+use interprocess::local_socket::{GenericFilePath, NameType, ToFsName, ToNsName};
 use interprocess::local_socket::{GenericNamespaced, ListenerOptions};
 
 use crate::ipc::error::SocketListenerError;
 
 pub fn new_socket_listener(name: &'static str) -> Result<Listener, SocketListenerError> {
-    let ns_name = name
-        .to_ns_name::<GenericNamespaced>()
-        .expect("Invalid socket file name, the name is static so it shouldn't happen.");
+    let ns_name = if GenericNamespaced::is_supported() {
+        name.to_ns_name::<GenericNamespaced>()
+    } else {
+        format!("/tmp/{name}").to_fs_name::<GenericFilePath>()
+    }
+    .expect("Invalid socket file name, the name is static so it shouldn't happen.");
 
     let opts = ListenerOptions::new().name(ns_name);
 

@@ -12,12 +12,12 @@ use crate::{
 };
 
 pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<()> {
-    let mut mountpoint = match args.mountpoint {
+    log::trace!("1");
+    let mountpoint = match args.mountpoint {
         Some(mountpoint) => Ok(mountpoint),
         None => std::env::current_dir().map(|path| path.join(args.name.clone())),
     }?;
-
-    mountpoint = std::fs::canonicalize(mountpoint)?;
+    log::trace!("2 {:?}", mountpoint);
 
     let NewArgs {
         name,
@@ -28,6 +28,7 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<()> {
         additional_hosts,
         ..
     } = args;
+    log::trace!("3");
 
     let request = NewRequest {
         mountpoint,
@@ -38,6 +39,7 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<()> {
         listen_url,
         additional_hosts,
     };
+    log::trace!("4");
     send_command(Command::New(request), &mut stream).await?;
 
     match recieve_answer::<NewAnswer>(&mut stream).await? {
@@ -54,10 +56,12 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<()> {
             "Given port is already used.",
         )),
         NewAnswer::BindImpossible(e) => {
-            eprintln!("Failed to bind the given pod.");
+            eprintln!("Failed to bind the given pod:");
             Err(e.into())
         }
-
-        NewAnswer::FailedToCreatePod(e) => Err(e.into()),
+        NewAnswer::FailedToCreatePod(e) => {
+            eprintln!("Failed to create the given pod:");
+            Err(e.into())
+        }
     }
 }

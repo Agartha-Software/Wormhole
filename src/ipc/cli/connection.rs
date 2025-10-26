@@ -21,22 +21,28 @@ pub async fn start_local_socket() -> io::Result<Stream> {
 pub async fn send_command(command: Command, stream: &mut Stream) -> Result<(), std::io::Error> {
     let serialized =
         bincode::serialize(&command).expect("Can't serialize cli command, shouldn't be possible .");
+    log::trace!("Sending cmd: {:?}, bytes {}", command, serialized.len());
 
+    stream.write_u32(serialized.len() as u32).await?;
     stream.write_all(&serialized).await
 }
 
 pub async fn recieve_answer<T>(stream: &mut Stream) -> Result<T, std::io::Error>
 where
-    T: for<'a> Deserialize<'a>,
+    T: for<'a> Deserialize<'a> + std::fmt::Debug,
 {
-    let mut recived_answer = Vec::new();
+    let size = stream.read_u32().await?;
+    let mut recived_answer = Vec::with_capacity(size as usize);
 
     stream.read_buf(&mut recived_answer).await?;
-    bincode::deserialize::<T>(&recived_answer).map_err(|err| {
-        log::error!("Service answer deserialisation failed: {err}");
-        io::Error::new(
-            io::ErrorKind::InvalidData,
-            "Command recieved isn't recognized",
-        )
-    })
+
+    bincode::deserialize::<T>(&recived_answer)
+        .map_err(|err| {
+            log::error!("Service answer deserialisation failed: {err}");
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Command recieved isn't recognized",
+            )
+        })
+        .inspect(|answer| log::trace!("Recieved answer: {:?}", answer))
 }

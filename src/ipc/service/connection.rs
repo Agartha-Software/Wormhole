@@ -17,12 +17,19 @@ where
 {
     log::debug!("Connection recieved");
 
-    //let mut buffer: Vec<u8> = Vec::with_capacity(std::mem::size_of::<Command>()); TODO: Test
-    let mut buffer: Vec<u8> = Vec::new();
+    let size = stream
+        .read_u32()
+        .await
+        .expect("Failed to read recieved command, shouldn't be possible!");
+    log::trace!("waiting for {size} bytes!");
+    let mut buffer: Vec<u8> = Vec::with_capacity(size as usize);
     let _size = stream
         .read_buf(&mut buffer)
         .await
         .expect("Failed to read recieved command, shouldn't be possible!");
+
+    log::trace!("found {_size} bytes!");
+
     match bincode::deserialize::<Command>(&buffer) {
         Ok(command) => handle_command(command, pods, stream)
             .await
@@ -46,6 +53,7 @@ where
     let serialized =
         bincode::serialize(&answer).expect("Can't serialize cli answer, shouldn't be possible!");
 
+    stream.write_u32(serialized.len() as u32).await?;
     stream.write_all(&serialized).await
 }
 
