@@ -9,11 +9,11 @@ use serde::Deserialize;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-pub async fn start_local_socket() -> io::Result<Stream> {
+pub async fn start_local_socket(socket: String) -> io::Result<Stream> {
     let name = if GenericNamespaced::is_supported() {
-        "wormhole.sock".to_ns_name::<GenericNamespaced>()?
+        socket.to_ns_name::<GenericNamespaced>()?
     } else {
-        "/tmp/wormhole.sock".to_fs_name::<GenericFilePath>()?
+        format!("/tmp/{socket}").to_fs_name::<GenericFilePath>()?
     };
     Stream::connect(name).await
 }

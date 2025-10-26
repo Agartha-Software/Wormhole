@@ -14,7 +14,7 @@ async fn main() -> ExitCode {
     let cmd = Cli::parse();
     log::debug!("Command found: {cmd:?}");
 
-    let stream = match start_local_socket().await {
+    let stream = match start_local_socket(cmd.socket).await {
         //TODO: don't open stream on local cmd
         Ok(stream) => stream,
         Err(err) => {
@@ -25,7 +25,7 @@ async fn main() -> ExitCode {
     };
     log::trace!("Connection with the service open.");
 
-    match command_network(cmd, stream).await {
+    match command_network(cmd.command, stream).await {
         Ok(_) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("{err}");

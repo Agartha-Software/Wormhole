@@ -1,12 +1,22 @@
 use std::path::PathBuf;
 
 use crate::pods::arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME};
-use clap::{Args, Parser, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None, name="wormhole")]
-pub enum Cli {
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: CliCommand,
+    /// Specify a specific service socket in case of multiple services running, Defaults to 'wormhole.sock'.
+    #[arg(short, long, default_value = "wormhole.sock")]
+    pub socket: String,
+}
+
+#[derive(Debug, Subcommand)]
+#[command(version, about, long_about = None, name="wormhole")]
+pub enum CliCommand {
     /// Create a new pod and join a network if possible or create a new network
     New(NewArgs),
     /// Pause a given pod
