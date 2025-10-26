@@ -32,31 +32,35 @@ Move the binaries where needed, they can be found under `target/release/wormhole
 
 Launch a new service, the node is started automatically
 ```
-wormholed  127.0.0.1:8081
-^--------  ^-------------
-deamon     Optional address with a default of 127.0.0.1:8081
+wormholed
+^--------
+deamon   
 ```
-If not providing the address, will use 127.0.0.1 and select the next available port after 8081
 
 Create a new Wormhole network
 The new pod being created with any other connection it will automaticaly create a new network
 ```
-./wormhole    127.0.0.1:8081     new      my_pod    -m dir1/   -p 5555
-^---------    ^-------------     ^--      ^-----    ^-------   ^-----------------
-CLI helper    Optional service   Command  Pod Name  optional   Pod port
-               address                              mount path
+./wormhole  new      my_pod    -m dir1/   -p 5555
+^---------  ^--      ^-----    ^-------   ^-----------------
+CLI helper  Command  Pod Name  optional   Pod port
+                               mount path
 
 ```
-Provide the optional service address if your service is not running on the default 127.0.0.1:8081 address.
 
 Join an existing Wormhole network
 ```
-./wormhole 127.0.0.1:8081 new my_pod2 -m dir2/ -p 5556 -u 127.0.0.10:5555
-                                                       ^-----------------
-                                                       Existing pod url
+./wormhole new my_pod2 -m dir2/ -p 5556 -u 127.0.0.1:5555
+                                        ^-----------------
+                                        Existing pod url
 ```
 
-For a more complex Docker-based deployment, refer to the [Docker Guide](docs/getting-started/docker_guide.md).
+Check help menus to see more:
+```sh
+./wormhole --help # general help
+./wormhole new --help # help for command "new"
+```
+
+### For easy testing, go check the [Docker Guide](docs/getting-started/docker_guide.md).
 
 ---
 
