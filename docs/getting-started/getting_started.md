@@ -36,6 +36,7 @@ wormholed  127.0.0.1:8081
 ^--------  ^-------------
 deamon     Optional address with a default of 127.0.0.1:8081
 ```
+If not providing the address, will use 127.0.0.1 and select the next available port after 8081
 
 Create a new Wormhole network
 The new pod being created with any other connection it will automaticaly create a new network
@@ -46,6 +47,7 @@ CLI helper    Optional service   Command  Pod Name  optional   Pod port
                address                              mount path
 
 ```
+Provide the optional service address if your service is not running on the default 127.0.0.1:8081 address.
 
 Join an existing Wormhole network
 ```
@@ -54,7 +56,6 @@ Join an existing Wormhole network
                                                        Existing pod url
 ```
 
-For a step-by-step guide to setting up a simple multi-pod network, see the [CLI Usage Guide](docs/getting-started/memo_cli.md).
 For a more complex Docker-based deployment, refer to the [Docker Guide](docs/getting-started/docker_guide.md).
 
 ---
