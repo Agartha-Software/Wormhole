@@ -282,4 +282,12 @@ impl DiskManager for DummyDiskManager {
     fn set_permisions(&self, _path: &WhPath, _permissions: u16) -> io::Result<()> {
         Ok(())
     }
+
+    fn file_exists(&self, path: &WhPath) -> bool {
+        self
+            .files
+            .read()
+            .expect("VirtDisk::read_file rwLock")
+            .get(&path.clone().set_relative()).is_some()
+    }
 }

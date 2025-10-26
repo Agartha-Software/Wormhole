@@ -145,4 +145,8 @@ impl DiskManager for UnixDiskManager {
     fn size_info(&self) -> std::io::Result<super::DiskSizeInfo> {
         todo!()
     }
+
+    fn file_exists(&self, path: &WhPath) -> bool {
+        self.handle.open_file(path.clone().set_relative()).is_ok()
+    }
 }

@@ -137,4 +137,8 @@ impl DiskManager for WindowsDiskManager {
     fn set_permisions(&self, path: &WhPath, permissions: u16) -> io::Result<()> {
         Ok(())
     }
+
+    fn file_exists(&self, path: &WhPath) -> bool {
+        std::fs::exists(&self.mount_point.join(path).inner)
+    }
 }
