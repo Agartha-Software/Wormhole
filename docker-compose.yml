@@ -2,12 +2,10 @@ services:
   whone:
     build:
       context: .
-      network: host
     post_start:
       - command: sh -c "sleep 1 &&
                         mkdir whfolder &&
                         wormhole new pod1 -p 5000 -m whfolder"
-    network_mode: "host"
     devices:
       - '/dev/fuse'
     cap_add:
@@ -18,28 +16,24 @@ services:
   whtwo:
     build:
       context: .
-      network: host
     post_start:
       - command: sh -c "sleep 2 &&
                         mkdir whfolder &&
-                        wormhole new pod2 -p 5001 -m whfolder -u 127.0.0.1:5000"
-    network_mode: "host"
+                        wormhole new pod2 -p 5000 -m whfolder -u whone:5000"
     devices:
       - '/dev/fuse'
     cap_add:
       - "SYS_ADMIN"
     environment:
       RUST_LOG: "wormhole=trace"
-  
+
   whthree:
     build:
       context: .
-      network: host
     post_start:
       - command: sh -c "sleep 3 &&
                         mkdir whfolder &&
-                        wormhole new pod3 -p 5002 -m whfolder -u 127.0.0.1:5001"
-    network_mode: "host"
+                        wormhole new pod3 -p 5000 -m whfolder -u whtwo:5000"
     devices:
       - '/dev/fuse'
     cap_add:
