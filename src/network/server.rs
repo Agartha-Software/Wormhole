@@ -1,8 +1,5 @@
 use super::message::ToNetworkMessage;
-use crate::{
-    error::{CliError, CliResult},
-    pods::pod::Pod,
-};
+use crate::{ipc::answers::NewAnswer, pods::pod::Pod};
 use std::{
     collections::HashMap,
     net::SocketAddr,
@@ -28,62 +25,53 @@ pub struct Server {
 pub const POD_DEFAULT_PORT: u16 = 40000;
 pub const POD_PORT_MAX_TRIES: u16 = 100;
 
-fn connect_bind(socket: &TcpSocket, addr: String) -> CliResult<()> {
-    let socket_addr = addr.parse().map_err(|_| CliError::Server {
-        addr: addr.to_owned(),
-        err: std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid ip address"),
-    })?;
-    socket.bind(socket_addr).map_err(|e| CliError::Server {
-        addr: addr.to_owned(),
-        err: e,
+fn connect_bind(socket: &TcpSocket, addr: String) -> Result<(), NewAnswer> {
+    let socket_addr = addr.parse().map_err(|_| NewAnswer::InvalidIp)?;
+    socket.bind(socket_addr).map_err(|e| {
+        log::trace!("Automatically generated address is invalid, retrying: {e}");
+        NewAnswer::BindImpossible(e.into())
     })
 }
 
 fn connect_to_available_port(
     socket: &TcpSocket,
     addr: &str,
-    port: Option<String>,
-) -> CliResult<String> {
+    port: Option<u16>,
+) -> Result<u16, NewAnswer> {
     if let Some(port) = port {
         let combined = format!("{}:{}", addr, port);
         connect_bind(socket, combined)?;
         return Ok(port);
     }
 
-    let mut last_err: Option<CliError> = None;
+    let mut last_err: Option<NewAnswer> = None;
     for p in 0..POD_PORT_MAX_TRIES {
         let port_num = POD_DEFAULT_PORT + p;
         let combined = format!("{}:{}", addr, port_num);
         match connect_bind(socket, combined) {
-            Ok(()) => return Ok(port_num.to_string()),
+            Ok(()) => return Ok(port_num),
             Err(e) => last_err = Some(e),
         }
     }
 
     // NOTE technically impossible to go there
-    Err(last_err.unwrap_or_else(|| CliError::Server {
-        addr: addr.to_owned(),
-        err: std::io::Error::new(
-            std::io::ErrorKind::AddrNotAvailable,
-            "no available port in range",
-        ),
-    }))
+    Err(last_err.unwrap_or(NewAnswer::InvalidIp))
 }
 
 impl Server {
-    pub async fn setup(addr: &str, port: Option<String>) -> CliResult<(Server, String)> {
-        let socket = TcpSocket::new_v4().map_err(|e| CliError::Server {
-            addr: addr.to_owned(),
-            err: e,
+    pub async fn setup(addr: &str, port: Option<u16>) -> Result<(Server, u16), NewAnswer> {
+        let socket = TcpSocket::new_v4().map_err(|e| {
+            log::error!("Failed to bind new pod listener: {e}");
+            NewAnswer::BindImpossible(e.into())
         })?;
-        socket.set_reuseaddr(false).map_err(|e| CliError::Server {
-            addr: addr.to_owned(),
-            err: e,
+        socket.set_reuseaddr(false).map_err(|e| {
+            log::error!("Failed to bind new pod listener: {e}");
+            NewAnswer::BindImpossible(e.into())
         })?;
         let port = connect_to_available_port(&socket, addr, port)?;
-        let listener = socket.listen(1024).map_err(|e| CliError::Server {
-            addr: addr.to_owned(),
-            err: e,
+        let listener = socket.listen(1024).map_err(|e| {
+            log::error!("Failed to bind new pod listener: {e}");
+            NewAnswer::BindImpossible(e.into())
         })?;
 
         Ok((
