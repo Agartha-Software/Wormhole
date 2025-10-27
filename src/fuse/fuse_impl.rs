@@ -44,11 +44,9 @@ impl Filesystem for FuseController {
                 reply.entry(&TTL, &inode.meta.with_ids(req.uid(), req.gid()), 0);
             }
             Ok(None) => {
-                log::error!("lookup({parent}, {}): no permission", name.display());
                 reply.error(libc::EACCES);
             }
             Err(e) => {
-                log::error!("lookup({parent}, {}): {e}", name.display());
                 reply.error(libc::ENOENT);
             }
         };
