@@ -383,12 +383,10 @@ impl FileSystemContext for FSPController {
             context,
             marker.inner_as_cstr().map(|s| s.to_string_lossy())
         );
-        let mut entries = if let Ok(entries) = self.fs_interface.read_dir(context.ino) {
-            entries
-        } else {
-            log::error!("read_directory::ERROR_NOT_FOUND");
-            return Err(STATUS_OBJECT_NAME_NOT_FOUND.into());
-        };
+        let mut entries = self
+            .fs_interface
+            .read_dir(context.ino)
+            .inspect_err(|e| log::error!("read_directory::ERROR_NOT_FOUND"))?;
 
         let mut cursor = 0;
 

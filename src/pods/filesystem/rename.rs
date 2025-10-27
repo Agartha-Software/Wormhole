@@ -6,6 +6,7 @@ use crate::{
     error::{WhError, WhResult},
     pods::{
         arbo::{Arbo, InodeId, Metadata},
+        filesystem::permissions::has_write_perm,
         whpath::WhPath,
     },
 };
@@ -30,6 +31,7 @@ custom_error! {
     ProtectedNameIsFolder = "Protected name can't be used for folders",
     ReadFailed{source: ReadError} = "Read failed on copy: {source}",
     LocalWriteFailed{io: std::io::Error} = "Write failed on copy: {io}",
+    PermissionDenied = "Permission denied"
 }
 
 impl FsInterface {
@@ -113,6 +115,9 @@ impl FsInterface {
                         RenameError::LocalRenamingFailed { io }
                     }
                     MakeInodeError::ProtectedNameIsFolder => RenameError::ProtectedNameIsFolder,
+                    MakeInodeError::PermissionDenied => RenameError::LocalRenamingFailed {
+                        io: std::io::ErrorKind::PermissionDenied.into(),
+                    },
                 })?
                 .id
         };
@@ -134,6 +139,7 @@ impl FsInterface {
             RemoveFileError::WhError { source } => RenameError::WhError { source },
             RemoveFileError::NonEmpty => unreachable!("special files cannot be folders"),
             RemoveFileError::LocalDeletionFailed { io } => RenameError::LocalRenamingFailed { io },
+            RemoveFileError::PermissionDenied => RenameError::PermissionDenied,
         })?;
 
         Ok(())
@@ -162,15 +168,16 @@ impl FsInterface {
         }
 
         let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface::remove_inode")?;
+        let p_inode = arbo.n_get_inode(parent).map_err(|err| match err {
+            WhError::InodeNotFound => RenameError::SourceParentNotFound,
+            WhError::InodeIsNotADirectory => RenameError::SourceParentNotFolder,
+            source => RenameError::WhError { source },
+        })?;
+        if !has_write_perm(p_inode.meta.perm) {
+            return Err(RenameError::PermissionDenied);
+        }
         let src_ino = arbo
-            .n_get_inode_child_by_name(
-                arbo.n_get_inode(parent).map_err(|err| match err {
-                    WhError::InodeNotFound => RenameError::SourceParentNotFound,
-                    WhError::InodeIsNotADirectory => RenameError::SourceParentNotFolder,
-                    source => RenameError::WhError { source },
-                })?,
-                &name,
-            )
+            .n_get_inode_child_by_name(p_inode, &name)
             .map_err(|err| match err {
                 WhError::InodeNotFound => RenameError::SourceParentNotFound,
                 WhError::InodeIsNotADirectory => RenameError::SourceParentNotFolder,
@@ -197,16 +204,14 @@ impl FsInterface {
 
         if let Some(dest_ino) = dest_ino {
             log::debug!("overwriting!!");
-            match self.recept_remove_inode(dest_ino) {
-                Ok(_) => (),
-                Err(RemoveFileError::LocalDeletionFailed { io }) => {
-                    return Err(RenameError::LocalOverwriteFailed { io })
+            self.recept_remove_inode(dest_ino).map_err(|e| match e {
+                RemoveFileError::LocalDeletionFailed { io } => {
+                    RenameError::LocalOverwriteFailed { io }
                 }
-                Err(RemoveFileError::NonEmpty) => return Err(RenameError::OverwriteNonEmpty),
-                Err(RemoveFileError::WhError { source }) => {
-                    return Err(RenameError::WhError { source })
-                }
-            }
+                RemoveFileError::NonEmpty => return RenameError::OverwriteNonEmpty,
+                RemoveFileError::WhError { source } => return RenameError::WhError { source },
+                RemoveFileError::PermissionDenied => RenameError::PermissionDenied,
+            })?;
         }
 
         self.rename_locally(parent, new_parent, name, new_name)?;
@@ -234,16 +239,14 @@ impl FsInterface {
         if let Some(dest_ino) = dest_ino {
             if overwrite {
                 log::debug!("overwriting!!");
-                match self.recept_remove_inode(dest_ino) {
-                    Ok(_) => (),
-                    Err(RemoveFileError::LocalDeletionFailed { io }) => {
-                        return Err(RenameError::LocalOverwriteFailed { io })
+                self.recept_remove_inode(dest_ino).map_err(|e| match e {
+                    RemoveFileError::LocalDeletionFailed { io } => {
+                        RenameError::LocalOverwriteFailed { io }
                     }
-                    Err(RemoveFileError::NonEmpty) => return Err(RenameError::OverwriteNonEmpty),
-                    Err(RemoveFileError::WhError { source }) => {
-                        return Err(RenameError::WhError { source })
-                    }
-                }
+                    RemoveFileError::NonEmpty => RenameError::OverwriteNonEmpty,
+                    RemoveFileError::WhError { source } => RenameError::WhError { source },
+                    RemoveFileError::PermissionDenied => RenameError::PermissionDenied,
+                })?;
             } else {
                 log::debug!("not overwriting!!");
                 return Err(RenameError::DestinationExists);
