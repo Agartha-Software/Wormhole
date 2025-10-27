@@ -52,9 +52,13 @@ impl FsInterface {
         let parent_path = self.construct_file_path(parent, name)?;
         let new_parent_path = self.construct_file_path(new_parent, new_name)?;
 
-        self.disk
-            .mv_file(&parent_path, &new_parent_path)
-            .map_err(|io| RenameError::LocalRenamingFailed { io })
+        if self.disk.file_exists(&parent_path) {
+            self.disk
+                .mv_file(&parent_path, &new_parent_path)
+                .map_err(|io| RenameError::LocalRenamingFailed { io })
+        } else {
+            Ok(())
+        }
     }
 
     pub fn set_meta_size(&self, ino: InodeId, meta: Metadata) -> Result<(), RenameError> {

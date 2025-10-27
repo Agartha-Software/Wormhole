@@ -76,7 +76,7 @@ impl fmt::Display for CliSuccess {
         match self {
             CliSuccess::Message(msg) => write!(f, "{}", msg),
             CliSuccess::WithData { message, data } => {
-                write!(f, "{} - Data:\n{}\n", message, data)
+                write!(f, "{} - Data: {}", message, data)
             }
         }
     }
