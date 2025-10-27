@@ -41,7 +41,6 @@ impl Filesystem for FuseController {
             .get_entry_from_name(parent, name.to_string_lossy().to_string())
         {
             Ok(Some(inode)) => {
-                log::trace!("lookup({parent}, {}) = {}", name.display(), inode.id);
                 reply.entry(&TTL, &inode.meta.with_ids(req.uid(), req.gid()), 0);
             }
             Ok(None) => {
@@ -56,7 +55,6 @@ impl Filesystem for FuseController {
     }
 
     fn getattr(&mut self, req: &Request, ino: u64, _fh: Option<u64>, reply: ReplyAttr) {
-        log::trace!("getattr");
         let attrs = self.fs_interface.n_get_inode_attributes(ino);
 
         match attrs {
@@ -86,7 +84,6 @@ impl Filesystem for FuseController {
         flags: Option<u32>,
         reply: ReplyAttr,
     ) {
-        log::trace!("setattr({ino})");
         match self
             .fs_interface
             .setattr(
@@ -128,7 +125,6 @@ impl Filesystem for FuseController {
         size: u32,
         reply: ReplyXattr,
     ) {
-        log::trace!("getxattr");
         let attr = self
             .fs_interface
             .get_inode_xattr(ino, &name.to_string_lossy().to_string());
@@ -162,7 +158,6 @@ impl Filesystem for FuseController {
         _position: u32, // Postion undocumented
         reply: ReplyEmpty,
     ) {
-        log::trace!("setxattr");
         // As we follow linux implementation in spirit, data size limit at 64kb
         if data.len() > 64000 {
             return reply.error(libc::ENOSPC);
@@ -211,7 +206,6 @@ impl Filesystem for FuseController {
         name: &OsStr,
         reply: ReplyEmpty,
     ) {
-        log::trace!("removexattr");
         match self
             .fs_interface
             .network_interface
@@ -223,7 +217,6 @@ impl Filesystem for FuseController {
     }
 
     fn listxattr(&mut self, _req: &Request<'_>, ino: u64, size: u32, reply: ReplyXattr) {
-        log::trace!("listxattr");
         match self.fs_interface.list_inode_xattr(ino) {
             Ok(keys) => {
                 let mut bytes = vec![];
@@ -259,7 +252,6 @@ impl Filesystem for FuseController {
         _lock: Option<u64>,
         reply: ReplyData,
     ) {
-        log::trace!("read");
         let mut buf = vec![];
         buf.resize(size as usize, 0);
         match self.fs_interface.read_file(
@@ -298,7 +290,6 @@ impl Filesystem for FuseController {
         offset: i64,
         mut reply: ReplyDirectory,
     ) {
-        log::trace!("readdir");
         let entries = match self.fs_interface.read_dir(ino) {
             Ok(entries) => entries,
             Err(ReadDirError::PermissionError) => {
@@ -341,7 +332,6 @@ impl Filesystem for FuseController {
         _rdev: u32,
         reply: ReplyEntry,
     ) {
-        log::trace!("mknod");
         let permissions = mode as u16;
         let kind = match filetype_from_mode(mode) {
             Some(kind) => kind,
@@ -382,7 +372,6 @@ impl Filesystem for FuseController {
         _umask: u32,
         reply: ReplyEntry,
     ) {
-        log::trace!("mkdir");
         match self
             .fs_interface
             .make_inode(
@@ -409,7 +398,6 @@ impl Filesystem for FuseController {
     }
 
     fn unlink(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
-        log::trace!("unlink");
         match self.fs_interface.fuse_remove_inode(parent, name) {
             Ok(()) => reply.ok(),
             Err(RemoveFileError::WhError { source }) => reply.error(source.to_libc()),
@@ -424,7 +412,6 @@ impl Filesystem for FuseController {
     }
 
     fn rmdir(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
-        log::trace!("rmdir");
         match self.fs_interface.fuse_remove_inode(parent, name) {
             Ok(()) => reply.ok(),
             Err(RemoveFileError::WhError { source }) => reply.error(source.to_libc()),
@@ -448,7 +435,6 @@ impl Filesystem for FuseController {
         flags: u32,
         reply: fuser::ReplyEmpty,
     ) {
-        log::trace!("rename");
         match self
             .fs_interface
             .rename(
@@ -493,7 +479,6 @@ impl Filesystem for FuseController {
     }
 
     fn open(&mut self, _req: &Request<'_>, ino: u64, flags: i32, reply: fuser::ReplyOpen) {
-        log::trace!("open");
         match AccessMode::from_libc(flags).and_then(|access| {
             self.fs_interface
                 .open(ino, OpenFlags::from_libc(flags), access)
@@ -518,7 +503,6 @@ impl Filesystem for FuseController {
         _lock_owner: Option<u64>,
         reply: fuser::ReplyWrite,
     ) {
-        log::trace!("write");
         let offset = offset
             .try_into()
             .expect("fuser write: can't convert i64 to u64");
@@ -630,7 +614,6 @@ impl Filesystem for FuseController {
         _flush: bool,
         reply: fuser::ReplyEmpty,
     ) {
-        log::trace!("release");
         match self.fs_interface.release(file_handle) {
             Ok(()) => reply.ok(),
             Err(err) => reply.error(err.to_libc()),
@@ -638,7 +621,6 @@ impl Filesystem for FuseController {
     }
 
     fn access(&mut self, _req: &Request<'_>, ino: u64, mask: i32, reply: ReplyEmpty) {
-        log::trace!("access({ino}, {mask})");
         let meta = match self.fs_interface.n_get_inode_attributes(ino) {
             Ok(meta) => meta,
             Err(err) => {
