@@ -13,6 +13,7 @@ pub async fn start_local_socket(socket: &str) -> io::Result<Stream> {
     let name = if GenericNamespaced::is_supported() {
         socket.to_ns_name::<GenericNamespaced>()?
     } else {
+        //TODO: /tmp/ shouldn't be used, maybe use /var/run/ or /var/run/wormhole/
         format!("/tmp/{socket}").to_fs_name::<GenericFilePath>()?
     };
     Stream::connect(name).await
