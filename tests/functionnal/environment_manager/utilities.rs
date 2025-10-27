@@ -83,7 +83,7 @@ pub fn cli_pod_creation_command(
 
             if let Some(peer) = connect_to {
                 args.push("-u".to_string());
-                args.push(format!("0.0.0.0:{peer}"));
+                args.push(format!("127.0.0.1:{peer}"));
             }
             args
         });
