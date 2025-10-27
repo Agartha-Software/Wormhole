@@ -18,6 +18,10 @@ pub fn new_socket_listener(name: &String) -> Result<Listener, SocketListenerErro
         Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
             Err(SocketListenerError::AddrInUse { name: name.clone() })
         }
+        #[cfg(windows)]
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+            Err(SocketListenerError::AddrInUse { name: name.clone() })
+        }
         Err(e) => panic!("Unhandled socket error during listener creation: {e}"),
         Ok(x) => Ok(x),
     }
