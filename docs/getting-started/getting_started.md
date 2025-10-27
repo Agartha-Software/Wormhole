@@ -66,19 +66,24 @@ Check help menus to see more:
 
 ## CLI Commands Overview
 
-To continue going forward, you can check the available cli commands:
+To continue going forward, you can check the cli help menu:
 
 ```
-  start        Start the service
-  stop         Stop the service
-  template     Create a new network (template)
-  new          Create a new pod and join a network if he have peers in arguments or create a new network
-  get-hosts    Get hosts for a specific file
-  tree         Tree the folder structure from the given path and show hosts for each file
-  remove       Remove a pod from its network
-  apply        Apply a new configuration to a pod
-  restore      Restore many or a specifique file configuration
-  help         Print this message or the help of the given subcommand(s)
+Usage: wormhole [OPTIONS] <COMMAND>
+
+Commands:
+  new        Create a new pod and if possible join a network, otherwise create a new one
+  inspect    Inspect the basic informations of a given pod
+  get-hosts  Get the hosts of a given file
+  tree       Display the file tree at a given pod or path and show the hosts for each files
+  remove     Remove a pod from its network and stop it
+  status     Checks if the service is working
+  help       Print this message or the help of the given subcommand(s)
+
+Options:
+  -s, --socket <SOCKET>  Specify a specific service socket in case of multiple services running [default: wormhole.sock]
+  -h, --help             Print help
+  -V, --version          Print version
 ```
 
 ## More info
