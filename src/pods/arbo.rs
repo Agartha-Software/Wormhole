@@ -37,10 +37,10 @@ pub const ARBO_FILE_FNAME: &str = ".arbo";
 
 // SECTION types
 
-/// InodeId is represented by an u64
 pub type Hosts = Vec<Address>;
 
 /// todo: replace usage of InodeId with Ino when no parallel merges are likely to be conflicting
+/// InodeId is represented by an u64
 pub type InodeId = u64;
 pub type Ino = u64;
 
@@ -120,12 +120,9 @@ impl Inode {
             mtime: SystemTime::now(),
             ctime: SystemTime::now(),
             crtime: SystemTime::now(),
-            kind: match entry {
-                FsEntry::Directory(_) => SimpleFileType::Directory,
-                FsEntry::File(_) => SimpleFileType::File,
-            },
+            kind: entry.get_filetype(),
             perm,
-            nlink: 0,
+            nlink: 1 + matches!(entry, FsEntry::Directory(_)) as u32,
             uid: 0,
             gid: 0,
             rdev: 0,
@@ -174,7 +171,7 @@ impl Arbo {
                     crtime: SystemTime::now(),
                     kind: SimpleFileType::Directory,
                     perm: 0o755,
-                    nlink: 0,
+                    nlink: 2, // Start with 2, one for this link (`self/`) and one for self-referential (`self/.`)
                     uid: 0,
                     gid: 0,
                     rdev: 0,
@@ -430,33 +427,7 @@ impl Arbo {
         self.entries.get(&ino).ok_or(WhError::InodeNotFound)
     }
 
-    #[deprecated]
     pub fn mv_inode(
-        &mut self,
-        parent: InodeId,
-        new_parent: InodeId,
-        name: &String,
-        new_name: &String,
-    ) -> io::Result<()> {
-        let parent_inode = self.entries.get(&parent).ok_or(io::Error::new(
-            io::ErrorKind::NotFound,
-            "add_inode_from_parameters: parent not existing",
-        ))?;
-        let item_id = match self.get_inode_child_by_name(parent_inode, name) {
-            Ok(item_inode) => item_inode.id,
-            Err(_) => todo!("mv_inode: inode not found"), // TODO
-        };
-
-        self.remove_children(parent, item_id)?;
-
-        let item = self.get_inode_mut(item_id)?;
-        item.name = new_name.clone();
-        item.parent = new_parent;
-
-        self.add_children(new_parent, item_id)
-    }
-
-    pub fn n_mv_inode(
         &mut self,
         parent: InodeId,
         new_parent: InodeId,

@@ -236,11 +236,6 @@ impl FileSystemContext for FSPController {
         }
     }
 
-    fn close(&self, context: Self::FileContext) {
-        // thread::sleep(std::time::Duration::from_secs(2));
-        log::trace!("close({:?});", context);
-    }
-
     fn create(
         &self,
         file_name: &winfsp::U16CStr,
@@ -294,6 +289,14 @@ impl FileSystemContext for FSPController {
         })
     }
 
+    fn close(&self, context: Self::FileContext) {
+        log::trace!("winfsp::close({:?});", context);
+        let _ = self
+            .fs_interface
+            .release(context.handle)
+            .inspect_err(|e| log::warn!("close::{e};"));
+    }
+
     fn cleanup(
         &self,
         context: &Self::FileContext,
@@ -306,10 +309,6 @@ impl FileSystemContext for FSPController {
             flags & FspCleanupDelete as u32 != 0
         );
 
-        let _ = self
-            .fs_interface
-            .release(context.handle, context.ino)
-            .inspect_err(|e| log::warn!("cleanup::{e};"));
         if flags & FspCleanupDelete as u32 != 0 {
             let _ = self
                 .fs_interface
@@ -384,12 +383,10 @@ impl FileSystemContext for FSPController {
             context,
             marker.inner_as_cstr().map(|s| s.to_string_lossy())
         );
-        let mut entries = if let Ok(entries) = self.fs_interface.read_dir(context.ino) {
-            entries
-        } else {
-            log::error!("read_directory::ERROR_NOT_FOUND");
-            return Err(STATUS_OBJECT_NAME_NOT_FOUND.into());
-        };
+        let mut entries = self
+            .fs_interface
+            .read_dir(context.ino)
+            .inspect_err(|e| log::error!("read_directory::ERROR_NOT_FOUND"))?;
 
         let mut cursor = 0;
 
@@ -534,23 +531,31 @@ impl FileSystemContext for FSPController {
         &self,
         context: &Self::FileContext,
         new_size: u64,
-        _set_allocation_size: bool, // allocation is ignored;
+        set_allocation_size: bool, // allocation is ignored;
         file_info: &mut winfsp::filesystem::FileInfo,
     ) -> winfsp::Result<()> {
-        self.fs_interface
-            .setattr(
-                context.ino,
-                None,
-                None,
-                None,
-                Some(new_size),
-                None,
-                None,
-                None,
-                Some(context.handle),
-                None,
-            )
-            .inspect_err(|e| log::warn!("set_file_size::{e}"))?;
+        log::trace!(
+            "set_file_size({:?}, {}, {});",
+            context,
+            new_size,
+            set_allocation_size
+        );
+        if !set_allocation_size {
+            self.fs_interface
+                .setattr(
+                    context.ino,
+                    None,
+                    None,
+                    None,
+                    Some(new_size),
+                    None,
+                    None,
+                    None,
+                    Some(context.handle),
+                    None,
+                )
+                .inspect_err(|e| log::warn!("set_file_size::{e}"))?;
+        }
 
         self.get_file_info_internal(context, file_info)
             .inspect_err(|e| log::warn!("set_file_size::{e}"))?;
@@ -719,32 +724,4 @@ impl FileSystemContext for FSPController {
     }
 
     fn dispatcher_stopped(&self, _normally: bool) {}
-
-    unsafe fn with_operation_response<T, F>(&self, f: F) -> Option<T>
-    where
-        F: FnOnce(&mut winfsp_sys::FSP_FSCTL_TRANSACT_RSP) -> T,
-    {
-        unsafe {
-            if let Some(context) = winfsp_sys::FspFileSystemGetOperationContext().as_ref() {
-                if let Some(response) = context.Response.as_mut() {
-                    return Some(f(response));
-                }
-            }
-        }
-        None
-    }
-
-    unsafe fn with_operation_request<T, F>(&self, f: F) -> Option<T>
-    where
-        F: FnOnce(&winfsp_sys::FSP_FSCTL_TRANSACT_REQ) -> T,
-    {
-        unsafe {
-            if let Some(context) = winfsp_sys::FspFileSystemGetOperationContext().as_ref() {
-                if let Some(request) = context.Request.as_ref() {
-                    return Some(f(request));
-                }
-            }
-        }
-        None
-    }
 }

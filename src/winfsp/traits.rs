@@ -9,6 +9,7 @@ use crate::{
             make_inode::{CreateError, MakeInodeError},
             open::OpenError,
             read::ReadError,
+            readdir::ReadDirError,
             rename::RenameError,
             write::WriteError,
         },
@@ -26,7 +27,9 @@ use windows::Win32::{
         STATUS_OBJECT_NAME_NOT_FOUND, STATUS_OBJECT_PATH_NOT_FOUND, STATUS_PENDING,
         STATUS_POSSIBLE_DEADLOCK,
     },
-    Storage::FileSystem::{FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_DIRECTORY, SYNCHRONIZE},
+    Storage::FileSystem::{
+        FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_DIRECTORY, FILE_WRITE_ATTRIBUTES, SYNCHRONIZE,
+    },
 };
 use winfsp::{filesystem::FileInfo, FspError};
 
@@ -98,6 +101,7 @@ impl From<MakeInodeError> for FspError {
             MakeInodeError::ParentNotFound => STATUS_OBJECT_NAME_NOT_FOUND.into(),
             MakeInodeError::WhError { source } => source.into(),
             MakeInodeError::ProtectedNameIsFolder => STATUS_NOT_A_DIRECTORY.into(),
+            MakeInodeError::PermissionDenied => STATUS_ACCESS_DENIED.into(),
         }
     }
 }
@@ -148,6 +152,7 @@ impl From<RenameError> for FspError {
             RenameError::DestinationExists => STATUS_OBJECT_NAME_EXISTS.into(),
             RenameError::LocalRenamingFailed { io } => io.into(),
             RenameError::ProtectedNameIsFolder => STATUS_FILE_IS_A_DIRECTORY.into(),
+            RenameError::PermissionDenied => STATUS_ACCESS_DENIED.into(),
             RenameError::ReadFailed { source } => source.into(),
             RenameError::LocalWriteFailed { io } => io.into(),
         }
@@ -187,6 +192,15 @@ impl From<SetAttrError> for FspError {
     }
 }
 
+impl From<ReadDirError> for FspError {
+    fn from(value: ReadDirError) -> Self {
+        match value {
+            ReadDirError::WhError { source } => source.into(),
+            ReadDirError::PermissionError => STATUS_ACCESS_DENIED.into(),
+        }
+    }
+}
+
 impl AccessMode {
     pub fn from_win_u32(access: u32) -> AccessMode {
         if access & (GENERIC_READ.0 & !SYNCHRONIZE.0) != 0
@@ -194,7 +208,7 @@ impl AccessMode {
         {
             return AccessMode::ReadWrite;
         }
-        if access & (GENERIC_WRITE.0 & !SYNCHRONIZE.0) != 0 {
+        if access & ((GENERIC_WRITE.0 | FILE_WRITE_ATTRIBUTES.0) & !SYNCHRONIZE.0) != 0 {
             return AccessMode::Write;
         }
         if access & (GENERIC_EXECUTE.0 & !SYNCHRONIZE.0) != 0 {

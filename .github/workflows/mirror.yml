@@ -11,7 +11,7 @@ on:
 jobs:
   push_to_mirror:
     if:
-      github.repository == ‘Agartha-Software/Wormhole’ # disable Forks trying this job (even if it would safely fail)
+      github.repository == 'Agartha-Software/Wormhole' # disable Forks trying this job (even if it would safely fail)
     runs-on: ubuntu-latest
 
     steps:
