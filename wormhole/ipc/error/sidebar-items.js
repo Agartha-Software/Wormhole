@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ListenerError","SocketListenerError","TCPListenerError"],"struct":["IoError"]};

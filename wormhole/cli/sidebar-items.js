@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CliCommand","Mode"],"struct":["Cli","GetHostsArgs","IdentifyPodArgs","IdentifyPodGroup","NewArgs","PodConfArgs","RemoveArgs","TemplateArg"]};

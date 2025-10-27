@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["command_network","start_local_socket"]};

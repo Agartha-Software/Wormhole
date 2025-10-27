@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["apply","new","remove","restore","start","stop"]};

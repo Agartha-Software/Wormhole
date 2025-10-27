@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["apply","cli_messager","get_hosts","new","register","remove","restore","start","status","stop","templates","tree"]};

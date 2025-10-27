@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["Server","Service"],"type":["PeerMap","Tx"]};
+window.SIDEBAR_ITEMS = {"constant":["POD_DEFAULT_PORT","POD_PORT_MAX_TRIES"],"struct":["Server","Service"],"type":["PeerMap","Tx"]};
