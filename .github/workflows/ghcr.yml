@@ -32,4 +32,4 @@ jobs:
                 context: ./wormhole-rep
                 push: true
                 file: ./wormhole-rep/Dockerfile.multistage
-                tages: ${{ env.REGISTRY}}/${{ env.IMAGE_NAME }}:latest
+                tags: ${{ env.REGISTRY}}/${{ env.IMAGE_NAME }}:latest
