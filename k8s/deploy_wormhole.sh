@@ -12,27 +12,19 @@
 # Quitte immédiatement si une commande échoue
 set -e
 
-# --- Étape 0: Création du cluster 'kind' (Optionnel) ---
-echo "=== Étape 0: Cluster 'kind' ==="
-read -p "Voulez-vous créer un nouveau cluster 'kind' nommé 'wormhole' ? (o/n) " CREATE_KIND
-if [[ "$CREATE_KIND" == "o" ]]; then
-  
-  echo "Vérification de l'existence d'un cluster 'kind' nommé 'wormhole'..."
-  # On vérifie si 'kind get clusters' retourne une ligne qui est EXACTEMENT 'wormhole'
-  if kind get clusters | grep -q "^wormhole$"; then
-    echo "-> Un cluster existant 'wormhole' a été trouvé. Suppression..."
-    kind delete cluster --name wormhole
-    echo "-> Cluster 'wormhole' supprimé."
-  else
-    echo "-> Aucun cluster existant trouvé."
-  fi
-
-  echo "Création du cluster 'kind-wormhole'..."
-  kind create cluster --name wormhole
-  kubectl cluster-info --context kind-wormhole
+echo "Vérification de l'existence d'un cluster 'kind' nommé 'wormhole'..."
+# On vérifie si 'kind get clusters' retourne une ligne qui est EXACTEMENT 'wormhole'
+if kind get clusters | grep -q "^wormhole$"; then
+  echo "-> Un cluster existant 'wormhole' a été trouvé. Suppression..."
+  kind delete cluster --name wormhole
+  echo "-> Cluster 'wormhole' supprimé."
 else
-  echo "Skipping cluster creation. Utilisation du contexte 'kubectl' actuel."
+  echo "-> Aucun cluster existant trouvé."
 fi
+
+echo "Création du cluster 'kind-wormhole'..."
+kind create cluster --name wormhole
+kubectl cluster-info --context kind-wormhole
 
 # --- Étape 1: Création du Secret Docker ---
 echo ""
