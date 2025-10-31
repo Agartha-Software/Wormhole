@@ -26,3 +26,4 @@ Folder*
 .wormhole
 .direnv/
 .kube/
+/k8s/.env
