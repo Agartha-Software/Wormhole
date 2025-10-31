@@ -107,9 +107,3 @@ spec:
             type: CharDevice
         - name: wormhole-data
           emptyDir: {}
-
-
-# Création kube template
-# maintenant il faut arriver à faire un script qui lancer des commandes de cli
-# pour faire communiquer pod wormhole entre eux
-# regarder sur le chat mistral 
