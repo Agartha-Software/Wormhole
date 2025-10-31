@@ -7,9 +7,7 @@ COPY src/ ./src/
 
 ENV GIT_HASH=1
 
-RUN cargo build --release --bin wormholed
-RUN cargo build --release --bin wormhole
-
+RUN cargo build --release
 
 
 FROM debian

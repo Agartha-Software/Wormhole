@@ -1,16 +1,21 @@
-use crate::functionnal::environment_manager::types::{StartupFiles, StopMethod};
+use crate::functionnal::environment_manager::types::{StartupFiles, StopMethod, MIN_POD_PORT};
 use crate::functionnal::environment_manager::utilities::{
     cli_command, cli_pod_creation_command, copy_dir_all, service_filter,
 };
 use crate::functionnal::{
-    environment_manager::types::{Service, MAX_PORT, MIN_PORT, SERVICE_BIN, SLEEP_TIME},
+    environment_manager::types::{Service, MAX_SOCKET_ID, MIN_SOCKET_ID, SERVICE_BIN, SLEEP_TIME},
     start_log,
 };
 use std::process::Stdio;
 
 pub struct EnvironmentManager {
-    pub port: std::ops::RangeFrom<u16>,
+    pub socket_id: std::ops::RangeFrom<u16>,
+    pub pods_port: std::ops::RangeFrom<u16>,
     pub services: Vec<Service>,
+}
+
+pub fn socket_from_id(id: u16) -> String {
+    format!("whtest{id}.sock")
 }
 
 impl EnvironmentManager {
@@ -18,37 +23,35 @@ impl EnvironmentManager {
         start_log();
         log::trace!("SLEEP_TIME for this test is {:?}", *SLEEP_TIME);
         return EnvironmentManager {
-            port: MIN_PORT..,
+            socket_id: MIN_SOCKET_ID..,
+            pods_port: MIN_POD_PORT..,
             services: Vec::new(),
         };
     }
 
-    pub fn reserve_port(&mut self) -> u16 {
-        return self.port.next().expect("port range");
+    pub fn reserve_socket_id(&mut self) -> u16 {
+        return self.socket_id.next().expect("socket id range");
     }
 
-    /// Create a service on the next available ip. No pods are created.
+    /// Create a service on the next available socket. No pods are created.
     pub fn add_service(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut port = self.reserve_port();
-        log::info!("trying service on {port}");
+        let mut socket = self.reserve_socket_id();
+        log::info!("trying service on {socket}");
 
-        // checks that no service is running on this ip
-        let (mut status, _, _) = cli_command(&[&format!("127.0.0.1:{port}"), "status"]);
+        // checks that no service is running on this socket
+        let (mut status, _, _) = cli_command(&["-s", &socket_from_id(socket), "status"]);
         while status.success() {
-            log::warn!(
-                "\nA service is already running on {}. Trying next port...",
-                port,
-            );
-            port = self.reserve_port();
-            (status, _, _) = cli_command(&[&format!("127.0.0.1:{port}"), "status"]);
+            log::warn!("\nA service is already running on socket {socket}. Trying next socket...");
+            socket = self.reserve_socket_id();
+            (status, _, _) = cli_command(&["-s", &socket_from_id(socket), "status"]);
         }
         assert!(
-            port < MAX_PORT,
-            "service port upper limit ({MAX_PORT}) exceeded"
+            socket < MAX_SOCKET_ID,
+            "service socket upper limit ({MAX_SOCKET_ID}) exceeded"
         );
 
         let mut instance = std::process::Command::new(SERVICE_BIN)
-            .args(&[&format!("127.0.0.1:{port}"), "--nodeamon"])
+            .args(&["-s", &socket_from_id(socket), "--nodeamon"])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .stdin(Stdio::piped())
@@ -58,20 +61,14 @@ impl EnvironmentManager {
         std::thread::sleep(*SLEEP_TIME);
 
         // checks the service viability
-        let (status, out, err) = cli_command(&[&format!("127.0.0.1:{port}"), "status"]);
-        if !out.contains(&format!("127.0.0.1:{port}")) {
-            log::error!(
-                    "\nService created on {} isn't answering proper status.\n(code {}).\nCli stdout: \"{}\"\n\nCli stderr: \"{}\"\n",
-                    port,
-                    status,
-                    out,
-                    err,
-                );
+        let (status, _, _) = cli_command(&["-s", &socket_from_id(socket), "status"]);
+        if !status.success() {
+            log::error!("\nCan't reach service on {}", socket_from_id(socket),);
 
             instance.kill().unwrap();
             let _ = instance.wait(); // necessary on some os
 
-            assert!(false, "Service {} isn't answering properly", port);
+            assert!(false, "Service {} isn't answering properly", socket);
         }
 
         let is_exited = instance.try_wait();
@@ -79,13 +76,13 @@ impl EnvironmentManager {
         assert!(
             is_exited.unwrap().is_none(),
             "Service {} exited unexpectedly",
-            port
+            socket
         );
 
-        log::info!("Service started on {}", port);
+        log::info!("Service started on {}", socket);
         self.services.push(Service {
             instance,
-            port,
+            id: socket,
             pods: Vec::new(),
         });
 
@@ -157,9 +154,9 @@ impl EnvironmentManager {
                 };
                 let pod_port = cli_pod_creation_command(
                     network_name.clone(),
-                    service.port,
+                    service.id,
                     temp_dir.path(),
-                    &mut self.port,
+                    &mut self.pods_port,
                     conn_to.as_ref(),
                 );
                 service

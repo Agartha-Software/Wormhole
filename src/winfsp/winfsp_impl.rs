@@ -383,12 +383,10 @@ impl FileSystemContext for FSPController {
             context,
             marker.inner_as_cstr().map(|s| s.to_string_lossy())
         );
-        let mut entries = if let Ok(entries) = self.fs_interface.read_dir(context.ino) {
-            entries
-        } else {
-            log::error!("read_directory::ERROR_NOT_FOUND");
-            return Err(STATUS_OBJECT_NAME_NOT_FOUND.into());
-        };
+        let mut entries = self
+            .fs_interface
+            .read_dir(context.ino)
+            .inspect_err(|e| log::error!("read_directory::ERROR_NOT_FOUND"))?;
 
         let mut cursor = 0;
 
@@ -726,32 +724,4 @@ impl FileSystemContext for FSPController {
     }
 
     fn dispatcher_stopped(&self, _normally: bool) {}
-
-    unsafe fn with_operation_response<T, F>(&self, f: F) -> Option<T>
-    where
-        F: FnOnce(&mut winfsp_sys::FSP_FSCTL_TRANSACT_RSP) -> T,
-    {
-        unsafe {
-            if let Some(context) = winfsp_sys::FspFileSystemGetOperationContext().as_ref() {
-                if let Some(response) = context.Response.as_mut() {
-                    return Some(f(response));
-                }
-            }
-        }
-        None
-    }
-
-    unsafe fn with_operation_request<T, F>(&self, f: F) -> Option<T>
-    where
-        F: FnOnce(&winfsp_sys::FSP_FSCTL_TRANSACT_REQ) -> T,
-    {
-        unsafe {
-            if let Some(context) = winfsp_sys::FspFileSystemGetOperationContext().as_ref() {
-                if let Some(request) = context.Request.as_ref() {
-                    return Some(f(request));
-                }
-            }
-        }
-        None
-    }
 }

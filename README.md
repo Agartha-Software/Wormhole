@@ -12,8 +12,6 @@ Wormhole is an open-source project designed to provide a decentralized, scalable
 
 This `README` provides an introduction to Wormhole, setup instructions, and links to detailed documentation. For a comprehensive understanding of the project's goals and technical details, refer to the [Technical Specification](docs/technical/technical_spec.md).
 
----
-
 ## Our Idea
 
 Inspired by great declarative softwares of modern times like Docker, we are aiming to provide users with a very flexible solution, allowing all kinds of usages while staying declarative, simple and shareable.
@@ -23,8 +21,6 @@ Inspired by great declarative softwares of modern times like Docker, we are aimi
 We want Wormhole to be as seamless as possible for final users. The storage space takes the shape of a simple folder. No need to create or mount any partition, nor use a gui to access it, the virtual space is mounted in place, where you want in your file tree.
 
 For users and other softwares, the files behave like any normal files, while they are in fact shared and moved accross all nodes (differents computers) of the network.
-
----
 
 ## Features
 
@@ -36,8 +32,6 @@ For users and other softwares, the files behave like any normal files, while the
 - **Configuration**: Declarative, file-based configuration using TOML for ease of use and sharing.
 
 For detailed use cases and technical details, see the [Technical Specification](docs/technical/technical_spec.md).
-
----
 
 ## Documentation
 

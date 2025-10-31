@@ -5,6 +5,7 @@ pub mod make_inode;
 pub mod open;
 pub mod permissions;
 pub mod read;
+pub mod readdir;
 pub mod release;
 pub mod remove_inode;
 pub mod rename;

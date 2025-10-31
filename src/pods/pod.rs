@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::{io, sync::Arc};
 
 use crate::config::{GlobalConfig, LocalConfig};
@@ -5,9 +6,12 @@ use crate::data::tree_hosts::{CliHostTree, TreeLine};
 use crate::error::{WhError, WhResult};
 #[cfg(target_os = "linux")]
 use crate::fuse::fuse_impl::mount_fuse;
+use crate::ipc::answers::{InspectInfo, PeerInfo};
 use crate::network::message::{FromNetworkMessage, MessageContent, ToNetworkMessage};
 use crate::network::HandshakeError;
-use crate::pods::arbo::{FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME, LOCAL_CONFIG_INO, ROOT};
+use crate::pods::arbo::{
+    FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME, LOCAL_CONFIG_INO, LOCK_TIMEOUT, ROOT,
+};
 #[cfg(target_os = "windows")]
 use crate::pods::disk_managers::dummy_disk_manager::DummyDiskManager;
 #[cfg(target_os = "linux")]
@@ -148,10 +152,10 @@ async fn initiate_connection(
 
 custom_error! {pub PodStopError
     WhError{source: WhError} = "{source}",
-    ArboSavingFailed{source: io::Error} = "PodStopError: could not write arbo to disk: {source}",
+    ArboSavingFailed{source: io::Error} = "Could not write arbo to disk: {source}",
     PodNotRunning = "No pod with this name was found running.",
-    FileNotReadable{file: InodeId, reason: String} = "PodStopError: could not read file from disk: ({file}) {reason}",
-    FileNotSent{file: InodeId} = "PodStopError: no pod was able to receive this file before stopping: ({file})"
+    FileNotReadable{file: InodeId, reason: String} = "Could not read file from disk: ({file}) {reason}",
+    FileNotSent{file: InodeId} = "No pod was able to receive this file before stopping: ({file})"
 }
 
 /// Create all the directories present in Arbo. (not the files)
@@ -244,7 +248,8 @@ impl Pod {
         let disk_manager = Box::new(DummyDiskManager::new(&proto.mountpoint)?);
 
         create_all_dirs(&proto.arbo, ROOT, disk_manager.as_ref())
-            .inspect_err(|e| log::error!("unable to create_all_dirs: {e}"))?;
+            .inspect_err(|e| log::error!("unable to create_all_dirs: {e}"))
+            .map_err(|e| std::io::Error::new(e.kind(), format!("create_all_dirs: {e}")))?;
 
         if let Ok(perms) = proto
             .arbo
@@ -252,13 +257,17 @@ impl Pod {
             .map(|inode| inode.meta.perm)
         {
             let _ = disk_manager.new_file(&GLOBAL_CONFIG_FNAME.into(), perms);
-            disk_manager.write_file(
-                &GLOBAL_CONFIG_FNAME.into(),
-                toml::to_string(&proto.global_config)
-                    .expect("infallible")
-                    .as_bytes(),
-                0,
-            )?;
+            disk_manager
+                .write_file(
+                    &GLOBAL_CONFIG_FNAME.into(),
+                    toml::to_string(&proto.global_config)
+                        .expect("infallible")
+                        .as_bytes(),
+                    0,
+                )
+                .map_err(|e| {
+                    std::io::Error::new(e.kind(), format!("write_file(global_config): {e}"))
+                })?;
         }
 
         if let Ok(perms) = proto
@@ -267,13 +276,17 @@ impl Pod {
             .map(|inode| inode.meta.perm)
         {
             let _ = disk_manager.new_file(&LOCAL_CONFIG_FNAME.into(), perms);
-            disk_manager.write_file(
-                &LOCAL_CONFIG_FNAME.into(),
-                toml::to_string(&proto.local_config)
-                    .expect("infallible")
-                    .as_bytes(),
-                0,
-            )?;
+            disk_manager
+                .write_file(
+                    &LOCAL_CONFIG_FNAME.into(),
+                    toml::to_string(&proto.local_config)
+                        .expect("infallible")
+                        .as_bytes(),
+                    0,
+                )
+                .map_err(|e| {
+                    std::io::Error::new(e.kind(), format!("write_file(local_config): {e}"))
+                })?;
         }
 
         let url = proto.local_config.general.url.clone();
@@ -284,7 +297,6 @@ impl Pod {
 
         let network_interface = Arc::new(NetworkInterface::new(
             arbo.clone(),
-            proto.mountpoint.clone(),
             url,
             senders_in.clone(),
             redundancy_tx.clone(),
@@ -331,9 +343,11 @@ impl Pod {
             mountpoint: proto.mountpoint.clone(),
             peers,
             #[cfg(target_os = "linux")]
-            fuse_handle: mount_fuse(&proto.mountpoint, fs_interface.clone())?,
+            fuse_handle: mount_fuse(&proto.mountpoint, fs_interface.clone())
+                .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fuse: {e}")))?,
             #[cfg(target_os = "windows")]
-            fsp_host: mount_fsp(&proto.mountpoint, fs_interface.clone())?,
+            fsp_host: mount_fsp(&proto.mountpoint, fs_interface.clone())
+                .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fsp: {e}")))?,
             network_airport_handle,
             peer_broadcast_handle,
             new_peer_handle,
@@ -346,14 +360,23 @@ impl Pod {
     // SECTION getting info from the pod (for the cli)
 
     pub fn get_file_hosts(&self, path: WhPath) -> Result<Vec<Address>, PodInfoError> {
-        let entry = Arbo::n_read_lock(&self.network_interface.arbo, "Pod::get_info")?
-            .get_inode_from_path(&path)
+        let path_string = path.to_string();
+        log::info!("Get file host at: {}", path_string);
+        let path = path_string
+            .strip_prefix(&self.mountpoint.to_string())
+            .ok_or(PodInfoError::WrongFileType {
+                detail: "Asked path is a directory (directories have no hosts)".to_owned(),
+            })?;
+        log::info!("Get file host at local path: {}", path);
+
+        let binding = Arbo::n_read_lock(&self.network_interface.arbo, "Pod::get_info")?;
+        let entry = &binding
+            .get_inode_from_path(&WhPath::from(path))
             .map_err(|_| PodInfoError::FileNotFound)?
-            .entry
-            .clone();
+            .entry;
 
         match entry {
-            FsEntry::File(hosts) => Ok(hosts),
+            FsEntry::File(hosts) => Ok(hosts.clone()),
             FsEntry::Directory(_) => Err(PodInfoError::WrongFileType {
                 detail: "Asked path is a directory (directories have no hosts)".to_owned(),
             }),
@@ -545,5 +568,35 @@ impl Pod {
 
     pub fn get_mountpoint(&self) -> &WhPath {
         return &self.mountpoint;
+    }
+
+    pub fn contains(&self, path: &PathBuf) -> bool {
+        let mountpoint = PathBuf::from(self.mountpoint.to_string());
+
+        path.starts_with(mountpoint)
+    }
+
+    pub fn get_inspect_info(&self) -> InspectInfo {
+        let peers_data: Vec<PeerInfo> = self
+            .peers
+            .try_read_for(LOCK_TIMEOUT)
+            .expect("Can't lock peers")
+            .iter()
+            .map(|peer| PeerInfo {
+                hostname: peer.hostname.clone(),
+                url: peer.url.clone(),
+            })
+            .collect();
+
+        InspectInfo {
+            url: self.network_interface.url.clone(),
+            hostname: self
+                .network_interface
+                .hostname()
+                .expect("Can't lock network"),
+            name: "".to_string(), //TODO to delete
+            connected_peers: peers_data,
+            mount: PathBuf::from(self.mountpoint.to_string()),
+        }
     }
 }

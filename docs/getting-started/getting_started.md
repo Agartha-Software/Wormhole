@@ -9,10 +9,10 @@ Wormhole uses two binaries:
  Wormhole being still in heavy developpement, the project still require to build the project from source.
 
 ## Install
-See the [install guide](docs/getting-started/install.md). This is the simplest way to directly install Wormhole
+See the [install guide](./install.md). This is the simplest way to directly install Wormhole
 
 ## Build for source
-If the [install guide](docs/getting-started/install.md) does not cover your system.
+If the [install guide](./install.md) does not cover your system.
 ### Prerequisites
 
 - [Rust](https://www.rust-lang.org/tools/install) installed.
@@ -32,46 +32,67 @@ Move the binaries where needed, they can be found under `target/release/wormhole
 
 Launch a new service, the node is started automatically
 ```
-./wormholed 127.0.0.1:8081
-^---------- ^-------------
-Node     Optional address with a default at 127.0.0.1:8081
+wormholed
+^--------
+deamon   
 ```
 
 Create a new Wormhole network
 The new pod being created with any other connection it will automaticaly create a new network
 ```
-./wormhole 127.0.0.1:8081            new      pod_name  --path dir1/ -i 127.0.0.10:8081
-^--------- ^-------------            ^--      ^-----    ^-------        ^-----------------
- CLI       Optional node address     Command  Pod Name  Directory       Pod Address
+./wormhole  new      my_pod    -m dir1/   -p 5555
+^---------  ^--      ^-----    ^-------   ^-----------------
+CLI helper  Command  Pod Name  optional   Pod port
+                               mount path
+
 ```
 
 Join an existing Wormhole network
 ```
-./wormhole 127.0.0.1:8081 new pod_name2  --path dir2/ -i 127.0.0.11:8081 -u 127.0.0.10:8081
-                                                                            ^-----------------
-                                                                            Existing pod address
+./wormhole new my_pod2 -m dir2/ -p 5556 -u 127.0.0.1:5555
+                                        ^-----------------
+                                        Existing pod url
 ```
 
-For a step-by-step guide to setting up a simple multi-pod network, see the [CLI Usage Guide](docs/getting-started/memo_cli.md).
-For a more complex Docker-based deployment, refer to the [Docker Guide](docs/getting-started/docker_guide.md).
+Check help menus to see more:
+```sh
+./wormhole --help # general help
+./wormhole new --help # help for command "new"
+```
+
+### For easy testing, go check the [Docker Guide](docs/getting-started/docker_guide.md).
 
 ---
 
 ## CLI Commands Overview
 
-To continue going forward, you can check the available cli commands:
+To continue going forward, you can check the cli help menu:
 
 ```
-  start        Start the service
-  stop         Stop the service
-  template     Create a new network (template)
-  new          Create a new pod and join a network if he have peers in arguments or create a new network
-  get-hosts    Get hosts for a specific file
-  tree         Tree the folder structure from the given path and show hosts for each file
-  remove       Remove a pod from its network
-  apply        Apply a new configuration to a pod
-  restore      Restore many or a specifique file configuration
-  help         Print this message or the help of the given subcommand(s)
+Usage: wormhole [OPTIONS] <COMMAND>
+
+Commands:
+  new        Create a new pod and if possible join a network, otherwise create a new one
+  inspect    Inspect the basic informations of a given pod
+  get-hosts  Get the hosts of a given file
+  tree       Display the file tree at a given pod or path and show the hosts for each files
+  remove     Remove a pod from its network and stop it
+  status     Checks if the service is working
+  help       Print this message or the help of the given subcommand(s)
+
+Options:
+  -s, --socket <SOCKET>  Specify a specific service socket in case of multiple services running [default: wormhole.sock]
+  -h, --help             Print help
+  -V, --version          Print version
+```
+
+## More info
+Both the client and daemon programs are fully documented, you can pass --help to any command or subcommand for more info:
+```
+wormhole --help
+wormhole new --help
+
+wormholed --help
 ```
 
 ## Configuration

@@ -1,0 +1,36 @@
+name: Windows CI Build
+
+on:
+  pull_request:
+    branches: [dev]
+  workflow_dispatch: # Allow manual triggers 
+
+jobs:
+ build-windows:
+    name: Build for windows
+    permissions:
+      contents: write
+      pull-requests: write
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Cache Cargo registry & git
+        uses: actions/cache@v3
+        with:
+          path: |
+            target
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-cache
+      - name: Install system dependencies
+        run: |
+          curl -L -o winfsp.msi https://github.com/winfsp/winfsp/releases/download/v2.1/winfsp-2.1.25156.msi
+          Start-Process msiexec.exe -Wait -ArgumentList '/i winfsp.msi /quiet /norestart ADDLOCAL=ALL /L*v install.log'
+          gc install.log
+      - name: Build project
+        env:
+          WINFSP_INCLUDE_PATH: "C:\\Program Files\\WinFsp\\inc"
+        run: cargo build --release
