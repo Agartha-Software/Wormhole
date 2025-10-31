@@ -18,17 +18,34 @@ spec:
       port: 8081
       targetPort: 8081
       protocol: TCP
-    - name: pod-communication-1
+    - name: pod-com-1
       port: 40001
       targetPort: 40001
       protocol: TCP
-    - name: pod-communication-2
+    - name: pod-com-2
       port: 40002
       targetPort: 40002
       protocol: TCP
-    - name: pod-communication-3
+    - name: pod-com-3
       port: 40003
       targetPort: 40003
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wormhole
+  namespace: wormhole
+  labels:
+    app: wormhole
+spec:
+  clusterIP: None
+  selector:
+    app: wormhole
+  ports:
+    - name: service
+      port: 8081
+      targetPort: 8081
       protocol: TCP
 ---
 apiVersion: apps/v1
@@ -39,6 +56,7 @@ metadata:
 spec:
   serviceName: "wormhole"
   replicas: 3
+  podManagementPolicy: Parallel
   selector:
     matchLabels:
       app: wormhole
@@ -47,9 +65,11 @@ spec:
       labels:
         app: wormhole
     spec:
+      imagePullSecrets:
+        - name: ghcr-creds
       containers:
         - name: wormhole
-          image: agartha-software/wormhole:latest
+          image: ghcr.io/agartha-software/wormhole:latest
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
@@ -65,13 +85,13 @@ spec:
             - name: service
               containerPort: 8081
               protocol: TCP
-            - name: pod-communication-1
+            - name: pod-com-1
               containerPort: 40001
               protocol: TCP
-            - name: pod-communication-2
+            - name: pod-com-2
               containerPort: 40002
               protocol: TCP
-            - name: pod-communication-3
+            - name: pod-com-3
               containerPort: 40003
               protocol: TCP
           volumeMounts:
@@ -79,7 +99,7 @@ spec:
               mountPath: /dev/fuse
             - name: wormhole-data
               mountPath: /wormhole
-          command: ["/bin/wormholed", "$(SERVICE_ADDRESS)"]
+          command: ["/bin/wormholed", "-i", "$(SERVICE_ADDRESS)"]
       volumes:
         - name: dev-fuse
           hostPath:
