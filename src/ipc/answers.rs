@@ -56,7 +56,7 @@ impl std::fmt::Display for PeerInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "hostname: {}, url: {}",
+            "Hostname: \"{}\", Url: {}",
             self.hostname,
             self.url
                 .as_ref()
