@@ -28,7 +28,7 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<()> {
     } = args;
 
     let request = NewRequest {
-        mountpoint,
+        mountpoint: mountpoint.clone(),
         name: name.clone(),
         port,
         url,
@@ -44,12 +44,16 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<()> {
             Ok(())
         }
         NewAnswer::AlreadyExist => Err(io::Error::new(
-            io::ErrorKind::AddrInUse,
-            "Pod already exist, couldn't create.",
+            io::ErrorKind::AlreadyExists,
+            format!("Pod with name '{name}' already exist, couldn't create."),
+        )),
+        NewAnswer::AlreadyMounted => Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!("A pod at {mountpoint:#?} is already mounted, couldn't create."),
         )),
         NewAnswer::InvalidIp => Err(io::Error::new(
             io::ErrorKind::AddrInUse,
-            "Given port is already used.",
+            "Given port is already used, couldn't create.",
         )),
         NewAnswer::BindImpossible(e) => {
             eprintln!("Failed to bind the given pod:");
@@ -61,7 +65,7 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<()> {
         }
         NewAnswer::InvalidUrlIp => Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "Url given to connect to is invalid.",
+            "The given Url to connect to is invalid.",
         )),
     }
 }

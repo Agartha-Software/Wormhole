@@ -8,6 +8,7 @@ use crate::{ipc::error::IoError, pods::arbo::Hosts};
 pub enum NewAnswer {
     Success(u16),
     AlreadyExist,
+    AlreadyMounted,
     InvalidIp,
     InvalidUrlIp,
     BindImpossible(IoError),
