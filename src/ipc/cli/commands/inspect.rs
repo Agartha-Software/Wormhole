@@ -1,9 +1,6 @@
 use std::io;
 
-use crate::{
-    config::types::Config,
-    ipc::answers::{InspectAnswer, PeerInfo},
-};
+use crate::ipc::answers::{InspectAnswer, PeerInfo};
 use interprocess::local_socket::tokio::Stream;
 
 use crate::{
@@ -16,7 +13,7 @@ use crate::{
 
 fn display_peers(peers: Vec<PeerInfo>) -> String {
     if peers.len() == 0 {
-        return format!("[ ]");
+        format!("[ ]")
     } else {
         let mut string = String::from("[");
         for (idx, peer) in peers.iter().enumerate() {
@@ -28,7 +25,7 @@ fn display_peers(peers: Vec<PeerInfo>) -> String {
             }
         }
         string.push_str("\n   ]");
-        return string;
+        string
     }
 }
 
