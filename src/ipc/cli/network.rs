@@ -5,7 +5,9 @@ use crate::{
     ipc::cli::commands::{gethosts, inspect, new, remove, status, tree},
 };
 
-pub async fn command_network(cmd: CliCommand, stream: Stream) -> Result<(), std::io::Error> {
+type Answer = String;
+
+pub async fn command_network(cmd: CliCommand, stream: Stream) -> Result<Answer, std::io::Error> {
     match cmd {
         CliCommand::New(args) => new(args, stream).await,
         // CliCommand::Freeze(args) => freeze(args, stream).await,

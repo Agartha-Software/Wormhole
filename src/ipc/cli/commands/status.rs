@@ -8,13 +8,10 @@ use crate::ipc::{
     commands::Command,
 };
 
-pub async fn status(mut stream: Stream) -> io::Result<()> {
+pub async fn status(mut stream: Stream) -> io::Result<String> {
     send_command(Command::Status, &mut stream).await?;
 
     match recieve_answer::<StatusAnswer>(&mut stream).await? {
-        StatusAnswer::Success => {
-            println!("Service online.");
-            Ok(())
-        }
+        StatusAnswer::Success => Ok(String::from("Service online.")),
     }
 }
