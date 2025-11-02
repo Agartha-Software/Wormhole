@@ -34,10 +34,13 @@ async fn main() -> ExitCode {
     log::trace!("Connection with the service open.");
 
     match command_network(cmd.command, stream).await {
-        Ok(_) => ExitCode::SUCCESS,
+        Ok(answer) => {
+            println!("{answer}");
+            ExitCode::SUCCESS
+        }
         Err(err) => {
             eprintln!("{err}");
-            return ExitCode::FAILURE;
+            ExitCode::FAILURE
         }
     }
 }

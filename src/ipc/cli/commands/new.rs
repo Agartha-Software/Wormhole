@@ -11,7 +11,7 @@ use crate::{
     },
 };
 
-pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<()> {
+pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<String> {
     let mountpoint = match args.mountpoint {
         Some(mountpoint) => Ok(mountpoint),
         None => std::env::current_dir().map(|path| path.join(args.name.clone())),
@@ -39,10 +39,9 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<()> {
     send_command(Command::New(request), &mut stream).await?;
 
     match recieve_answer::<NewAnswer>(&mut stream).await? {
-        NewAnswer::Success(new_port) => {
-            println!("Pod '{name}' created with success with port '{new_port}'.");
-            Ok(())
-        }
+        NewAnswer::Success(new_port) => Ok(format!(
+            "Pod '{name}' created with success with port '{new_port}'."
+        )),
         NewAnswer::AlreadyExist => Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
             format!("Pod with name '{name}' already exist, couldn't create."),

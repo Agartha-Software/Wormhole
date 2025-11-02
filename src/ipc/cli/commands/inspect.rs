@@ -11,23 +11,24 @@ use crate::{
     },
 };
 
-pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<(), io::Error> {
+pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String, io::Error> {
     let id = PodId::from(args);
 
     send_command(Command::Inspect(id), &mut stream).await?;
     match recieve_answer::<InspectAnswer>(&mut stream).await? {
-        InspectAnswer::Information(info) => {
-            println!("Pod informations:");
-            println!("   hostname:\t\t{}", info.hostname);
-            println!("   name:\t\t{}", info.name);
-            println!("   mount:\t\t{:#?}", info.mount);
-            println!(
-                "   url:\t\t\t{}",
-                info.url.unwrap_or(String::from("Undefined"))
-            );
-            println!("   connected peers:\t{:#?}", info.connected_peers);
-            Ok(())
-        }
+        InspectAnswer::Information(info) => Ok(format!(
+            "Pod informations:\n\
+   hostname:\t\t{}\n\
+   name:\t\t{}\n\
+   mount:\t\t{:#?}\n\
+   url:\t\t\t{}\n\
+   connected peers:\t{:#?}",
+            info.hostname,
+            info.name,
+            info.mount,
+            info.url.unwrap_or(String::from("Undefined")),
+            info.connected_peers
+        )),
         InspectAnswer::PodNotFound => Err(io::Error::new(
             io::ErrorKind::NotFound,
             "The given pod couldn't be found.",
