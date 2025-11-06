@@ -642,8 +642,8 @@ pub fn mount_fuse(
         MountOption::FSName(format!(
             "wormhole@{}",
             mount_point
-                .file_stem()
-                .ok_or(io::ErrorKind::NotADirectory)?
+                .file_name()
+                .ok_or(io::ErrorKind::InvalidFilename)?
                 .to_string_lossy()
         )),
     ];
