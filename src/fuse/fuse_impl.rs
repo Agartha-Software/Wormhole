@@ -21,7 +21,7 @@ use libc::{XATTR_CREATE, XATTR_REPLACE};
 use std::ffi::OsStr;
 use std::io;
 use std::os::unix::ffi::OsStrExt;
-use std::path::{Path, PathBuf};
+use std::path::{Path};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -44,7 +44,7 @@ impl Filesystem for FuseController {
             Ok(None) => {
                 reply.error(libc::EACCES);
             }
-            Err(e) => {
+            Err(_) => {
                 reply.error(libc::ENOENT);
             }
         };

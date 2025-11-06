@@ -12,7 +12,7 @@ use crate::pods::network::network_interface::NetworkInterface;
 use futures::io;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::ffi::{OsString};
+use std::ffi::{OsStr};
 use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -78,14 +78,14 @@ impl FsInterface {
 
     /// get an entry
     /// return Ok(None) if no permissions to access entries
-    pub fn get_entry_from_name(&self, parent: InodeId, name: OsString) -> WhResult<Option<Inode>> {
+    pub fn get_entry_from_name(&self, parent: InodeId, name: &OsStr) -> WhResult<Option<Inode>> {
         let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface.get_entry_from_name")?;
         let p_inode = arbo.n_get_inode(parent)?;
         if !has_execute_perm(p_inode.meta.perm) {
             return Ok(None);
         }
         Ok(Some(
-            arbo.n_get_inode_child_by_name(p_inode, &name)?.clone(),
+            arbo.n_get_inode_child_by_name(p_inode, name)?.clone(),
         ))
     }
 
