@@ -44,8 +44,7 @@ where
             {
                 Some((_, pod)) => {
                     let local_folder_path = PathBuf::from(
-                        path
-                            .strip_prefix(pod.get_mountpoint())
+                        path.strip_prefix(pod.get_mountpoint())
                             .expect("Path having this prefix has been determined earlier"),
                     );
                     get_tree(pod, Some(local_folder_path))

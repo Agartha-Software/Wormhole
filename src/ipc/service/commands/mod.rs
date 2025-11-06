@@ -23,8 +23,6 @@ use std::collections::HashMap;
 pub(self) fn find_pod(id: PodId, pods: &HashMap<String, Pod>) -> Option<(&String, &Pod)> {
     match id {
         PodId::Name(name) => pods.get_key_value(&name),
-        PodId::Path(path) => pods
-            .iter()
-            .find(|(_, pod)| *pod.get_mountpoint() == path),
+        PodId::Path(path) => pods.iter().find(|(_, pod)| *pod.get_mountpoint() == path),
     }
 }

@@ -57,14 +57,7 @@ where
         }
     };
 
-    let answer = match Pod::new(
-        global_config,
-        local_config,
-        &args.mountpoint,
-        server,
-    )
-    .await
-    {
+    let answer = match Pod::new(global_config, local_config, &args.mountpoint, server).await {
         Ok(pod) => {
             pods.insert(args.name, pod);
             NewAnswer::Success(port)

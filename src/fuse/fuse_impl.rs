@@ -21,7 +21,7 @@ use libc::{XATTR_CREATE, XATTR_REPLACE};
 use std::ffi::OsStr;
 use std::io;
 use std::os::unix::ffi::OsStrExt;
-use std::path::{Path};
+use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 

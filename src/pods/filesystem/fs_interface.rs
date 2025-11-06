@@ -12,7 +12,7 @@ use crate::pods::network::network_interface::NetworkInterface;
 use futures::io;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::ffi::{OsStr};
+use std::ffi::OsStr;
 use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -84,9 +84,7 @@ impl FsInterface {
         if !has_execute_perm(p_inode.meta.perm) {
             return Ok(None);
         }
-        Ok(Some(
-            arbo.n_get_inode_child_by_name(p_inode, name)?.clone(),
-        ))
+        Ok(Some(arbo.n_get_inode_child_by_name(p_inode, name)?.clone()))
     }
 
     pub fn get_inode_attributes(&self, ino: InodeId) -> io::Result<Metadata> {

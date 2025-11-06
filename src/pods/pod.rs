@@ -256,13 +256,15 @@ impl Pod {
             .map(|inode| inode.meta.perm)
         {
             let _ = disk_manager.new_file(Path::new(GLOBAL_CONFIG_FNAME), perms);
-            disk_manager.write_file(
-                Path::new(GLOBAL_CONFIG_FNAME),
-                toml::to_string(&proto.global_config)
-                    .expect("infallible")
-                    .as_bytes(),
-                0,
-            ).map_err(|e| {
+            disk_manager
+                .write_file(
+                    Path::new(GLOBAL_CONFIG_FNAME),
+                    toml::to_string(&proto.global_config)
+                        .expect("infallible")
+                        .as_bytes(),
+                    0,
+                )
+                .map_err(|e| {
                     std::io::Error::new(e.kind(), format!("write_file(global_config): {e}"))
                 })?;
         }
@@ -273,13 +275,15 @@ impl Pod {
             .map(|inode| inode.meta.perm)
         {
             let _ = disk_manager.new_file(Path::new(LOCAL_CONFIG_FNAME), perms);
-            disk_manager.write_file(
-                Path::new(LOCAL_CONFIG_FNAME),
-                toml::to_string(&proto.local_config)
-                    .expect("infallible")
-                    .as_bytes(),
-                0,
-            ).map_err(|e| {
+            disk_manager
+                .write_file(
+                    Path::new(LOCAL_CONFIG_FNAME),
+                    toml::to_string(&proto.local_config)
+                        .expect("infallible")
+                        .as_bytes(),
+                    0,
+                )
+                .map_err(|e| {
                     std::io::Error::new(e.kind(), format!("write_file(local_config): {e}"))
                 })?;
         }
