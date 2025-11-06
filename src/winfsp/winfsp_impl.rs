@@ -113,6 +113,12 @@ pub fn mount_fsp(
         .map_err(|_| std::io::Error::new(ErrorKind::Other, "oh no!"))?;
     log::debug!("created host...");
 
+    let aliased = aliased_path(&path).unwrap();
+    if fs::metadata(&path).is_ok() {
+        log::debug!("moving from {:?} to {:?} ...", &path, &aliased);
+        fs::rename(&path, &aliased)?;
+    }
+
     log::debug!("mounting host @ {:?} ...", &path);
     host.mount(&path)?;
     log::debug!("mounted host...");
