@@ -46,6 +46,9 @@ pub fn check_permissions(
     inode_perm: u16,
 ) -> Result<AccessMode, OpenError> {
     match access {
+        AccessMode::Void if flags.exec && !has_execute_perm(inode_perm) => {
+            Err(OpenError::WrongPermissions)
+        }
         AccessMode::Void => Ok(AccessMode::Void),
         AccessMode::Read => {
             if !has_read_perm(inode_perm) {

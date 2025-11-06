@@ -1,4 +1,4 @@
-# Global Network configuration
+# Global Network Configuration
 
 > [!WARNING]
 > /!\ Not all of theses configuration settings are implemented yet /!\
@@ -6,84 +6,106 @@
 Main configuration for a Wormhole network.
 This configuration defines the general behavior of the network and all its related information.
 > [!IMPORTANT]
-> The system will always try to comply with rules defined in here. In case of conflict, they have absolute priority over almost all [individual pod configuration](./pod_conf.md) rules.
-> See [emergency strategies](../strategies/emergency.md) for details.
+> The system will always try to comply with the rules defined here. In case of conflict, they have absolute priority over almost all [individual pod configuration](./pod_conf.md) rules.
+> See [emergency strategies](../strategies/emergency.md) for more details.
 
-## General
+## Implemented Features
+
+### General
 >
-> [!NOTE] [wormhole]
+> [!NOTE] [general]
 
 > [!CAUTION] Mandatory
-> **name**<br>
-> Short, simple name of the network
+> **name**: string
+> Short and simple name for the network.
 
 ---
 
-**access**: open | demand | whitelist | blacklist<br>
-*default:demand*<br>
-Defines how new pods should join the network.
-
----
-
-## Network
->
-> [!NOTE] [network]
-
-**frequency**: seconds<br>
-*default:0(smart)*<br>
-Time during which outgoing write requests are locally stored before being sent all at once.
-Prevents network floods when creating lot of files fastly.
-> [!NOTE]
-> A value of 0 let the system manage itself, balancing over a base frequency of 1sec depending on current use.
-
-
----
-
-## Redundancy
+### Redundancy
 >
 > [!NOTE] [redundancy]
 
 > [!TIP]
-> Redundancy is a very important parameter when aiming to securing data. This value defines the number of replications of a file over many nodes. Having at least one replica enables :
-> - Failure-safe data storage.<br>
-> Upon node failure, no data is lost, and the cluster will rebalance itself.
-> Always-on system.<br>
-> - Even while rebalancing after failure, data is still available and users keeps a seamless experience.
+> Redundancy is a very important parameter for securing data. This value defines the number of replications of a file across multiple nodes. Having at least one replica allows for:
+> - Fault-tolerant data storage.
+> In case of a node failure, no data is lost and the cluster will rebalance itself.
+> Always-on system.
+> - Even during rebalancing after a failure, data is still available and users maintain a seamless experience.
 
-**amount**: number<br>
-*default:0*<br>
-Number of replicas for one file. Replicas are made for safety and thus stored on different nodes.
+**number**: number
+*default: 2*
+Number of replicas for a file. Replicas are made for security and therefore stored on different nodes.
 > [!WARNING]
-> - Can't exeed the number of actives nodes.
-> - Storage needs increase linearly.
+> - Cannot exceed the number of active nodes.
+> - Storage requirements increase linearly.
 
 > [!TIP]
-> The system will smartly store replicas on nodes where the file is regularly requested to speed up the system :D
+> The system will intelligently store replicas on nodes where the file is regularly requested to speed up the system :D
 
-**strategy**: number<br>
-*default:2*<br>
-Instantly replicate every change can cause a lot of useless stress on the cluster. You can set a strategy depending on your needs.
+---
 
-0. Instantly replicate all operations<br>
-If you can't afford to lose even one minute of data upon failure
+## Features Not Yet Implemented
+
+> [!WARNING]
+> /!\ Section Not implemented at this time /!\
+
+### General (continued)
+>
+> [!NOTE] [general]
+
+**access**: open | demand | whitelist | blacklist
+*default: demand*
+Defines how new pods should join the network.
+
+---
+
+> [!WARNING]
+> /!\ Section Not implemented at this time /!\
+
+### Network
+>
+> [!NOTE] [network]
+
+**frequency**: seconds
+*default: 0 (smart)*
+Time during which outgoing write requests are stored locally before being sent all at once.
+Prevents network flooding when creating many files rapidly.
+> [!NOTE]
+> A value of 0 lets the system manage itself, balancing on a base frequency of 1 second depending on current usage.
+
+---
+
+> [!WARNING]
+> /!\ Strategy options not implemented at this time /!\
+
+### Redundancy (continued)
+>
+> [!NOTE] [redundancy]
+
+**strategy**: number
+*default: 2*
+Instantly replicating every change can cause a lot of unnecessary stress on the cluster. You can define a strategy based on your needs.
+
+0. Instantly replicate all operations
+If you can't afford to lose even one minute of data upon failure.
 1. System managed
-Will target inactivity periods for a file, preventing the propagation of too many minor writes when using a file.<br>
-Uses min-replication-time & max-replication-time
-2. Fixed
-Replicates a file every max-replication-time (if the file got a modification since last time)
+Will target inactivity periods for a file, preventing the propagation of too many minor writes when using a file.
+Uses `min-replication-time` & `max-replication-time`.
+1. Fixed
+Replicates a file every `max-replication-time` (if the file has been modified since the last time).
 
 ---
 
-**min-replication-time**: minutes<br>
-*default:10*<br>
-> [!NOTE] Used by the redundancy strategy when system managed
+**min-replication-time**: minutes
+*default: 10*
+> [!NOTE] Used by the redundancy strategy when system-managed.
 
-Minimum time before repropagating a save when system managed.
+Minimum time before re-propagating a backup when system-managed.
 
 ---
 
-**max-replication-time**: minutes<br>
-*default:120*<br>
-> [!NOTE] Used by the redundancy strategy when system managed.<br>Used by the redundancy strategy when fixed.
+**max-replication-time**: minutes
+*default: 120*
+> [!NOTE] Used by the redundancy strategy when system-managed.Used by the redundancy strategy when fixed.
 
-Maximum time before repropagating a save when system managed.
+Maximum time before re-propagating a backup when system-managed.

@@ -33,4 +33,6 @@ pub trait DiskManager: Send + Sync + Debug {
     fn new_dir(&self, path: &Path, permissions: u16) -> io::Result<()>;
 
     fn size_info(&self) -> io::Result<DiskSizeInfo>;
+
+    fn file_exists(&self, path: &WhPath) -> bool;
 }

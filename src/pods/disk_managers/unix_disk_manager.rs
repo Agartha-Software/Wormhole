@@ -122,16 +122,24 @@ impl DiskManager for UnixDiskManager {
         .expect("panics if there are internal null bytes");
 
         let ptr: *const i8 = c_string_path.as_ptr();
-        unsafe {
+        let result = unsafe {
             // If we just self.handle.open_file...set_permission, the open flags
             // don't allow to modify the permission on a file where we don't have the permission like a 000
             // This is the only convincing way we found
-            libc::fchmodat(raw_fd, ptr, permissions.into(), 0);
+            libc::fchmodat(raw_fd, ptr, permissions.into(), libc::AT_EMPTY_PATH)
+        };
+        if result != 0 {
+            Err(std::io::Error::last_os_error())
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 
     fn size_info(&self) -> std::io::Result<super::DiskSizeInfo> {
         todo!()
+    }
+
+    fn file_exists(&self, path: &WhPath) -> bool {
+        self.handle.open_file(path.clone().set_relative()).is_ok()
     }
 }

@@ -39,10 +39,10 @@ pub const ARBO_FILE_FNAME: &str = ".arbo";
 
 // SECTION types
 
-/// InodeId is represented by an u64
 pub type Hosts = Vec<Address>;
 
 /// todo: replace usage of InodeId with Ino when no parallel merges are likely to be conflicting
+/// InodeId is represented by an u64
 pub type InodeId = u64;
 pub type Ino = u64;
 

@@ -7,6 +7,7 @@ use crate::pods::filesystem::make_inode::MakeInodeError;
 use crate::pods::filesystem::open::{check_permissions, OpenError};
 use crate::pods::filesystem::read::ReadError;
 
+use crate::pods::filesystem::readdir::ReadDirError;
 use crate::pods::filesystem::remove_inode::RemoveFileError;
 use crate::pods::filesystem::rename::RenameError;
 use crate::pods::filesystem::write::WriteError;
@@ -16,7 +17,7 @@ use fuser::{
     BackgroundSession, Filesystem, MountOption, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty,
     ReplyEntry, ReplyXattr, Request,
 };
-use libc::{EIO, ENOENT, XATTR_CREATE, XATTR_REPLACE};
+use libc::{XATTR_CREATE, XATTR_REPLACE};
 use std::ffi::OsStr;
 use std::io;
 use std::os::unix::ffi::OsStrExt;
@@ -37,23 +38,26 @@ impl Filesystem for FuseController {
 
     fn lookup(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
         match self.fs_interface.get_entry_from_name(parent, name) {
-            Ok(inode) => {
+            Ok(Some(inode)) => {
                 reply.entry(&TTL, &inode.meta.with_ids(req.uid(), req.gid()), 0);
             }
-            Err(_) => {
-                reply.error(ENOENT);
+            Ok(None) => {
+                reply.error(libc::EACCES);
+            }
+            Err(e) => {
+                reply.error(libc::ENOENT);
             }
         };
     }
 
     fn getattr(&mut self, req: &Request, ino: u64, _fh: Option<u64>, reply: ReplyAttr) {
-        let attrs = self.fs_interface.get_inode_attributes(ino);
+        let attrs = self.fs_interface.n_get_inode_attributes(ino);
 
         match attrs {
             Ok(attrs) => reply.attr(&TTL, &attrs.with_ids(req.uid(), req.gid())),
             Err(err) => {
                 log::error!("getattr error: {:?}", err);
-                reply.error(err.raw_os_error().unwrap_or(EIO))
+                reply.error(err.to_libc())
             }
         }
     }
@@ -76,18 +80,22 @@ impl Filesystem for FuseController {
         flags: Option<u32>,
         reply: ReplyAttr,
     ) {
-        match self.fs_interface.setattr(
-            ino,
-            mode,
-            uid,
-            gid,
-            size,
-            atime.map(|time| time_or_now_to_system_time(time)),
-            mtime.map(|time| time_or_now_to_system_time(time)),
-            ctime,
-            file_handle,
-            flags,
-        ) {
+        match self
+            .fs_interface
+            .setattr(
+                ino,
+                mode,
+                uid,
+                gid,
+                size,
+                atime.map(|time| time_or_now_to_system_time(time)),
+                mtime.map(|time| time_or_now_to_system_time(time)),
+                ctime,
+                file_handle,
+                flags,
+            )
+            .inspect_err(|e| log::error!("setattr({ino}): {e}"))
+        {
             Ok(meta) => reply.attr(&TTL, &meta.with_ids(req.uid(), req.gid())),
             Err(SetAttrError::WhError { source }) => reply.error(source.to_libc()),
             Err(SetAttrError::SizeNoPerm) => reply.error(libc::EPERM),
@@ -276,9 +284,14 @@ impl Filesystem for FuseController {
     ) {
         let entries = match self.fs_interface.read_dir(ino) {
             Ok(entries) => entries,
-            Err(e) => {
-                log::error!("readdir: ENOENT {e} {ino}");
-                reply.error(ENOENT);
+            Err(ReadDirError::PermissionError) => {
+                log::error!("readdir: EPERM {ino}");
+                reply.error(libc::EACCES);
+                return;
+            }
+            Err(ReadDirError::WhError { source: e }) => {
+                log::error!("readdir: {e} {ino}");
+                reply.error(e.to_libc());
                 return;
             }
         };
@@ -316,7 +329,7 @@ impl Filesystem for FuseController {
             Some(kind) => kind,
             None => {
                 // If it's not a file or a directory it's not yet supported
-                reply.error(libc::EPERM);
+                reply.error(libc::EACCES);
                 return;
             }
         };
@@ -336,8 +349,8 @@ impl Filesystem for FuseController {
             Err(MakeInodeError::ParentNotFound) => reply.error(libc::ENOENT),
             Err(MakeInodeError::ParentNotFolder) => reply.error(libc::ENOTDIR),
             Err(MakeInodeError::ProtectedNameIsFolder) => reply.error(libc::EISDIR),
+            Err(MakeInodeError::PermissionDenied) => reply.error(libc::EACCES),
         }
-        //todo when persmissions are added reply.error(libc::EACCES)
     }
 
     fn mkdir(
@@ -352,6 +365,7 @@ impl Filesystem for FuseController {
         match self
             .fs_interface
             .make_inode(parent, name, mode as u16, SimpleFileType::Directory)
+            .inspect_err(|e| log::error!("mkdir({parent}, {}): {e}", name.display()))
         {
             Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
             Err(MakeInodeError::LocalCreationFailed { io }) => {
@@ -364,6 +378,7 @@ impl Filesystem for FuseController {
             Err(MakeInodeError::ParentNotFound) => reply.error(libc::ENOENT),
             Err(MakeInodeError::ParentNotFolder) => reply.error(libc::ENOTDIR),
             Err(MakeInodeError::ProtectedNameIsFolder) => reply.error(libc::EISDIR),
+            Err(MakeInodeError::PermissionDenied) => reply.error(libc::EACCES),
         }
     }
 
@@ -377,6 +392,7 @@ impl Filesystem for FuseController {
                 ))
             }
             Err(RemoveFileError::NonEmpty) => reply.error(libc::ENOTEMPTY),
+            Err(RemoveFileError::PermissionDenied) => reply.error(libc::EACCES),
         }
     }
 
@@ -390,6 +406,7 @@ impl Filesystem for FuseController {
                 ))
             }
             Err(RemoveFileError::NonEmpty) => reply.error(libc::ENOTEMPTY),
+            Err(RemoveFileError::PermissionDenied) => reply.error(libc::EACCES),
         }
     }
 
@@ -432,6 +449,7 @@ impl Filesystem for FuseController {
             Err(RenameError::DestinationParentNotFound) => reply.error(libc::ENOENT),
             Err(RenameError::ProtectedNameIsFolder) => reply.error(libc::ENOTDIR),
             Err(RenameError::ReadFailed { source: _ }) => reply.error(libc::EIO), // TODO
+            Err(RenameError::PermissionDenied) => reply.error(libc::EACCES),
             Err(RenameError::LocalWriteFailed { io }) => reply.error(
                 io.raw_os_error()
                     .expect("Local read error should always be the underling os error"),
@@ -447,8 +465,8 @@ impl Filesystem for FuseController {
             Ok(file_handle) => reply.opened(file_handle, flags as u32), // TODO - check flags ?,
             Err(OpenError::WhError { source }) => reply.error(source.to_libc()),
             Err(OpenError::MultipleAccessFlags) => reply.error(libc::EINVAL),
-            Err(OpenError::TruncReadOnly) => reply.error(libc::EACCES),
-            Err(OpenError::WrongPermissions) => reply.error(libc::EPERM),
+            Err(OpenError::TruncReadOnly) => reply.error(libc::EPERM),
+            Err(OpenError::WrongPermissions) => reply.error(libc::EACCES),
         };
     }
 
@@ -585,18 +603,30 @@ impl Filesystem for FuseController {
         let meta = match self.fs_interface.n_get_inode_attributes(ino) {
             Ok(meta) => meta,
             Err(err) => {
+                log::error!("access({ino}, {mask}): {err}");
                 reply.error(err.to_libc());
                 return;
             }
         };
 
-        match AccessMode::from_libc(mask)
-            .and_then(|access| check_permissions(OpenFlags::from_libc(mask), access, meta.perm))
+        let mut flags = OpenFlags::default();
+        flags.exec = (mask & libc::X_OK) != 0;
+        let mode = match mask & (libc::R_OK | libc::W_OK) {
+            libc::F_OK => Ok(AccessMode::Void),
+            libc::R_OK => Ok(AccessMode::Read),
+            libc::W_OK => Ok(AccessMode::Write),
+            0b110 /* (libc::R_OK | libc::W_OK) */ => Ok(AccessMode::ReadWrite),
+            _ => unreachable!(),
+        };
+
+        match mode
+            .and_then(|access| check_permissions(flags, access, meta.perm))
+            .inspect_err(|err| log::error!("access({ino}, {mask}): {err}"))
         {
             Ok(_) => reply.ok(),
             Err(OpenError::MultipleAccessFlags) => reply.error(libc::EINVAL),
-            Err(OpenError::TruncReadOnly) => reply.error(libc::EACCES),
-            Err(OpenError::WrongPermissions) => reply.error(libc::EPERM),
+            Err(OpenError::TruncReadOnly) => reply.error(libc::EPERM),
+            Err(OpenError::WrongPermissions) => reply.error(libc::EACCES),
             Err(OpenError::WhError { source }) => reply.error(source.to_libc()),
         };
     }

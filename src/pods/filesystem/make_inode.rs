@@ -4,7 +4,10 @@ use custom_error::custom_error;
 
 use crate::{
     error::WhError,
-    pods::arbo::{Arbo, FsEntry, Inode},
+    pods::{
+        arbo::{Arbo, FsEntry, Inode},
+        filesystem::permissions::has_write_perm,
+    },
 };
 
 use super::{
@@ -20,6 +23,7 @@ custom_error! {pub MakeInodeError
     ParentNotFolder = "Parent isn't a folder",
     LocalCreationFailed{io: std::io::Error} = "Local creation failed: {io}",
     ProtectedNameIsFolder = "Protected name can't be used for folders",
+    PermissionDenied = "Permission Denied",
 }
 
 custom_error! {pub CreateError
@@ -63,6 +67,24 @@ impl FsInterface {
         permissions: u16,
         kind: SimpleFileType,
     ) -> Result<Inode, MakeInodeError> {
+        let new_path = {
+            let arbo = Arbo::n_read_lock(&self.arbo, "make inode")?;
+
+            let parent = arbo.n_get_inode(parent_ino)?;
+
+            if !has_write_perm(parent.meta.perm) || !has_write_perm(parent.meta.perm) {
+                return Err(MakeInodeError::PermissionDenied);
+            }
+            //check if already exist
+            match arbo.n_get_inode_child_by_name(&parent, &name) {
+                Ok(_) => return Err(MakeInodeError::AlreadyExist),
+                Err(WhError::InodeNotFound) => {}
+                Err(err) => return Err(MakeInodeError::WhError { source: err }),
+            }
+            let mut new_path = arbo.n_get_path_from_inode_id(parent_ino)?;
+            new_path.push(&name);
+            new_path
+        };
         let new_entry = match kind {
             SimpleFileType::File => FsEntry::File(vec![self.network_interface.hostname()?.clone()]),
             SimpleFileType::Directory => FsEntry::Directory(Vec::new()),
@@ -77,21 +99,6 @@ impl FsInterface {
             .or_else(|_| self.network_interface.n_get_next_inode())?;
 
         let new_inode = Inode::new(name, parent_ino, new_inode_id, new_entry, permissions);
-
-        let mut new_path;
-        {
-            let arbo = Arbo::n_read_lock(&self.arbo, "make inode")?;
-
-            let parent = arbo.n_get_inode(new_inode.parent)?;
-            //check if already exist
-            match arbo.n_get_inode_child_by_name(&parent, &new_inode.name) {
-                Ok(_) => return Err(MakeInodeError::AlreadyExist),
-                Err(WhError::InodeNotFound) => {}
-                Err(err) => return Err(MakeInodeError::WhError { source: err }),
-            }
-            new_path = arbo.n_get_path_from_inode_id(parent_ino)?;
-            new_path.push(&name);
-        }
 
         match kind {
             SimpleFileType::File => self

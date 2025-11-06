@@ -11,12 +11,14 @@
 
 use std::ffi::OsStr;
 
-pub mod commands;
+pub mod cli;
 pub mod config;
 pub mod data;
 pub mod error;
+pub mod ipc;
 pub mod network;
 pub mod pods;
+pub mod signals;
 #[cfg(target_os = "windows")]
 pub mod winfsp;
 

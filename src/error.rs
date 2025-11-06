@@ -27,7 +27,12 @@ impl WhError {
     }
 
     pub fn into_io(self) -> io::Error {
-        io::Error::other(self)
+        match self {
+            WhError::InodeNotFound => io::ErrorKind::NotFound.into(),
+            WhError::InodeIsNotADirectory => io::ErrorKind::NotADirectory.into(),
+            WhError::InodeIsADirectory => io::ErrorKind::IsADirectory.into(),
+            other => io::Error::other(other),
+        }
     }
 }
 
@@ -71,7 +76,7 @@ impl fmt::Display for CliSuccess {
         match self {
             CliSuccess::Message(msg) => write!(f, "{}", msg),
             CliSuccess::WithData { message, data } => {
-                write!(f, "{} \nData:\n{}\n", message, data)
+                write!(f, "{} - Data: {}", message, data)
             }
         }
     }

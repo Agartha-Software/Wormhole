@@ -5,7 +5,10 @@ use custom_error::custom_error;
 
 use crate::{
     error::WhError,
-    pods::arbo::{Arbo, FsEntry, InodeId},
+    pods::{
+        arbo::{Arbo, FsEntry, InodeId},
+        filesystem::permissions::has_write_perm,
+    },
 };
 
 use super::fs_interface::FsInterface;
@@ -22,7 +25,8 @@ custom_error! {
     pub RemoveFileError
     WhError{source: WhError} = "{source}",
     NonEmpty = "Can't remove non-empty dir",
-    LocalDeletionFailed{io: std::io::Error} = "Local Deletion failed: {io}"
+    LocalDeletionFailed{io: std::io::Error} = "Local Deletion failed: {io}",
+    PermissionDenied  = "Permission denied",
 }
 
 impl From<RemoveInodeError> for RemoveFileError {
@@ -41,7 +45,11 @@ impl FsInterface {
         let target = {
             let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface::fuse_remove_inode")?;
             let parent = arbo.n_get_inode(parent)?;
-            arbo.n_get_inode_child_by_name(parent, name)?.id
+            if !has_write_perm(parent.meta.perm) {
+                return Err(RemoveFileError::PermissionDenied);
+            }
+            arbo.n_get_inode_child_by_name(parent, &name)?
+                .id
         };
 
         self.remove_inode(target)
