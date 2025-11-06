@@ -55,7 +55,7 @@ custom_error! {AliasedPathError
     NoFolderName = "Can't get folder name",
 }
 
-pub fn aliased_path(path: &Path) -> Result<PathBuf, AliasedPathError> {
+fn aliased_path(path: &Path) -> Result<PathBuf, AliasedPathError> {
     let mut buf = path.to_owned();
     let mut file_name = OsString::from(".");
 
@@ -389,7 +389,7 @@ impl FileSystemContext for FSPController {
         let mut entries = self
             .fs_interface
             .read_dir(context.ino)
-            .inspect_err(|e| log::error!("read_directory::ERROR_NOT_FOUND"))?;
+            .inspect_err(|_| log::error!("read_directory::ERROR_NOT_FOUND"))?;
 
         let mut cursor = 0;
 
