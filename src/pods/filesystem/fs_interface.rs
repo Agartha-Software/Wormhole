@@ -12,7 +12,7 @@ use crate::pods::network::network_interface::NetworkInterface;
 use futures::io;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::ffi::{OsStr, OsString};
+use std::ffi::{OsString};
 use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::sync::Arc;

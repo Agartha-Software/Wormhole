@@ -1,5 +1,7 @@
 #[cfg(target_os = "linux")]
 use std::ffi::OsStr;
+#[cfg(target_os = "linux")]
+use crate::pods::filesystem::permissions::has_write_perm;
 
 use custom_error::custom_error;
 
@@ -7,7 +9,6 @@ use crate::{
     error::WhError,
     pods::{
         arbo::{Arbo, FsEntry, InodeId},
-        filesystem::permissions::has_write_perm,
     },
 };
 
