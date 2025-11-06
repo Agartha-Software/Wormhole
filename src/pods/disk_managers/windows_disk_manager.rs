@@ -1,5 +1,6 @@
 use std::{
-    os::windows::prelude::FileExt, path::{Path, PathBuf}
+    os::windows::prelude::FileExt,
+    path::{Path, PathBuf},
 };
 
 use tokio::io;
@@ -14,16 +15,17 @@ pub struct WindowsDiskManager {
 }
 
 impl WindowsDiskManager {
+    /// On windows, the original dir is moved from "name" to ".name"
     pub fn new(mount_point: &Path) -> io::Result<Self> {
-        let mount_point = aliased_path(mount_point).map_err(|_| io::ErrorKind::InvalidFilename)?;
+        let system_mount_point = aliased_path(mount_point).map_err(|_| io::ErrorKind::InvalidFilename)?;
 
-        if !mount_point.exists() {
-            std::fs::create_dir(&mount_point)?;
+        if system_mount_point.exists() {
+            return Err(io::Error::new(io::ErrorKind::AlreadyExists, "System virtual mountpoint already existing (path/.mountpoint). Please delete it to create a pod here."));
         }
+        std::fs::rename(mount_point, &system_mount_point)?;
+        std::fs::create_dir(&mount_point)?;
 
-        Ok(Self {
-            mount_point,
-        })
+        Ok(Self { mount_point: system_mount_point })
     }
 }
 
