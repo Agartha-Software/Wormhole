@@ -51,19 +51,6 @@ impl UnixDiskManager {
 
 /// always takes a WhPath and infers the real disk path
 impl DiskManager for UnixDiskManager {
-    /// Very simple util to log the content of a folder locally
-    fn log_arbo(&self, path: &Path) -> io::Result<()> {
-        // TODO - unused function ?
-        let dirs = self.handle.list_dir(path)?;
-        for dir in dirs {
-            match dir {
-                Ok(entry) => log::debug!("|{:?} => {:?}|", entry.file_name(), entry.simple_type()),
-                Err(err) => return Err(err),
-            }
-        }
-        Ok(())
-    }
-
     fn new_file(&self, path: &Path, mode: u16) -> io::Result<()> {
         if self.exist(path) {
             self.handle.remove_file(path)?;

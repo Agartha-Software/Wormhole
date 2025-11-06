@@ -249,24 +249,24 @@ impl DiskManager for DummyDiskManager {
         })
     }
 
-    fn log_arbo(&self, path: &Path) -> io::Result<()> {
-        let lock = self.files.read().expect("VirtDisk::log_arbo rwLock");
+    // fn log_arbo(&self, path: &Path) -> io::Result<()> {
+    //     let lock = self.files.read().expect("VirtDisk::log_arbo rwLock");
 
-        match lock.get(path) {
-            Some(VirtualFile::Folder(vec)) => Ok::<(), io::Error>({
-                vec.iter().for_each(|f| {
-                    let t = match lock.get(f) {
-                        Some(VirtualFile::File(_)) => format!("{:?}", SimpleFileType::File),
-                        Some(VirtualFile::Folder(_)) => format!("{:?}", SimpleFileType::Directory),
-                        None => "err".into(),
-                    };
-                    log::debug!("|{:?} => {}|", f.file_name(), t);
-                });
-            }),
-            Some(VirtualFile::File(_)) => Err(io::ErrorKind::InvalidData.into()),
-            None => Err(io::ErrorKind::NotFound.into()),
-        }
-    }
+    //     match lock.get(path) {
+    //         Some(VirtualFile::Folder(vec)) => Ok::<(), io::Error>({
+    //             vec.iter().for_each(|f| {
+    //                 let t = match lock.get(f) {
+    //                     Some(VirtualFile::File(_)) => format!("{:?}", SimpleFileType::File),
+    //                     Some(VirtualFile::Folder(_)) => format!("{:?}", SimpleFileType::Directory),
+    //                     None => "err".into(),
+    //                 };
+    //                 log::debug!("|{:?} => {}|", f.file_name(), t);
+    //             });
+    //         }),
+    //         Some(VirtualFile::File(_)) => Err(io::ErrorKind::InvalidData.into()),
+    //         None => Err(io::ErrorKind::NotFound.into()),
+    //     }
+    // }
 
     fn set_permisions(&self, _path: &Path, _permissions: u16) -> io::Result<()> {
         Ok(())

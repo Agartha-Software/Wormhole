@@ -17,7 +17,8 @@ pub struct WindowsDiskManager {
 impl WindowsDiskManager {
     /// On windows, the original dir is moved from "name" to ".name"
     pub fn new(mount_point: &Path) -> io::Result<Self> {
-        let system_mount_point = aliased_path(mount_point).map_err(|_| io::ErrorKind::InvalidFilename)?;
+        let system_mount_point =
+            aliased_path(mount_point).map_err(|_| io::ErrorKind::InvalidFilename)?;
 
         if system_mount_point.exists() {
             return Err(io::Error::new(io::ErrorKind::AlreadyExists, "System virtual mountpoint already existing (path/.mountpoint). Please delete it to create a pod here."));
@@ -25,7 +26,9 @@ impl WindowsDiskManager {
         std::fs::rename(mount_point, &system_mount_point)?;
         std::fs::create_dir(&mount_point)?;
 
-        Ok(Self { mount_point: system_mount_point })
+        Ok(Self {
+            mount_point: system_mount_point,
+        })
     }
 }
 
@@ -101,10 +104,6 @@ impl DiskManager for WindowsDiskManager {
             free_size: disk.available_space() as usize,
             total_size: disk.total_space() as usize,
         })
-    }
-
-    fn log_arbo(&self, path: &Path) -> std::io::Result<()> {
-        todo!()
     }
 
     fn set_permisions(&self, path: &Path, _permissions: u16) -> io::Result<()> {

@@ -378,36 +378,10 @@ impl Pod {
         path: Option<&Path>,
     ) -> Result<CliHostTree, PodInfoError> {
         let arbo = Arbo::n_read_lock(&self.network_interface.arbo, "Pod::get_info")?;
-        let ino = if let Some(path) = path {
-            arbo.get_inode_from_path(path)
-                .map_err(|_| PodInfoError::FileNotFound)?
-                .id
-        } else {
-            ROOT
-        };
 
         Ok(CliHostTree {
-            lines: Self::recurse_tree(&*arbo, ino, 0),
+            lines: arbo.get_file_tree_and_hosts(path)?,
         })
-    }
-
-    /// given ino is not checked -> must exist in arbo
-    fn recurse_tree(arbo: &Arbo, ino: InodeId, indentation: u8) -> Vec<TreeLine> {
-        let entry = &arbo
-            .n_get_inode(ino)
-            .expect("recurse_tree: ino not found")
-            .entry;
-        let path = arbo
-            .n_get_path_from_inode_id(ino)
-            .expect("recurse_tree: unable to get path");
-        match entry {
-            FsEntry::File(hosts) => vec![(indentation, ino, path, hosts.clone())],
-            FsEntry::Directory(children) => children
-                .iter()
-                .map(|c| Pod::recurse_tree(arbo, *c, indentation + 1))
-                .flatten()
-                .collect::<Vec<TreeLine>>(),
-        }
     }
 
     // !SECTION

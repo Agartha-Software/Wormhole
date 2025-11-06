@@ -13,8 +13,6 @@ pub struct DiskSizeInfo {
 }
 
 pub trait DiskManager: Send + Sync + Debug {
-    fn log_arbo(&self, path: &Path) -> io::Result<()>;
-
     fn new_file(&self, path: &Path, permissions: u16) -> io::Result<()>;
 
     fn set_permisions(&self, path: &Path, permissions: u16) -> io::Result<()>;

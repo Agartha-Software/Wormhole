@@ -1,4 +1,4 @@
-use crate::{error::WhResult, network::message::Address};
+use crate::{data::tree_hosts::TreeLine, error::WhResult, network::message::Address};
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -648,6 +648,37 @@ impl Arbo {
 
         inode.xattrs.remove(key);
         Ok(())
+    }
+
+    pub fn get_file_tree_and_hosts(&self, path: Option<&Path>) -> WhResult<Vec<TreeLine>> {
+        let ino = if let Some(path) = path {
+            self.get_inode_from_path(path)
+                .map_err(|_| WhError::InodeNotFound)?
+                .id
+        } else {
+            ROOT
+        };
+
+        Ok(self.recurse_tree(ino, 0))
+    }
+
+    /// given ino is not checked -> must exist in arbo
+    fn recurse_tree(&self, ino: InodeId, indentation: u8) -> Vec<TreeLine> {
+        let entry = &self
+            .n_get_inode(ino)
+            .expect("recurse_tree: ino not found")
+            .entry;
+        let path = self
+            .n_get_path_from_inode_id(ino)
+            .expect("recurse_tree: unable to get path");
+        match entry {
+            FsEntry::File(hosts) => vec![(indentation, ino, path, hosts.clone())],
+            FsEntry::Directory(children) => children
+                .iter()
+                .map(|c| self.recurse_tree(*c, indentation + 1))
+                .flatten()
+                .collect::<Vec<TreeLine>>(),
+        }
     }
 }
 
