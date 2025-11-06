@@ -139,7 +139,7 @@ impl DiskManager for UnixDiskManager {
         todo!()
     }
 
-    fn file_exists(&self, path: &WhPath) -> bool {
-        self.handle.open_file(path.clone().set_relative()).is_ok()
+    fn file_exists(&self, path: &Path) -> bool {
+        self.handle.open_file(path).is_ok()
     }
 }
