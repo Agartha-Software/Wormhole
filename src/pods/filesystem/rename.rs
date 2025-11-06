@@ -7,7 +7,6 @@ use crate::{
     pods::{
         arbo::{Arbo, InodeId, Metadata},
         filesystem::permissions::has_write_perm,
-        whpath::WhPath,
     },
 };
 
