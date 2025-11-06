@@ -1,6 +1,5 @@
 use std::{
-    os::windows::prelude::FileExt,
-    path::{Path, PathBuf},
+    os::windows::prelude::FileExt, path::{Path, PathBuf}
 };
 
 use tokio::io;
@@ -110,7 +109,7 @@ impl DiskManager for WindowsDiskManager {
         Ok(())
     }
 
-    fn file_exists(&self, path: &WhPath) -> bool {
-        std::fs::exists(&self.mount_point.join(path).inner)
+    fn file_exists(&self, path: &Path) -> bool {
+        std::fs::exists(&self.mount_point.join(path)).unwrap_or(false)
     }
 }
