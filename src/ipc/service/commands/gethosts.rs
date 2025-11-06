@@ -5,7 +5,6 @@ use crate::ipc::{
     answers::GetHostsAnswer, commands::GetHostsRequest, service::connection::send_answer,
 };
 use crate::pods::pod::{Pod, PodInfoError};
-use crate::pods::whpath::WhPath;
 
 pub async fn gethosts<Stream>(
     req: GetHostsRequest,
@@ -16,7 +15,7 @@ where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
 {
     let answer = match pods.iter().find(|(_, pod)| pod.contains(&req.path)) {
-        Some((_, pod)) => match pod.get_file_hosts(WhPath::from(&req.path.display().to_string())) {
+        Some((_, pod)) => match pod.get_file_hosts(&req.path) {
             Ok(hosts) => GetHostsAnswer::Hosts(hosts),
             Err(PodInfoError::FileNotFound) => GetHostsAnswer::FileNotFound,
             Err(PodInfoError::WrongFileType { detail }) => GetHostsAnswer::WrongFileType(detail),
