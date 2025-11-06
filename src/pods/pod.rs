@@ -12,10 +12,10 @@ use crate::network::HandshakeError;
 use crate::pods::arbo::{
     FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME, LOCAL_CONFIG_INO, LOCK_TIMEOUT, ROOT,
 };
-#[cfg(target_os = "windows")]
-use crate::pods::disk_managers::windows_disk_manager::WindowsDiskManager;
 #[cfg(target_os = "linux")]
 use crate::pods::disk_managers::unix_disk_manager::UnixDiskManager;
+#[cfg(target_os = "windows")]
+use crate::pods::disk_managers::windows_disk_manager::WindowsDiskManager;
 use crate::pods::disk_managers::DiskManager;
 use crate::pods::network::redundancy::redundancy_worker;
 #[cfg(target_os = "windows")]
