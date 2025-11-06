@@ -10,7 +10,7 @@
 # 5. Configures the 3 pods to connect in a chain (0 <- 1 <- 2)
 
 # Exit immediately if a command fails
-set -e
+set -Eeuo pipefail
 
 # --- Color Definitions ---
 # Use direct string assignment, which is more robust
@@ -121,10 +121,11 @@ print_color "$BOLD$CYAN" "=== Step 2: Deploying 'wormhole.yaml' ==="
 kubectl apply -f "$SCRIPT_DIR/wormhole.yaml"
 
 print_color "$YELLOW" "Waiting for all 3 pods to be ready..."
-kubectl wait --for=condition=ready pod \
-  -l app=wormhole \
-  -n wormhole \
-  --timeout=300s
+# Attendre que le StatefulSet ait 3 réplicas prêts
+kubectl -n wormhole rollout status statefulset/wormhole --timeout=300s
+
+# Puis attendre la readiness des pods (ils existent désormais)
+kubectl -n wormhole wait pod -l app=wormhole --for=condition=Ready --timeout=300s
 print_color "$GREEN" "All 3 pods are 'Running'."
 
 # --- Step 3: Network Configuration ---

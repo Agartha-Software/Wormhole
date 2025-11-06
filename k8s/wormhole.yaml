@@ -80,8 +80,6 @@ spec:
           env:
             - name: RUST_LOG
               value: wormhole=trace
-            - name: SERVICE_ADDRESS
-              value: 0.0.0.0:8081
           ports:
             - name: service
               containerPort: 8081
@@ -100,7 +98,8 @@ spec:
               mountPath: /dev/fuse
             - name: wormhole-data
               mountPath: /wormhole
-          command: ["/bin/wormholed", "-i", "$(SERVICE_ADDRESS)"]
+          command: ["/bin/wormholed"]
+          args: ["-i", "0.0.0.0:8081"]
       volumes:
         - name: dev-fuse
           hostPath:
