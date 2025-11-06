@@ -272,11 +272,11 @@ impl DiskManager for DummyDiskManager {
         Ok(())
     }
 
-    fn file_exists(&self, path: &WhPath) -> bool {
+    fn file_exists(&self, path: &Path) -> bool {
         self.files
             .read()
             .expect("VirtDisk::read_file rwLock")
-            .get(&path.clone().set_relative())
+            .get(path)
             .is_some()
     }
 }
