@@ -1,141 +1,172 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
-# === Script de déploiement Wormhole sur Kubernetes ===
+# === Wormhole Kubernetes Deployment Script ===
 #
-# Ce script automatise les étapes suivantes :
-# 1. Création (optionnelle) d'un cluster 'kind'
-# 2. Demande des identifiants GHCR pour l'image privée
-# 3. Création du namespace et du secret d'image
-# 4. Déploiement du StatefulSet depuis 'wormhole.yaml'
-# 5. Configuration des 3 pods pour qu'ils se connectent en réseau
+# This script automates the following steps:
+# 1. Optional 'kind' cluster creation (cleans up old one if found)
+# 2. Asks for GHCR credentials for the private image
+# 3. Creates the namespace and image pull secret
+# 4. Deploys the StatefulSet from 'wormhole.yaml'
+# 5. Configures the 3 pods to connect in a chain (0 <- 1 <- 2)
 
-# Quitte immédiatement si une commande échoue
+# Exit immediately if a command fails
 set -e
 
-echo "Vérification de l'existence d'un cluster 'kind' nommé 'wormhole'..."
-# On vérifie si 'kind get clusters' retourne une ligne qui est EXACTEMENT 'wormhole'
-if kind get clusters | grep -q "^wormhole$"; then
-  echo "-> Un cluster existant 'wormhole' a été trouvé. Suppression..."
-  kind delete cluster --name wormhole
-  echo "-> Cluster 'wormhole' supprimé."
-else
-  echo "-> Aucun cluster existant trouvé."
+# --- Color Definitions ---
+# Use direct string assignment, which is more robust
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+# Check if stdout is not a terminal (e.g., in a file) and disable colors
+if [ ! -t 1 ]; then
+    RED=""
+    GREEN=""
+    YELLOW=""
+    CYAN=""
+    BOLD=""
+    RESET=""
 fi
 
-echo "Création du cluster 'kind-wormhole'..."
+# Helper function for safe printing
+# Usage: print_color "$GREEN" "This is green text"
+print_color() {
+    local color="$1"
+    local message="$2"
+    # CORRECTION: The color codes are part of the format string,
+    # and the message is passed as a safe '%s' argument.
+    # This forces printf to interpret the escape codes.
+    printf "$color%s$RESET\n" "$message"
+}
+
+# Helper function for printing standard text
+# Safely prints strings, even if they start with '-'
+print() {
+    printf "%s\n" "$1"
+}
+
+
+# --- Step 0: Kind Cluster Setup ---
+print_color "$BOLD$CYAN" "=== Step 0: Kind Cluster Setup ==="
+
+print_color "$YELLOW" "Checking for existing 'kind' cluster named 'wormhole'..."
+# Check if 'kind get clusters' returns a line that is EXACTLY 'wormhole'
+if kind get clusters | grep -q "^wormhole$"; then
+  print "-> Found existing 'wormhole' cluster. Deleting..."
+  kind delete cluster --name wormhole
+  print_color "$GREEN" "-> Cluster 'wormhole' deleted."
+else
+  print "-> No existing cluster found."
+fi
+
+print_color "$YELLOW" "Creating new 'kind-wormhole' cluster..."
 kind create cluster --name wormhole
 kubectl cluster-info --context kind-wormhole
 
-# --- Étape 1: Création du Secret Docker ---
-echo ""
-echo "=== Étape 1: Secret Docker (ghcr.io) ==="
-# Détermine le répertoire absolu où se trouve le script
+# --- Step 1: Docker Secret Creation ---
+printf "\n" # Add a newline
+print_color "$BOLD$CYAN" "=== Step 1: Docker Secret (ghcr.io) ==="
+# Determine the absolute directory where the script is located
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 ENV_FILE="$SCRIPT_DIR/.env"
 
-echo "Recherche du fichier .env dans: $ENV_FILE"
+print_color "$YELLOW" "Looking for .env file at: $ENV_FILE"
 if [ -f "$ENV_FILE" ]; then
-  # 'set -a' exporte toutes les variables définies dans le .env
-  # 'set +a' arrête ce comportement
   set -a
   source "$ENV_FILE"
   set +a
-  echo "Fichier .env chargé."
+  print_color "$GREEN" "Loaded .env file."
 else
-  echo "ERREUR: Fichier .env introuvable."
-  echo "Veuillez créer un fichier .env contenant votre GITHUB_TOKEN."
-  echo "Exemple: GITHUB_TOKEN=ghp_votrejetonpersonnel"
+  print_color "$RED" "ERROR: .env file not found."
+  print "Please create a .env file containing your GITHUB_TOKEN."
+  print "Example: GITHUB_TOKEN=ghp_yourpersonaltoken"
   exit 1
 fi
 
-# Vérifie que le GITHUB_TOKEN a bien été chargé
+# Check that GITHUB_TOKEN was loaded
 if [ -z "$GITHUB_TOKEN" ]; then
-  echo "ERREUR: GITHUB_TOKEN est vide ou n'est pas défini dans votre fichier .env."
+  print_color "$RED" "ERROR: GITHUB_TOKEN is empty or not set in your .env file."
   exit 1
 fi
 
-# # Vérifie que le GITHUB_USERNAME a bien été chargé
-# if [ -z "$GITHUB_USERNAME" ]; then
-#   echo "ERREUR: GITHUB_USERNAME est vide ou n'est pas défini dans votre fichier .env."
-#   exit 1
-# fi
-# 
-# # Vérifie que le EMAIL a bien été chargé
-# if [ -z "$EMAIL" ]; then
-#   echo "ERREUR: EMAIL est vide ou n'est pas défini dans votre fichier .env."
-#   exit 1
-# fi
+# Get GITHUB_USERNAME interactively
+print_color "$YELLOW" "Please enter your GitHub username for 'ghcr.io'."
+read -p "GitHub Username: " GITHUB_USERNAME
 
-echo "Veuillez saisir votre nom d'utilisateur GitHub pour 'ghcr.io'."
-read -p "Nom d'utilisateur GitHub: " GITHUB_USERNAME
+# Clean up variables from potential \r (Windows line endings)
+GITHUB_TOKEN=$(echo "$GITHUB_TOKEN" | tr -d '\r')
+GITHUB_USERNAME=$(echo "$GITHUB_USERNAME" | tr -d '\r')
 
-echo "Veuillez saisir votre email pour 'ghcr.io'."
-read -p "Email: " EMAIL
-
-echo "Création du namespace 'wormhole'..."
+print_color "$YELLOW" "Creating namespace 'wormhole'..."
 kubectl create namespace wormhole --dry-run=client -o yaml | kubectl apply -f -
 
-echo "Suppression de l'ancien secret 'ghcr-creds' (si existant)..."
+print_color "$YELLOW" "Deleting old 'ghcr-creds' secret (if it exists)..."
 kubectl -n wormhole delete secret docker-registry ghcr-creds || true
 
-echo "Création du nouveau secret 'ghcr-creds'..."
+print_color "$YELLOW" "Creating new 'ghcr-creds' secret..."
+# ** CRITICAL: Removed --docker-email as it's not needed for ghcr.io and breaks auth **
 kubectl -n wormhole create secret docker-registry ghcr-creds \
   --docker-server=ghcr.io \
   --docker-username="$GITHUB_USERNAME" \
-  --docker-password="$GITHUB_TOKEN" \
-  --docker-email="$EMAIL"
+  --docker-password="$GITHUB_TOKEN"
 
-echo "Secret 'ghcr-creds' créé avec succès."
+print_color "$GREEN" "Secret 'ghcr-creds' created successfully."
 
-# --- Étape 2: Déploiement de Wormhole ---
-echo ""
-echo "=== Étape 2: Déploiement de 'wormhole.yaml' ==="
-kubectl apply -f wormhole.yaml
+# --- Step 2: Deploy Wormhole ---
+printf "\n"
+print_color "$BOLD$CYAN" "=== Step 2: Deploying 'wormhole.yaml' ==="
+kubectl apply -f "$SCRIPT_DIR/wormhole.yaml"
 
-echo "En attente que les 3 pods soient prêts..."
+print_color "$YELLOW" "Waiting for all 3 pods to be ready..."
 kubectl wait --for=condition=ready pod \
   -l app=wormhole \
   -n wormhole \
   --timeout=300s
-echo "Les 3 pods sont 'Running'."
+print_color "$GREEN" "All 3 pods are 'Running'."
 
-# --- Étape 3: Configuration du réseau ---
-echo ""
-echo "=== Étape 3: Configuration du réseau Wormhole ==="
+# --- Step 3: Network Configuration ---
+printf "\n"
+print_color "$BOLD$CYAN" "=== Step 3: Configuring Wormhole Network (Chain) ==="
 
-echo "Configuration de 'wormhole-0' (Nœud 1)..."
+print_color "$YELLOW" "Configuring 'wormhole-0' (Node 1) on port 40001..."
 kubectl -n wormhole exec wormhole-0 -- bash -c \
   "mkdir -p /wormhole/whfolder && wormhole new pod1 -p 40001 -m /wormhole/whfolder"
 
-echo "Récupération de l'IP de 'wormhole-0' pour les autres nœuds..."
-PEER_IP=$(kubectl -n wormhole exec wormhole-0 -- getent hosts wormhole-0.wormhole | awk '{ print $1 }')
+print_color "$YELLOW" "Fetching IP for 'wormhole-0' for other nodes..."
+PEER0_IP=$(kubectl -n wormhole exec wormhole-0 -- getent hosts wormhole-0.wormhole | awk '{ print $1 }')
 
-if [[ -z "$PEER_IP" ]]; then
-  echo "ERREUR: Impossible de récupérer l'IP de 'wormhole-0'. Arrêt."
+if [[ -z "$PEER0_IP" ]]; then
+  print_color "$RED" "ERROR: Could not get IP for 'wormhole-0'. Aborting."
   exit 1
 fi
-echo "IP de 'wormhole-0' trouvée: $PEER_IP"
+printf "%sIP for 'wormhole-0' found: %s%s%s\n" "$RESET" "$BOLD" "$PEER0_IP" "$RESET"
 
-# Configuration de wormhole-1
-echo "Configuration de 'wormhole-1' (Nœud 2) pour rejoindre $PEER_IP:40001..."
+
+# Configure wormhole-1
+print_color "$YELLOW" "Configuring 'wormhole-1' (Node 2) on port 40002..."
+print "  -> Connecting to wormhole-0 ($PEER0_IP:40001)"
 kubectl -n wormhole exec wormhole-1 -- bash -c \
-  "mkdir -p /wormhole/whfolder && wormhole new pod2 -p 40002 -m /wormhole/whfolder -u ${PEER_IP}:40001"
+  "mkdir -p /wormhole/whfolder && wormhole new pod2 -p 40002 -m /wormhole/whfolder -u ${PEER0_IP}:40001"
 
-echo "Récupération de l'IP de 'wormhole-1'..."
+print_color "$YELLOW" "Fetching IP for 'wormhole-1'..."
 PEER1_IP=$(kubectl -n wormhole exec wormhole-1 -- getent hosts wormhole-1.wormhole | awk '{ print $1 }')
 
 if [[ -z "$PEER1_IP" ]]; then
-  echo "ERREUR: Impossible de récupérer l'IP de 'wormhole-1'. Arrêt."
+  print_color "$RED" "ERROR: Could not get IP for 'wormhole-1'. Aborting."
   exit 1
 fi
-echo "IP de 'wormhole-1' trouvée: $PEER1_IP"
+printf "%sIP for 'wormhole-1' found: %s%s%s\n" "$RESET" "$BOLD" "$PEER1_IP" "$RESET"
 
-# Configuration de wormhole-2
-echo "Configuration de 'wormhole-2' (Nœud 3) pour rejoindre $PEER1_IP:40002..."
+# Configure wormhole-2
+print_color "$YELLOW" "Configuring 'wormhole-2' (Node 3) on port 40003..."
+print "  -> Connecting to wormhole-1 ($PEER1_IP:40002)"
 kubectl -n wormhole exec wormhole-2 -- bash -c \
   "mkdir -p /wormhole/whfolder && wormhole new pod3 -p 40003 -m /wormhole/whfolder -u ${PEER1_IP}:40002"
 
-echo ""
-echo "✅ Succès ! Les 3 pods wormhole sont déployés et devraient être connectés."
-echo "Vous pouvez vérifier l'état en vous connectant à un pod :"
-echo "kubectl -n wormhole exec -it wormhole-0 -- /bin/bash"
+printf "\n"
+print_color "$GREEN" "✅ Success! All 3 wormhole pods are deployed and should be connected."
+print "You can check the status by exec-ing into a pod:"
+print_color "$BOLD" "kubectl -n wormhole exec -it wormhole-0 -- /bin/bash"
