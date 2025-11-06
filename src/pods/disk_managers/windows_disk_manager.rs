@@ -31,7 +31,7 @@ impl WindowsDiskManager {
 
 /// always takes a WhPath and infers the real disk path
 impl DiskManager for WindowsDiskManager {
-    fn new_file(&self, path: &Path, permissions: u16) -> io::Result<()> {
+    fn new_file(&self, path: &Path, _permissions: u16) -> io::Result<()> {
         std::fs::File::create(&self.mount_point.join(path))?;
         Ok(())
     }
@@ -66,7 +66,7 @@ impl DiskManager for WindowsDiskManager {
         std::fs::File::open(&self.mount_point.join(path))?.seek_read(buf, offset as u64)
     }
 
-    fn new_dir(&self, path: &Path, permissions: u16) -> io::Result<()> {
+    fn new_dir(&self, path: &Path, _permissions: u16) -> io::Result<()> {
         std::fs::create_dir(&self.mount_point.join(path))
     }
 
@@ -107,7 +107,8 @@ impl DiskManager for WindowsDiskManager {
         todo!()
     }
 
-    fn set_permisions(&self, path: &Path, permissions: u16) -> io::Result<()> {
+    fn set_permisions(&self, path: &Path, _permissions: u16) -> io::Result<()> {
+        log::warn!("permissions not supported on windows");
         Ok(())
     }
 
