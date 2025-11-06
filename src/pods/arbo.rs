@@ -661,7 +661,6 @@ fn recover_serialized_arbo(parent_folder: &Path) -> Option<Arbo> {
     bincode::deserialize(&fs::read(parent_folder.join(ARBO_FILE_FNAME)).ok()?).ok()
 }
 
-#[cfg(target_os = "linux")]
 fn index_folder_recursive(
     arbo: &mut Arbo,
     parent: Ino,
@@ -690,6 +689,11 @@ fn index_folder_recursive(
                 .ok_or(io::Error::other("ran out of Inodes"))?,
         };
 
+        #[cfg(target_os = "linux")]
+        let perm_mode = meta.permissions().mode() as u16;
+        #[cfg(target_os = "windows")]
+        let perm_mode = WINDOWS_DEFAULT_PERMS_MODE;
+
         arbo.add_inode(Inode::new(
             &fname,
             parent,
@@ -699,7 +703,7 @@ fn index_folder_recursive(
             } else {
                 FsEntry::Directory(Vec::new())
             },
-            meta.permissions().mode() as u16,
+            perm_mode,
         ))
         .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err.to_string()))?;
         let mut meta: Metadata = meta.try_into()?;
@@ -720,11 +724,13 @@ pub fn generate_arbo(path: &Path, host: &String) -> io::Result<Arbo> {
     } else {
         let mut arbo = Arbo::new();
 
-        #[cfg(target_os = "linux")]
         index_folder_recursive(&mut arbo, ROOT, path, host)?;
         Ok(arbo)
     }
 }
+
+
+const WINDOWS_DEFAULT_PERMS_MODE: u16 = 666;
 
 /* NOTE
  * is currently made with fuse in sight. Will probably need to be edited to be windows compatible
@@ -786,6 +792,34 @@ impl TryInto<Metadata> for fs::Metadata {
             gid: self.gid(),
             rdev: self.rdev() as u32,
             blksize: self.blksize() as u32,
+            flags: 0,
+        })
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl TryInto<Metadata> for fs::Metadata {
+    type Error = std::io::Error;
+    fn try_into(self) -> Result<Metadata, std::io::Error> {
+        Ok(Metadata {
+            ino: 0, // TODO: unsafe default
+            size: self.len(),
+            blocks: 0,
+            atime: self.accessed()?,
+            mtime: self.modified()?,
+            ctime: self.modified()?,
+            crtime: self.created()?,
+            kind: if self.is_file() {
+                SimpleFileType::File
+            } else {
+                SimpleFileType::Directory
+            },
+            perm: WINDOWS_DEFAULT_PERMS_MODE,
+            nlink: 0 as u32,
+            uid: 0,
+            gid: 0,
+            rdev: 0 as u32,
+            blksize: 0 as u32,
             flags: 0,
         })
     }
