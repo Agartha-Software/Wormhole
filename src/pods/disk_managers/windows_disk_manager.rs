@@ -24,11 +24,22 @@ impl WindowsDiskManager {
             return Err(io::Error::new(io::ErrorKind::AlreadyExists, "System virtual mountpoint already existing (path/.mountpoint). Please delete it to create a pod here."));
         }
         std::fs::rename(mount_point, &system_mount_point)?;
-        std::fs::create_dir(&mount_point)?;
 
         Ok(Self {
             mount_point: system_mount_point,
         })
+    }
+}
+
+impl Drop for WindowsDiskManager {
+    fn drop(&mut self) {
+        log::debug!("Drop of WindowsDiskManager");
+        let aliased = aliased_path(&self.mount_point).unwrap();
+
+        if std::fs::metadata(&aliased).is_ok() {
+            log::debug!("moving from {:?} to {:?} ...", &aliased, &self.mount_point);
+            let _ = std::fs::rename(aliased, &self.mount_point);
+        }
     }
 }
 

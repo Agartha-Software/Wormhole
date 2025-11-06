@@ -38,7 +38,6 @@ pub struct WormholeHandle {
 pub struct FSPController {
     pub volume_label: Arc<RwLock<String>>,
     pub fs_interface: Arc<FsInterface>,
-    pub dummy_file: OsString,
     pub mount_point: PathBuf,
     // pub provider: Arc<RwLock<Provider<WindowsFolderHandle>>>,
 }
@@ -68,12 +67,7 @@ pub(crate) fn aliased_path(path: &Path) -> Result<PathBuf, AliasedPathError> {
 
 impl Drop for FSPController {
     fn drop(&mut self) {
-        let aliased = aliased_path(&self.mount_point).unwrap();
-
-        if fs::metadata(&aliased).is_ok() {
-            log::debug!("moving from {:?} to {:?} ...", &aliased, &self.mount_point);
-            let _ = fs::rename(aliased, &self.mount_point);
-        }
+        log::debug!("Drop of FSPController");
     }
 }
 
@@ -113,22 +107,14 @@ pub fn mount_fsp(
         volume_label: Arc::new(RwLock::new("wormhole_fs".into())),
         fs_interface,
         mount_point: path.to_owned(),
-        dummy_file: "dummy".into(), // dummy_file: (&path.clone().rename(&("dummy_file").to_string())).into(),
     };
     log::debug!("creating host...");
     let mut host = FileSystemHost::<FSPController>::new(volume_params, wormhole_context)
         .map_err(|_| std::io::Error::new(ErrorKind::Other, "oh no!"))?;
     log::debug!("created host...");
 
-    let aliased = aliased_path(&path).unwrap();
-    if fs::metadata(&path).is_ok() {
-        log::debug!("moving from {:?} to {:?} ...", &path, &aliased);
-        fs::rename(&path, &aliased)?;
-    }
-
     log::debug!("mounting host @ {:?} ...", &path);
-    let _ = host.mount(&path).ok().ok_or(Error::other("WinFSP::mount"));
-    // mount function throws the wrong error anyway so no point in inspecting it
+    host.mount(&path)?;
     log::debug!("mounted host...");
     host.start_with_threads(1)?;
     log::debug!("started host...");
@@ -252,6 +238,7 @@ impl FileSystemContext for FSPController {
         _extra_buffer_is_reparse_point: bool,
         file_info: &mut winfsp::filesystem::OpenFileInfo,
     ) -> winfsp::Result<Self::FileContext> {
+        log::trace!("create({:?})", file_name);
         let kind = match (create_options & FILE_DIRECTORY_FILE) != 0 {
             true => SimpleFileType::Directory,
             false => SimpleFileType::File,
@@ -329,6 +316,7 @@ impl FileSystemContext for FSPController {
         _context: Option<&Self::FileContext>,
         _file_info: &mut winfsp::filesystem::FileInfo,
     ) -> winfsp::Result<()> {
+        log::trace!("flush");
         Ok(())
         //         Err(NTSTATUS(STATUS_INVALID_DEVICE_REQUEST).into())
     }
