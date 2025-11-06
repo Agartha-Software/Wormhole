@@ -5,10 +5,9 @@ use crate::ipc::answers::TreeAnswer;
 use crate::ipc::error::IoError;
 use crate::ipc::{commands::PodId, service::connection::send_answer};
 use crate::pods::pod::Pod;
-use crate::pods::whpath::{JoinPath, WhPath};
 
 fn get_tree(pod: &Pod, path: Option<PathBuf>) -> TreeAnswer {
-    let tree = pod.get_file_tree_and_hosts(path.map(|p| WhPath::from(&p.display().to_string())));
+    let tree = pod.get_file_tree_and_hosts(path.as_deref());
 
     match tree {
         Ok(tree) => TreeAnswer::Tree(tree.to_string()),
@@ -41,12 +40,12 @@ where
         PodId::Path(path) => {
             match pods
                 .iter()
-                .find(|(_, pod)| path.as_str().starts_with(pod.get_mountpoint().as_str()))
+                .find(|(_, pod)| path.starts_with(pod.get_mountpoint()))
             {
                 Some((_, pod)) => {
                     let local_folder_path = PathBuf::from(
-                        path.as_str()
-                            .strip_prefix(pod.get_mountpoint().as_str())
+                        path
+                            .strip_prefix(pod.get_mountpoint())
                             .expect("Path having this prefix has been determined earlier"),
                     );
                     get_tree(pod, Some(local_folder_path))
