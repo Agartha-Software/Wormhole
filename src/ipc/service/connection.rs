@@ -15,20 +15,17 @@ pub async fn handle_connection<Stream>(pods: &mut HashMap<String, Pod>, mut stre
 where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
 {
-    log::debug!("Connection recieved");
+    log::trace!("Connection from CLI recieved!");
 
     let size = stream
         .read_u32()
         .await
         .expect("Failed to read recieved command, shouldn't be possible!");
-    log::trace!("waiting for {size} bytes!");
     let mut buffer: Vec<u8> = Vec::with_capacity(size as usize);
     let _size = stream
         .read_buf(&mut buffer)
         .await
         .expect("Failed to read recieved command, shouldn't be possible!");
-
-    log::trace!("found {_size} bytes!");
 
     match bincode::deserialize::<Command>(&buffer) {
         Ok(command) => handle_command(command, pods, stream)
