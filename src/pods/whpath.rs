@@ -3,7 +3,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use camino::{FromPathBufError, Utf8PathBuf};
+use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use custom_error::custom_error;
 
 custom_error! {pub WhPathError
@@ -72,6 +72,28 @@ impl TryFrom<&str> for WhPath {
 
     fn try_from(p: &str) -> Result<Self, Self::Error> {
         Self::try_from(PathBuf::from(p))
+    }
+}
+
+impl From<Utf8PathBuf> for WhPath {
+    fn from(value: Utf8PathBuf) -> Self {
+        Self { inner: value }
+    }
+}
+
+impl From<&Utf8Path> for WhPath {
+    fn from(value: &Utf8Path) -> Self {
+        Self { inner: value.into() }
+    }
+}
+
+impl WhPath {
+    fn root() -> Self {
+        Self { inner: Utf8PathBuf::default() }
+    }
+
+    fn to_absolute(&self, absolute: &Utf8Path) -> Utf8PathBuf {
+        absolute.join(&self.inner)
     }
 }
 
