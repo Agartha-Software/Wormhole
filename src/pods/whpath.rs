@@ -1,10 +1,12 @@
+use camino::{FromPathBufError, Iter, Utf8Component, Utf8Path, Utf8PathBuf};
+use custom_error::custom_error;
+use std::fmt::{Debug, Display};
 use std::{
     ffi::{OsStr, OsString},
     path::{Component, Path, PathBuf},
 };
 
-use camino::{FromPathBufError, Iter, Utf8Component, Utf8Path, Utf8PathBuf};
-use custom_error::custom_error;
+use crate::error::WhResult;
 
 custom_error! {pub WhPathError
     NotRelative = "Can't get folder name",
@@ -108,6 +110,18 @@ impl AsRef<OsStr> for WhPath {
     }
 }
 
+impl Debug for WhPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WhPath").field("inner", &self.inner).finish()
+    }
+}
+
+impl Display for WhPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&*self.inner, f)
+    }
+}
+
 impl WhPath {
     pub fn root() -> Self {
         Self {
@@ -144,7 +158,7 @@ impl WhPath {
             return Err(WhPathError::InvalidOperation);
         } else {
             Ok(Self {
-                inner: self.inner.join(normalize_utf8path(path)?)
+                inner: self.inner.join(normalize_utf8path(path)?),
             })
         }
     }
