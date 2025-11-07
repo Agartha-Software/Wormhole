@@ -1,5 +1,5 @@
 use std::{
-    ffi::OsString,
+    ffi::{OsStr, OsString},
     path::{Component, Path, PathBuf},
 };
 
@@ -47,6 +47,14 @@ impl TryFrom<OsString> for WhPath {
     type Error = WhPathError;
 
     fn try_from(p: OsString) -> Result<Self, Self::Error> {
+        Self::try_from(PathBuf::from(p))
+    }
+}
+
+impl TryFrom<&OsStr> for WhPath {
+    type Error = WhPathError;
+
+    fn try_from(p: &OsStr) -> Result<Self, Self::Error> {
         Self::try_from(PathBuf::from(p))
     }
 }
