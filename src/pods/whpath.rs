@@ -59,6 +59,22 @@ impl TryFrom<&OsStr> for WhPath {
     }
 }
 
+impl TryFrom<String> for WhPath {
+    type Error = WhPathError;
+
+    fn try_from(p: String) -> Result<Self, Self::Error> {
+        Self::try_from(PathBuf::from(p))
+    }
+}
+
+impl TryFrom<&str> for WhPath {
+    type Error = WhPathError;
+
+    fn try_from(p: &str) -> Result<Self, Self::Error> {
+        Self::try_from(PathBuf::from(p))
+    }
+}
+
 /// Normalize a path without accessing the filesystem
 ///
 /// Adapted from:
