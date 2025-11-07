@@ -119,7 +119,7 @@ impl WhPath {
         if !absolute.is_absolute() {
             Err(WhPathError::InvalidOperation)
         } else {
-            absolute.join(&self.inner)
+            Ok(absolute.join(&self.inner))
         }
     }
 
