@@ -115,8 +115,12 @@ impl WhPath {
         }
     }
 
-    pub fn to_absolute(&self, absolute: &Utf8Path) -> Utf8PathBuf {
-        absolute.join(&self.inner)
+    pub fn to_absolute(&self, absolute: &Utf8Path) -> Result<Utf8PathBuf, WhPathError> {
+        if !absolute.is_absolute() {
+            Err(WhPathError::InvalidOperation)
+        } else {
+            absolute.join(&self.inner)
+        }
     }
 
     pub fn iter(&self) -> Iter<'_> {
@@ -130,6 +134,18 @@ impl WhPath {
             return Err(WhPathError::InvalidOperation);
         } else {
             Ok(self.inner.push(&normalize_utf8path(path)?))
+        }
+    }
+
+    pub fn join(&self, path: impl AsRef<Utf8Path>) -> Result<Self, WhPathError> {
+        let path = path.as_ref();
+
+        if path.is_absolute() {
+            return Err(WhPathError::InvalidOperation);
+        } else {
+            Ok(Self {
+                inner: self.inner.join(normalize_utf8path(path)?)
+            })
         }
     }
 }
