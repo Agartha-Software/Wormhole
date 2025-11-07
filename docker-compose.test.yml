@@ -1,0 +1,23 @@
+services:
+  xfstests-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile  # On utilise le même Dockerfile
+      target: test           # Mais on s'arrête au stage 'test'
+    
+
+    environment:
+      - TEST_DEV=/dev/fuse
+      - TEST_DIR=/mnt/test
+      - SCRATCH_DEV=/dev/fuse
+      - SCRATCH_MNT=/mnt/scratch
+      - FSTYP=fuse
+      - FUSE_OPTIONS=default_permissions,allow_other
+  
+    # --- Privilèges requis pour FUSE ---
+    devices:
+      - '/dev/fuse:/dev/fuse'
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - "apparmor:unconfined"
