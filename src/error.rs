@@ -12,6 +12,7 @@ custom_error! {pub WhError
     DeadLock = "A DeadLock occured",
     NetworkDied{called_from: String} = "{called_from}: Unable to update modification on the network",
     WouldBlock{called_from: String} = "{called_from}: Unable to lock arbo",
+    UnsupportedPath = "Path is unsupported (probably not valid utf8)",
 }
 
 impl WhError {
@@ -23,6 +24,7 @@ impl WhError {
             WhError::DeadLock => libc::EDEADLOCK,
             WhError::NetworkDied { called_from: _ } => libc::ENETDOWN,
             WhError::WouldBlock { called_from: _ } => libc::EWOULDBLOCK,
+            WhError::UnsupportedPath => libc::EILSEQ,
         }
     }
 
@@ -31,6 +33,7 @@ impl WhError {
             WhError::InodeNotFound => io::ErrorKind::NotFound.into(),
             WhError::InodeIsNotADirectory => io::ErrorKind::NotADirectory.into(),
             WhError::InodeIsADirectory => io::ErrorKind::IsADirectory.into(),
+            WhError::UnsupportedPath => io::ErrorKind::InvalidData.into(),
             other => io::Error::other(other),
         }
     }
