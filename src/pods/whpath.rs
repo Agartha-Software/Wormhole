@@ -6,7 +6,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use crate::error::WhResult;
+use crate::error::{WhError, WhResult};
 
 custom_error! {pub WhPathError
     NotRelative = "Can't get folder name",
@@ -230,4 +230,12 @@ pub fn normalize_utf8path(path: impl AsRef<Utf8Path>) -> Result<Utf8PathBuf, WhP
         }
     }
     Ok(ret)
+}
+
+pub fn osstring_to_string(osstr: OsString) -> WhResult<String> {
+    osstr.into_string().map_err(|_| WhError::UnsupportedPath)
+}
+
+pub fn osstr_to_str(osstr: &OsStr) -> WhResult<&str> {
+    osstr.to_str().ok_or(WhError::UnsupportedPath)
 }
