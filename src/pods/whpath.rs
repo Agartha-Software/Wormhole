@@ -26,7 +26,7 @@ impl TryFrom<PathBuf> for WhPath {
     type Error = WhPathError;
 
     fn try_from(p: PathBuf) -> Result<Self, Self::Error> {
-        if !p.is_relative() {
+        if p.is_absolute() {
             return Err(Self::Error::NotRelative);
         }
         let normalized_path = normalize_path(&p)?;
