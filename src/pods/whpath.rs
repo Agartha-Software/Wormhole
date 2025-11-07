@@ -87,6 +87,24 @@ impl From<&Utf8Path> for WhPath {
     }
 }
 
+impl AsRef<Path> for WhPath {
+    fn as_ref(&self) -> &Path {
+        self.inner.as_std_path()
+    }
+}
+
+impl AsRef<str> for WhPath {
+    fn as_ref(&self) -> &str {
+        self.inner.as_str()
+    }
+}
+
+impl AsRef<OsStr> for WhPath {
+    fn as_ref(&self) -> &OsStr {
+        self.inner.as_os_str()
+    }
+}
+
 impl WhPath {
     fn root() -> Self {
         Self { inner: Utf8PathBuf::default() }
