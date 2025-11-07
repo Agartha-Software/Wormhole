@@ -1,9 +1,9 @@
-use std::collections::HashMap;
 use crate::ipc::answers::TreeAnswer;
 use crate::ipc::error::IoError;
 use crate::ipc::{commands::PodId, service::connection::send_answer};
 use crate::pods::pod::Pod;
 use crate::pods::whpath::WhPath;
+use std::collections::HashMap;
 
 fn get_tree(pod: &Pod, path: Option<&WhPath>) -> TreeAnswer {
     let tree = pod.get_file_tree_and_hosts(path);

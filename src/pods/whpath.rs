@@ -150,10 +150,16 @@ impl WhPath {
     }
 
     /// Create a relative path from a full path
-    /// 
+    ///
     /// Useful to remove the pod's mountpoint from the full file path
-    pub fn make_relative<T: AsRef<Path>>(full_path: T, make_relative_to: T) -> Result<Self, WhPathError> {
-        let relative_path = full_path.as_ref().strip_prefix(make_relative_to).map_err(|_| WhPathError::InvalidOperation)?;
+    pub fn make_relative<T: AsRef<Path>>(
+        full_path: T,
+        make_relative_to: T,
+    ) -> Result<Self, WhPathError> {
+        let relative_path = full_path
+            .as_ref()
+            .strip_prefix(make_relative_to)
+            .map_err(|_| WhPathError::InvalidOperation)?;
         Self::try_from(relative_path)
     }
 
