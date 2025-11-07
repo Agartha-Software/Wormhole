@@ -12,8 +12,8 @@ use std::{
 use crate::error::{WhError, WhResult};
 
 custom_error! {pub WhPathError
-    NotRelative = "Can't create a WhPath from an absolute path",
-    NotValidUtf8 = "Path is not valid utf8",
+    NotRelative = "Path is not relative",
+    NotValidUtf8 = "Path is not valid UTF-8",
     NotValidPath = "Path is not valid / can't be normalized",
     InvalidOperation = "Operation would compromise WhPath integrity",
 }
@@ -138,14 +138,6 @@ impl WhPath {
     pub fn root() -> Self {
         Self {
             inner: Utf8PathBuf::default(),
-        }
-    }
-
-    pub fn to_absolute(&self, absolute: &Utf8Path) -> Result<Utf8PathBuf, WhPathError> {
-        if !absolute.is_absolute() {
-            Err(WhPathError::InvalidOperation)
-        } else {
-            Ok(absolute.join(&self.inner))
         }
     }
 
