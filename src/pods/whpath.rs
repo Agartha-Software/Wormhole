@@ -3,7 +3,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
+use camino::{FromPathBufError, Iter, Utf8Path, Utf8PathBuf};
 use custom_error::custom_error;
 
 custom_error! {pub WhPathError
@@ -106,12 +106,18 @@ impl AsRef<OsStr> for WhPath {
 }
 
 impl WhPath {
-    fn root() -> Self {
+    pub fn root() -> Self {
         Self { inner: Utf8PathBuf::default() }
     }
 
-    fn to_absolute(&self, absolute: &Utf8Path) -> Utf8PathBuf {
+    pub fn to_absolute(&self, absolute: &Utf8Path) -> Utf8PathBuf {
         absolute.join(&self.inner)
+    }
+
+    pub fn iter(&self) -> Iter<'_> {
+        Iter {
+            inner: self.inner.components(),
+        }
     }
 }
 
