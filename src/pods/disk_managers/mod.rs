@@ -1,7 +1,8 @@
 use std::io;
 
 use std::fmt::Debug;
-use std::path::Path;
+
+use crate::pods::whpath::WhPath;
 pub mod dummy_disk_manager;
 #[cfg(target_os = "linux")]
 pub mod unix_disk_manager;
@@ -12,27 +13,27 @@ pub struct DiskSizeInfo {
 }
 
 pub trait DiskManager: Send + Sync + Debug {
-    fn log_arbo(&self, path: &Path) -> io::Result<()>;
+    fn log_arbo(&self, path: &WhPath) -> io::Result<()>;
 
-    fn new_file(&self, path: &Path, permissions: u16) -> io::Result<()>;
+    fn new_file(&self, path: &WhPath, permissions: u16) -> io::Result<()>;
 
-    fn set_permisions(&self, path: &Path, permissions: u16) -> io::Result<()>;
+    fn set_permisions(&self, path: &WhPath, permissions: u16) -> io::Result<()>;
 
-    fn remove_file(&self, path: &Path) -> io::Result<()>;
+    fn remove_file(&self, path: &WhPath) -> io::Result<()>;
 
-    fn remove_dir(&self, path: &Path) -> io::Result<()>;
+    fn remove_dir(&self, path: &WhPath) -> io::Result<()>;
 
-    fn write_file(&self, path: &Path, binary: &[u8], offset: usize) -> io::Result<usize>;
+    fn write_file(&self, path: &WhPath, binary: &[u8], offset: usize) -> io::Result<usize>;
 
-    fn set_file_size(&self, path: &Path, size: usize) -> io::Result<()>;
+    fn set_file_size(&self, path: &WhPath, size: usize) -> io::Result<()>;
 
-    fn mv_file(&self, path: &Path, new_path: &Path) -> io::Result<()>;
+    fn mv_file(&self, path: &WhPath, new_path: &WhPath) -> io::Result<()>;
 
-    fn read_file(&self, path: &Path, offset: usize, buf: &mut [u8]) -> io::Result<usize>;
+    fn read_file(&self, path: &WhPath, offset: usize, buf: &mut [u8]) -> io::Result<usize>;
 
-    fn new_dir(&self, path: &Path, permissions: u16) -> io::Result<()>;
+    fn new_dir(&self, path: &WhPath, permissions: u16) -> io::Result<()>;
 
     fn size_info(&self) -> io::Result<DiskSizeInfo>;
 
-    fn file_exists(&self, path: &Path) -> bool;
+    fn file_exists(&self, path: &WhPath) -> bool;
 }

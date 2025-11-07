@@ -1,9 +1,8 @@
-use crate::{error::WhResult, network::message::Address};
+use crate::{error::WhResult, network::message::Address, pods::whpath::WhPath};
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    ffi::{OsStr, OsString},
     fs, io,
     ops::RangeFrom,
     path::{Path, PathBuf},
@@ -53,13 +52,13 @@ pub enum FsEntry {
     Directory(Vec<InodeId>),
 }
 
-pub type XAttrs = HashMap<OsString, Vec<u8>>;
+pub type XAttrs = HashMap<String, Vec<u8>>;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Inode {
     pub parent: InodeId,
     pub id: InodeId,
-    pub name: OsString,
+    pub name: String,
     pub entry: FsEntry,
     pub meta: Metadata,
     pub xattrs: XAttrs,
@@ -99,7 +98,7 @@ impl FsEntry {
 }
 
 impl Inode {
-    pub fn new(name: &OsStr, parent_ino: InodeId, id: InodeId, entry: FsEntry, perm: u16) -> Self {
+    pub fn new(name: &str, parent_ino: InodeId, id: InodeId, entry: FsEntry, perm: u16) -> Self {
         let meta = Metadata {
             ino: id,
             size: 0,
@@ -189,7 +188,7 @@ impl Arbo {
         self.entries.values_mut()
     }
 
-    pub fn get_special(name: &OsStr, parent_ino: u64) -> Option<u64> {
+    pub fn get_special(name: &str, parent_ino: u64) -> Option<u64> {
         match (name, parent_ino) {
             (n, 1) if n == GLOBAL_CONFIG_FNAME => Some(GLOBAL_CONFIG_INO),
             (n, 1) if n == LOCAL_CONFIG_FNAME => Some(LOCAL_CONFIG_INO),
@@ -301,7 +300,7 @@ impl Arbo {
     /// Create a new [Inode] from the given parameters and insert it inside the local arbo
     pub fn add_inode_from_parameters(
         &mut self,
-        name: &OsStr,
+        name: &str,
         id: InodeId, //REVIEW: Renamed id to be more coherent with the Inode struct
         parent_ino: InodeId,
         entry: FsEntry,
@@ -419,8 +418,8 @@ impl Arbo {
         &mut self,
         parent: InodeId,
         new_parent: InodeId,
-        name: &OsStr,
-        new_name: &OsStr,
+        name: &str,
+        new_name: &str,
     ) -> WhResult<()> {
         let parent_inode = self.entries.get(&parent).ok_or(WhError::InodeNotFound)?;
         let item_id = self.n_get_inode_child_by_name(parent_inode, name)?.id;
@@ -452,9 +451,9 @@ impl Arbo {
     }
 
     #[must_use]
-    pub fn get_path_from_inode_id(&self, inode_index: InodeId) -> io::Result<PathBuf> {
+    pub fn get_path_from_inode_id(&self, inode_index: InodeId) -> io::Result<WhPath> {
         if inode_index == ROOT {
-            return Ok(PathBuf::from(ROOT_PATH));
+            return Ok(WhPath::root());
         }
         let inode = match self.entries.get(&inode_index) {
             Some(inode) => inode,
@@ -488,7 +487,7 @@ impl Arbo {
     }
 
     #[must_use]
-    pub fn get_inode_child_by_name(&self, parent: &Inode, name: &OsStr) -> io::Result<&Inode> {
+    pub fn get_inode_child_by_name(&self, parent: &Inode, name: &str) -> io::Result<&Inode> {
         if let Ok(children) = parent.entry.get_children() {
             for child in children.iter() {
                 if let Some(child) = self.entries.get(child) {
@@ -507,7 +506,7 @@ impl Arbo {
     }
 
     #[must_use]
-    pub fn n_get_inode_child_by_name(&self, parent: &Inode, name: &OsStr) -> WhResult<&Inode> {
+    pub fn n_get_inode_child_by_name(&self, parent: &Inode, name: &str) -> WhResult<&Inode> {
         if let Ok(children) = parent.entry.get_children() {
             for child in children.iter() {
                 if let Some(child) = self.entries.get(child) {
@@ -523,7 +522,7 @@ impl Arbo {
     }
 
     #[must_use]
-    pub fn get_inode_from_path(&self, path: &Path) -> io::Result<&Inode> {
+    pub fn get_inode_from_path(&self, path: &WhPath) -> io::Result<&Inode> {
         let mut actual_inode = self.entries.get(&ROOT).expect("inode_from_path: NO ROOT");
 
         for name in path.iter() {
@@ -636,14 +635,14 @@ impl Arbo {
         Ok(())
     }
 
-    pub fn set_inode_xattr(&mut self, ino: InodeId, key: &OsStr, data: Vec<u8>) -> WhResult<()> {
+    pub fn set_inode_xattr(&mut self, ino: InodeId, key: &str, data: Vec<u8>) -> WhResult<()> {
         let inode = self.n_get_inode_mut(ino)?;
 
         inode.xattrs.insert(key.into(), data);
         Ok(())
     }
 
-    pub fn remove_inode_xattr(&mut self, ino: InodeId, key: &OsStr) -> WhResult<()> {
+    pub fn remove_inode_xattr(&mut self, ino: InodeId, key: &str) -> WhResult<()> {
         let inode = self.n_get_inode_mut(ino)?;
 
         inode.xattrs.remove(key);

@@ -8,7 +8,6 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     error::WhResult,
-    osstring_convert,
     pods::arbo::{ArboIndex, Inode, InodeId, Metadata},
 };
 
@@ -69,7 +68,7 @@ impl fmt::Debug for MessageContent {
                 f,
                 "Inode({{{}, name: {}, parent:{}, {}}})",
                 inode.id,
-                osstring_convert(&inode.name),
+                &inode.name,
                 inode.parent,
                 match inode.entry {
                     crate::pods::arbo::FsEntry::File(_) => 'f',
