@@ -1,13 +1,12 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
-
 use crate::ipc::answers::TreeAnswer;
 use crate::ipc::error::IoError;
 use crate::ipc::{commands::PodId, service::connection::send_answer};
 use crate::pods::pod::Pod;
+use crate::pods::whpath::WhPath;
 
-fn get_tree(pod: &Pod, path: Option<PathBuf>) -> TreeAnswer {
-    let tree = pod.get_file_tree_and_hosts(path.as_deref());
+fn get_tree(pod: &Pod, path: Option<&WhPath>) -> TreeAnswer {
+    let tree = pod.get_file_tree_and_hosts(path);
 
     match tree {
         Ok(tree) => TreeAnswer::Tree(tree.to_string()),
@@ -42,13 +41,13 @@ where
                 .iter()
                 .find(|(_, pod)| path.starts_with(pod.get_mountpoint()))
             {
-                Some((_, pod)) => {
-                    let local_folder_path = PathBuf::from(
-                        path.strip_prefix(pod.get_mountpoint())
-                            .expect("Path having this prefix has been determined earlier"),
-                    );
-                    get_tree(pod, Some(local_folder_path))
-                }
+                Some((_, pod)) => get_tree(
+                    pod,
+                    Some(
+                        &WhPath::make_relative(&path, pod.get_mountpoint())
+                            .map_err(|_| std::io::ErrorKind::InvalidFilename)?,
+                    ),
+                ),
                 None => TreeAnswer::PodNotFound,
             }
         }

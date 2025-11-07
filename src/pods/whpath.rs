@@ -3,6 +3,7 @@ use custom_error::custom_error;
 use openat::AsPath;
 use std::ffi::CString;
 use std::fmt::{Debug, Display};
+use std::ops::Deref;
 use std::{
     ffi::{OsStr, OsString},
     path::{Component, Path, PathBuf},
@@ -11,7 +12,7 @@ use std::{
 use crate::error::{WhError, WhResult};
 
 custom_error! {pub WhPathError
-    NotRelative = "Can't get folder name",
+    NotRelative = "Can't create a WhPath from an absolute path",
     NotValidUtf8 = "Path is not valid utf8",
     NotValidPath = "Path is not valid / can't be normalized",
     InvalidOperation = "Operation would compromise WhPath integrity",
@@ -146,6 +147,14 @@ impl WhPath {
         } else {
             Ok(absolute.join(&self.inner))
         }
+    }
+
+    /// Create a relative path from a full path
+    /// 
+    /// Useful to remove the pod's mountpoint from the full file path
+    pub fn make_relative<T: AsRef<Path>>(full_path: T, make_relative_to: T) -> Result<Self, WhPathError> {
+        let relative_path = full_path.as_ref().strip_prefix(make_relative_to).map_err(|_| WhPathError::InvalidOperation)?;
+        Self::try_from(relative_path)
     }
 
     pub fn iter(&self) -> Iter<'_> {
