@@ -3,13 +3,14 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use camino::{FromPathBufError, Iter, Utf8Path, Utf8PathBuf};
+use camino::{FromPathBufError, Iter, Utf8Component, Utf8Path, Utf8PathBuf};
 use custom_error::custom_error;
 
 custom_error! {pub WhPathError
     NotRelative = "Can't get folder name",
     NotValidUtf8 = "Path is not valid utf8",
-    NotValidPath = "Path is not valid / can't be normalized"
+    NotValidPath = "Path is not valid / can't be normalized",
+    InvalidOperation = "Operation would compromise WhPath integrity",
 }
 
 impl From<FromPathBufError> for WhPathError {
@@ -83,7 +84,9 @@ impl From<Utf8PathBuf> for WhPath {
 
 impl From<&Utf8Path> for WhPath {
     fn from(value: &Utf8Path) -> Self {
-        Self { inner: value.into() }
+        Self {
+            inner: value.into(),
+        }
     }
 }
 
@@ -107,7 +110,9 @@ impl AsRef<OsStr> for WhPath {
 
 impl WhPath {
     pub fn root() -> Self {
-        Self { inner: Utf8PathBuf::default() }
+        Self {
+            inner: Utf8PathBuf::default(),
+        }
     }
 
     pub fn to_absolute(&self, absolute: &Utf8Path) -> Utf8PathBuf {
@@ -115,8 +120,16 @@ impl WhPath {
     }
 
     pub fn iter(&self) -> Iter<'_> {
-        Iter {
-            inner: self.inner.components(),
+        self.inner.iter()
+    }
+
+    pub fn push(&mut self, path: impl AsRef<Utf8Path>) -> Result<(), WhPathError> {
+        let path = path.as_ref();
+
+        if path.is_absolute() {
+            return Err(WhPathError::InvalidOperation);
+        } else {
+            Ok(self.inner.push(&normalize_utf8path(path)?))
         }
     }
 }
@@ -126,8 +139,8 @@ impl WhPath {
 /// Adapted from:
 ///
 /// https://github.com/rust-lang/cargo/blob/fede83ccf973457de319ba6fa0e36ead454d2e20/src/cargo/util/paths.rs#L61
-pub fn normalize_path(path: &Path) -> Result<PathBuf, WhPathError> {
-    let mut components = path.components().peekable();
+pub fn normalize_path(path: impl AsRef<Path>) -> Result<PathBuf, WhPathError> {
+    let mut components = path.as_ref().components().peekable();
     let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().cloned() {
         components.next();
         PathBuf::from(c.as_os_str())
@@ -148,6 +161,40 @@ pub fn normalize_path(path: &Path) -> Result<PathBuf, WhPathError> {
                 }
             }
             Component::Normal(c) => {
+                ret.push(c);
+            }
+        }
+    }
+    Ok(ret)
+}
+
+/// Normalize a path without accessing the filesystem
+///
+/// Adapted from:
+///
+/// https://github.com/rust-lang/cargo/blob/fede83ccf973457de319ba6fa0e36ead454d2e20/src/cargo/util/paths.rs#L61
+pub fn normalize_utf8path(path: impl AsRef<Utf8Path>) -> Result<Utf8PathBuf, WhPathError> {
+    let mut components = path.as_ref().components().peekable();
+    let mut ret = if let Some(c @ Utf8Component::Prefix(..)) = components.peek().cloned() {
+        components.next();
+        Utf8PathBuf::from(c.as_str())
+    } else {
+        Utf8PathBuf::new()
+    };
+
+    for component in components {
+        match component {
+            Utf8Component::Prefix(..) => unreachable!(),
+            Utf8Component::RootDir => {
+                ret.push(component.as_str());
+            }
+            Utf8Component::CurDir => {}
+            Utf8Component::ParentDir => {
+                if !ret.pop() {
+                    return Err(WhPathError::NotValidPath);
+                }
+            }
+            Utf8Component::Normal(c) => {
                 ret.push(c);
             }
         }
