@@ -125,8 +125,9 @@ pub fn mount_fsp(
         fs::rename(&path, &aliased)?;
     }
 
+    let path = path.to_string_lossy().to_string().replace("\\", "/");
     log::debug!("mounting host @ {:?} ...", &path);
-    let _ = host.mount(&path).ok().ok_or(Error::other("WinFSP::mount"));
+    let _ = host.mount(&path)?;
     // mount function throws the wrong error anyway so no point in inspecting it
     log::debug!("mounted host...");
     host.start_with_threads(1)?;
