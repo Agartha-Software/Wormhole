@@ -1,5 +1,3 @@
-use std::ffi::OsStr;
-
 use custom_error::custom_error;
 
 use crate::{
@@ -36,7 +34,7 @@ impl FsInterface {
     pub fn create(
         &self,
         parent_ino: u64,
-        name: &OsStr,
+        name: &str,
         kind: SimpleFileType,
         flags: OpenFlags,
         access: AccessMode,
@@ -63,7 +61,7 @@ impl FsInterface {
     pub fn make_inode(
         &self,
         parent_ino: u64,
-        name: &OsStr,
+        name: &str,
         permissions: u16,
         kind: SimpleFileType,
     ) -> Result<Inode, MakeInodeError> {

@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     fs, io,
     ops::RangeFrom,
-    path::{Path, PathBuf},
+    path::Path,
     sync::Arc,
     time::{Duration, SystemTime},
 };
@@ -15,6 +15,7 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
 use crate::error::WhError;
 use crate::pods::filesystem::fs_interface::SimpleFileType;
+use crate::pods::whpath::osstring_to_string;
 
 use super::filesystem::{make_inode::MakeInodeError, remove_inode::RemoveInodeError};
 
@@ -472,9 +473,9 @@ impl Arbo {
     ///
     /// Possible Errors:
     ///   InodeNotFound: if the inode isn't inside the tree
-    pub fn n_get_path_from_inode_id(&self, inode_index: InodeId) -> WhResult<PathBuf> {
+    pub fn n_get_path_from_inode_id(&self, inode_index: InodeId) -> WhResult<WhPath> {
         if inode_index == ROOT {
-            return Ok(PathBuf::from(ROOT_PATH));
+            return Ok(WhPath::root());
         }
         let inode = self
             .entries
@@ -670,7 +671,7 @@ fn index_folder_recursive(
     for entry in fs::read_dir(path)? {
         let entry = entry.expect("error in filesystem indexion (1)");
         let ftype = entry.file_type().expect("error in filesystem indexion (2)");
-        let fname = entry.file_name();
+        let fname = osstring_to_string(entry.file_name()).map_err(|e| e.into_io())?;
         let meta = entry.metadata()?;
 
         let special_ino = Arbo::get_special(&fname, parent);

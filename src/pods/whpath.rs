@@ -1,5 +1,7 @@
 use camino::{FromPathBufError, Iter, Utf8Component, Utf8Path, Utf8PathBuf};
 use custom_error::custom_error;
+use openat::AsPath;
+use std::ffi::CString;
 use std::fmt::{Debug, Display};
 use std::{
     ffi::{OsStr, OsString},
@@ -110,9 +112,18 @@ impl AsRef<OsStr> for WhPath {
     }
 }
 
+impl<'a> AsPath for &'a WhPath {
+    type Buffer = CString;
+    fn to_path(self) -> Option<CString> {
+        CString::new(self.inner.as_str().as_bytes()).ok()
+    }
+}
+
 impl Debug for WhPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("WhPath").field("inner", &self.inner).finish()
+        f.debug_struct("WhPath")
+            .field("inner", &self.inner)
+            .finish()
     }
 }
 

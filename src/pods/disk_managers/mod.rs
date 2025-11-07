@@ -3,6 +3,7 @@ use std::io;
 use std::fmt::Debug;
 
 use crate::pods::whpath::WhPath;
+#[cfg(target_os = "windows")]
 pub mod dummy_disk_manager;
 #[cfg(target_os = "linux")]
 pub mod unix_disk_manager;
