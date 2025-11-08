@@ -110,8 +110,8 @@ impl DiskManager for UnixDiskManager {
     }
 
     fn read_file(&self, path: &WhPath, offset: usize, buf: &mut [u8]) -> io::Result<usize> {
-        let file = self.handle.open_file(path.clone().set_relative())?;
-        file.read(&mut buf)
+        let mut file = self.handle.open_file(path.clone().set_relative())?;
+        file.read(buf)
     }
     fn new_dir(&self, path: &WhPath, permissions: u16) -> io::Result<()> {
         self.handle
