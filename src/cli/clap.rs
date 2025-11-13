@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::{
-    cli::config_command::ConfigCommand,
+    cli::config_clap::ConfigCommand,
     ipc::service::SOCKET_DEFAULT_NAME,
     pods::arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
 };
@@ -93,7 +93,22 @@ pub struct IdentifyPodGroup {
 }
 
 #[derive(Debug, Args, Clone)]
-#[command(about, name = "start")]
+#[group(required = true, multiple = false)]
+pub struct IdentifyNewPodGroup {
+    /// Name of the pod
+    pub name: Option<String>,
+    /// Path of the pod
+    #[arg(long, short, value_parser=parse_canonicalize_non_existant)]
+    pub path: Option<PathBuf>,
+}
+
+#[derive(Debug, Args, Clone)]
+pub struct IdentifyNewPodArgs {
+    #[clap(flatten)]
+    pub group: IdentifyNewPodGroup,
+}
+
+#[derive(Debug, Args, Clone)]
 pub struct IdentifyPodArgs {
     #[clap(flatten)]
     pub group: IdentifyPodGroup,

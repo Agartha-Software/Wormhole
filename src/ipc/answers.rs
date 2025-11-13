@@ -87,3 +87,12 @@ pub enum TreeAnswer {
     PodNotFound,
     PodTreeFailed(IoError),
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum WriteConfigAnswer {
+    Success,
+    PodNotFound,
+    NotADirectory,
+    WriteFailed(String),
+    ConfigBlock,
+}

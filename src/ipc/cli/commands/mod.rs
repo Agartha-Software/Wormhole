@@ -1,3 +1,4 @@
+mod config;
 mod freeze;
 mod gethosts;
 mod inspect;
@@ -7,6 +8,7 @@ mod status;
 mod tree;
 mod unfreeze;
 
+pub use config::write::write;
 pub use gethosts::gethosts;
 pub use inspect::inspect;
 pub use new::new;
