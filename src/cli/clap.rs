@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use crate::{
+    cli::config_command::ConfigCommand,
     ipc::service::SOCKET_DEFAULT_NAME,
     pods::arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
 };
@@ -26,8 +27,9 @@ pub enum CliCommand {
     // Freeze(IdentifyPodArgs),
     // /// Restart a given pod
     // UnFreeze(IdentifyPodArgs),
-    // /// Create a new network (template)
-    // Template(TemplateArg),
+    /// Interact with the configuration of a pod (Write, Show, Validate)
+    #[command(subcommand)]
+    Config(ConfigCommand),
     /// Inspect the basic informations of a given pod
     Inspect(IdentifyPodArgs),
     /// Get the hosts of a given file
@@ -48,18 +50,45 @@ pub enum CliCommand {
     // Stop,
 }
 
-fn canonicalize(path_str: &str) -> std::io::Result<PathBuf> {
-    std::fs::canonicalize(PathBuf::from(path_str))
+fn canonicalize(path: PathBuf) -> std::io::Result<PathBuf> {
+    std::fs::canonicalize(path)
+}
+
+fn parse_canonicalize(path_str: &str) -> std::io::Result<PathBuf> {
+    canonicalize(PathBuf::from(path_str))
+}
+
+// like canonicalize but doesn't check if the final element exist
+pub fn parse_canonicalize_non_existant(path_str: &str) -> std::io::Result<PathBuf> {
+    let path = PathBuf::from(path_str);
+
+    if path.exists() {
+        return canonicalize(path);
+    }
+    match path.parent() {
+        Some(parent) => {
+            let name = path.file_name().ok_or(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Path doesn't exist", // If have a parent should have a children
+            ))?;
+            let mut canon = canonicalize(parent.to_path_buf())?;
+            canon.push(name);
+            Ok(canon)
+        }
+        None => Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Path doesn't exist",
+        )),
+    }
 }
 
 #[derive(Debug, Args, Clone)]
 #[group(required = true, multiple = false)]
 pub struct IdentifyPodGroup {
     /// Name of the pod
-    #[arg(long, short)]
     pub name: Option<String>,
     /// Path of the pod
-    #[arg(long, short, value_parser=canonicalize)]
+    #[arg(long, short, value_parser=parse_canonicalize)]
     pub path: Option<PathBuf>,
 }
 
@@ -85,7 +114,7 @@ pub struct PodConfArgs {
 #[command(about, long_about = None)]
 pub struct GetHostsArgs {
     /// Path of the file
-    #[arg(required = true, value_parser=canonicalize)]
+    #[arg(required = true, value_parser=parse_canonicalize)]
     pub path: PathBuf,
 }
 
@@ -99,7 +128,7 @@ pub struct NewArgs {
     #[arg(long, short)]
     pub port: Option<u16>,
     /// Mount point to create the pod in. By default creates a mount point in the working directory with the name of the pod
-    #[arg(long = "mount", short, value_parser=canonicalize)]
+    #[arg(long = "mount", short, value_parser=parse_canonicalize)]
     pub mountpoint: Option<PathBuf>,
     /// Network to join
     #[arg(long, short)]
@@ -113,16 +142,6 @@ pub struct NewArgs {
     /// Additional hosts to try to join from as a backup
     #[arg(raw = true)]
     pub additional_hosts: Vec<String>,
-}
-
-#[derive(Debug, Args, Clone)]
-#[command(about, long_about = None)]
-pub struct TemplateArg {
-    /// Name of the pod to create
-    pub name: String,
-    /// Mount point to create the pod in. By default creates a mount point in the working directory with the name of the pod
-    #[arg(long = "mount", short, value_parser=canonicalize)]
-    pub mountpoint: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ValueEnum)]
