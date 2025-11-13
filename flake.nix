@@ -16,7 +16,15 @@
                 pkgs.rustfmt
                 pkgs.pkg-config
                 pkgs.fuse3
-                # Kubernetes CLI & tooling
+              ];
+            RUST_SRC_PATH =
+              "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
+          };
+
+          # nix develop .#k8s -c $SHELL
+          k8s = pkgs.mkShell {
+            packages =
+              [
                 pkgs.kubectl
                 pkgs.kubernetes-helm
                 pkgs.kustomize
@@ -24,8 +32,6 @@
                 pkgs.k3d
                 pkgs.kind
               ];
-            RUST_SRC_PATH =
-              "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
             shellHook = ''
               export KUBECONFIG="$PWD/.kube/config"
               mkdir -p "$(dirname "$KUBECONFIG")"
