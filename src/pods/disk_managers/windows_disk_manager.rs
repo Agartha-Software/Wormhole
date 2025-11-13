@@ -5,7 +5,7 @@ use std::{
 
 use tokio::io;
 
-use crate::winfsp::winfsp_impl::aliased_path;
+use crate::{pods::whpath::WhPath, winfsp::winfsp_impl::aliased_path};
 
 use super::{DiskManager, DiskSizeInfo};
 
@@ -45,29 +45,29 @@ impl Drop for WindowsDiskManager {
 
 /// always takes a WhPath and infers the real disk path
 impl DiskManager for WindowsDiskManager {
-    fn new_file(&self, path: &Path, _permissions: u16) -> io::Result<()> {
+    fn new_file(&self, path: &WhPath, _permissions: u16) -> io::Result<()> {
         std::fs::File::create(&self.mount_point.join(path))?;
         Ok(())
     }
 
-    fn remove_file(&self, path: &Path) -> io::Result<()> {
+    fn remove_file(&self, path: &WhPath) -> io::Result<()> {
         std::fs::remove_file(&self.mount_point.join(path))
     }
 
-    fn remove_dir(&self, path: &Path) -> io::Result<()> {
+    fn remove_dir(&self, path: &WhPath) -> io::Result<()> {
         std::fs::remove_dir(&self.mount_point.join(path))
     }
 
-    fn write_file(&self, path: &Path, binary: &[u8], offset: usize) -> io::Result<usize> {
+    fn write_file(&self, path: &WhPath, binary: &[u8], offset: usize) -> io::Result<usize> {
         return std::fs::File::open(&self.mount_point.join(path))?
             .seek_write(binary, offset as u64);
     }
 
-    fn set_file_size(&self, path: &Path, size: usize) -> io::Result<()> {
+    fn set_file_size(&self, path: &WhPath, size: usize) -> io::Result<()> {
         std::fs::File::open(&self.mount_point.join(path))?.set_len(size as u64)
     }
 
-    fn mv_file(&self, path: &Path, new_path: &Path) -> io::Result<()> {
+    fn mv_file(&self, path: &WhPath, new_path: &WhPath) -> io::Result<()> {
         // let mut original_path = path.clone(); // NOTE - Would be better if rename was non mutable
         // original_path.rename(new_name);
         std::fs::rename(
@@ -76,11 +76,11 @@ impl DiskManager for WindowsDiskManager {
         )
     }
 
-    fn read_file(&self, path: &Path, offset: usize, buf: &mut [u8]) -> io::Result<usize> {
+    fn read_file(&self, path: &WhPath, offset: usize, buf: &mut [u8]) -> io::Result<usize> {
         std::fs::File::open(&self.mount_point.join(path))?.seek_read(buf, offset as u64)
     }
 
-    fn new_dir(&self, path: &Path, _permissions: u16) -> io::Result<()> {
+    fn new_dir(&self, path: &WhPath, _permissions: u16) -> io::Result<()> {
         std::fs::create_dir(&self.mount_point.join(path))
     }
 
@@ -117,12 +117,12 @@ impl DiskManager for WindowsDiskManager {
         })
     }
 
-    fn set_permisions(&self, path: &Path, _permissions: u16) -> io::Result<()> {
+    fn set_permisions(&self, path: &WhPath, _permissions: u16) -> io::Result<()> {
         log::warn!("permissions not supported on windows");
         Ok(())
     }
 
-    fn file_exists(&self, path: &Path) -> bool {
+    fn file_exists(&self, path: &WhPath) -> bool {
         std::fs::exists(&self.mount_point.join(path)).unwrap_or(false)
     }
 }

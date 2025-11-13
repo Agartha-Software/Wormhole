@@ -23,7 +23,7 @@ use winfsp::{
 use winfsp_sys::{FspCleanupDelete, FILE_ACCESS_RIGHTS};
 
 use crate::pods::{
-    arbo::{Arbo, InodeId, ROOT_PATH},
+    arbo::{Arbo, InodeId},
     filesystem::{
         file_handle::{AccessMode, OpenFlags},
         fs_interface::{FsInterface, SimpleFileType},
