@@ -2,19 +2,15 @@ services:
   xfstests-runner:
     build:
       context: .
-      dockerfile: Dockerfile  # On utilise le même Dockerfile
-      target: test           # Mais on s'arrête au stage 'test'
-    
+      dockerfile: Dockerfile
+      target: test
 
     environment:
-      - TEST_DEV=/dev/fuse
-      - TEST_DIR=/mnt/test
-      - SCRATCH_DEV=/dev/fuse
-      - SCRATCH_MNT=/mnt/scratch
-      - FSTYP=fuse
-      - FUSE_OPTIONS=default_permissions,allow_other
+      # On ne fournit que les chemins que notre script va utiliser.
+      # Le script run_...sh générera local.config avec TEST_DEV, FSTYP, etc.
+      - TEST_DIR=/mnt/wormhole-test
+      - SCRATCH_MNT=/mnt/wormhole-test/scratch
   
-    # --- Privilèges requis pour FUSE ---
     devices:
       - '/dev/fuse:/dev/fuse'
     cap_add:
