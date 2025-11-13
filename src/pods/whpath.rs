@@ -213,6 +213,11 @@ impl WhPath {
 
         if path.is_absolute() {
             return Err(WhPathError::InvalidOperation);
+        } else if path
+            .components()
+            .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".")
+        {
+            return Err(WhPathError::NotNormalized);
         } else {
             Ok(self.inner.push(path))
         }
@@ -223,6 +228,11 @@ impl WhPath {
 
         if path.is_absolute() {
             return Err(WhPathError::InvalidOperation);
+        } else if path
+            .components()
+            .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".")
+        {
+            return Err(WhPathError::NotNormalized);
         } else {
             Ok(Self {
                 inner: self.inner.join(path),
