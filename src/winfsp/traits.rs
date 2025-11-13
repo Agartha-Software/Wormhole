@@ -13,7 +13,7 @@ use crate::{
             rename::RenameError,
             write::WriteError,
         },
-        network::pull_file::PullError,
+        network::pull_file::PullError, whpath::WhPathError,
     },
 };
 use nt_time::FileTime;
@@ -71,6 +71,13 @@ impl From<WhError> for FspError {
             WhError::InodeIsADirectory => STATUS_FILE_IS_A_DIRECTORY.into(),
             WhError::WhPathError { e: _ } => CRYPT_E_BAD_ENCODE.into(), // REVIEW unsure about this type
         }
+    }
+}
+
+impl From<WhPathError> for FspError {
+    fn from(value: WhPathError) -> Self {
+        let wherr: WhError = value.into();
+        wherr.into()
     }
 }
 

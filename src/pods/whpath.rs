@@ -6,6 +6,7 @@ use openat::AsPath;
 use std::ffi::CString;
 use std::fmt::{Debug, Display};
 use std::io;
+use std::ops::Deref;
 use std::{
     ffi::{OsStr, OsString},
     path::{Path, PathBuf},
@@ -137,26 +138,44 @@ impl TryFrom<&winfsp::U16CStr> for WhPath {
     }
 }
 
-impl AsRef<Path> for WhPath {
-    fn as_ref(&self) -> &Path {
-        self.inner.as_std_path()
+// impl AsRef<Path> for WhPath {
+//     fn as_ref(&self) -> &Path {
+//         self.inner.as_std_path()
+//     }
+// }
+
+// impl AsRef<str> for WhPath {
+//     fn as_ref(&self) -> &str {
+//         self.inner.as_str()
+//     }
+// }
+
+// impl AsRef<OsStr> for WhPath {
+//     fn as_ref(&self) -> &OsStr {
+//         self.inner.as_os_str()
+//     }
+// }
+
+// impl AsRef<Utf8Path> for WhPath {
+//     fn as_ref(&self) -> &Utf8Path {
+//         &self.inner
+//     }
+// }
+
+impl<T> AsRef<T> for WhPath
+where
+    T: ?Sized,
+    Utf8PathBuf: AsRef<T>,
+{
+    fn as_ref(&self) -> &T {
+        self.inner.as_ref()
     }
 }
 
-impl AsRef<str> for WhPath {
-    fn as_ref(&self) -> &str {
-        self.inner.as_str()
-    }
-}
+impl Deref for WhPath {
+    type Target = Utf8PathBuf;
 
-impl AsRef<OsStr> for WhPath {
-    fn as_ref(&self) -> &OsStr {
-        self.inner.as_os_str()
-    }
-}
-
-impl AsRef<Utf8Path> for WhPath {
-    fn as_ref(&self) -> &Utf8Path {
+    fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
@@ -188,6 +207,14 @@ impl WhPath {
         Self {
             inner: Utf8PathBuf::default(),
         }
+    }
+
+    pub fn typed_ref<T>(&self) -> &T
+    where
+        T: ?Sized,
+        Utf8PathBuf: AsRef<T>,
+    {
+        self.as_ref()
     }
 
     /// Create a relative path from a full path
@@ -238,6 +265,11 @@ impl WhPath {
                 inner: self.inner.join(path),
             })
         }
+    }
+
+    pub fn parent(&self) -> Option<WhPath> {
+        // REVIEW - clones for now, as can't make a Whpath that has '&Utf8Path' as inner type
+        Some(Self { inner: self.inner.parent()?.into() })
     }
 }
 
