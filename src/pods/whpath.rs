@@ -269,7 +269,9 @@ impl WhPath {
 
     pub fn parent(&self) -> Option<WhPath> {
         // REVIEW - clones for now, as can't make a Whpath that has '&Utf8Path' as inner type
-        Some(Self { inner: self.inner.parent()?.into() })
+        Some(Self {
+            inner: self.inner.parent()?.into(),
+        })
     }
 }
 

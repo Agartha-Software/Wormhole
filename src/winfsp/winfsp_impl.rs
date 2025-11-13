@@ -1,7 +1,7 @@
 use std::{
     ffi::OsString,
     fs,
-    io::{ErrorKind},
+    io::ErrorKind,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
     time::SystemTime,
@@ -27,7 +27,8 @@ use crate::pods::{
     filesystem::{
         file_handle::{AccessMode, OpenFlags},
         fs_interface::{FsInterface, SimpleFileType},
-    }, whpath::WhPath,
+    },
+    whpath::{WhPath, WhPathError},
 };
 
 #[derive(PartialEq, Debug)]
@@ -393,7 +394,11 @@ impl FileSystemContext for FSPController {
         let mut cursor = 0;
 
         entries.sort_by(|a, b| a.name.cmp(&b.name));
-        let marker = marker.inner_as_cstr().map(|s| OsString::from(s));
+        let marker = match marker.inner_as_cstr() {
+            Some(inner) => Some(inner.to_string().map_err(|_| WhPathError::NotValidUtf8)?),
+            None => None
+        };
+
         for entry in entries
             .into_iter()
             .skip_while(|s| marker.as_ref().map(|m| s.name <= *m).unwrap_or(false))
@@ -427,12 +432,12 @@ impl FileSystemContext for FSPController {
 
         let path: WhPath = file_name.try_into()?;
         let parent = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::rename")?
-            .get_inode_from_path(path.parent().unwrap_or(Path::new(ROOT_PATH)))?
+            .get_inode_from_path(&path.parent().unwrap_or(WhPath::root()))?
             .id;
 
-        let new_path = PathBuf::from(OsString::from(new_file_name));
+        let new_path: WhPath = new_file_name.try_into()?;
         let new_parent = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::rename")?
-            .get_inode_from_path(new_path.parent().unwrap_or(Path::new(ROOT_PATH)))?
+            .get_inode_from_path(&new_path.parent().unwrap_or(WhPath::root()))?
             .id;
 
         self.fs_interface
@@ -440,7 +445,9 @@ impl FileSystemContext for FSPController {
                 parent,
                 new_parent,
                 path.file_name().ok_or(STATUS_OBJECT_NAME_NOT_FOUND)?,
-                new_path.file_name().ok_or(STATUS_OBJECT_NAME_NOT_FOUND)?,
+                (*new_path)
+                    .file_name()
+                    .ok_or(STATUS_OBJECT_NAME_NOT_FOUND)?,
                 replace_if_exists,
             )
             .inspect_err(|e| log::error!("rename: {e};"))?;

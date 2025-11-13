@@ -13,7 +13,8 @@ use crate::{
             rename::RenameError,
             write::WriteError,
         },
-        network::pull_file::PullError, whpath::WhPathError,
+        network::pull_file::PullError,
+        whpath::WhPathError,
     },
 };
 use nt_time::FileTime;
