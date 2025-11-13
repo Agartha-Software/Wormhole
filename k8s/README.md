@@ -8,7 +8,7 @@ This guide shows how to deploy 3 Wormhole pods on Kubernetes and connect them to
 - The container image [ghcr.io/agartha-software/wormhole:latest](ghcr.io/agartha-software/wormhole:latest) accessible from the cluster
   - If private, a GitHub token with `read:packages` and a Kubernetes imagePullSecret
 
-### Why create a dedicated cluster (kind)
+### Why create a dedicated cluster ([kind](https://kind.sigs.k8s.io/)
 Using a local, dedicated cluster (with kind) gives:
 - Isolation: avoids interfering with other workloads/contexts on your machine
 - Reproducibility: same kube version/behavior across dev machines
