@@ -4,32 +4,34 @@ on:
         branches: [main]
     pull_request:
         branches: [main]
+        types: [closed]
 env:
     REGISTRY: ghcr.io
     IMAGE_NAME: ${{ github.repository }}
 
 jobs:
     build_and_push-image:
-        runs-on: ubuntu-latest
-        permissions:
-            contents: read
-            packages: write
+      runs-on: ubuntu-latest
+      if: github.event.pull_request.merged == true
+      permissions:
+        contents: read
+        packages: write
         
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+      steps:
+          - name: Checkout repository
+            uses: actions/checkout@v4
 
-            - name: Log in to the Container registry
-              uses: docker/login-action@v1
-              with:
-                registry: ${{ env.REGISTRY }}
-                username: ${{ github.actor }}
-                password: ${{ secrets.GITHUB_TOKEN }}
-            
-            - name: Build and push Docker image
-              uses: docker/build-push-action@v2
-              with:
-                context: ./wormhole-rep
-                push: true
-                file: ./wormhole-rep/Dockerfile.multistage
-                tags: ${{ env.REGISTRY}}/${{ env.IMAGE_NAME }}:latest
+          - name: Log in to the Container registry
+            uses: docker/login-action@v1
+            with:
+              registry: ${{ env.REGISTRY }}
+              username: ${{ github.actor }}
+              password: ${{ secrets.GITHUB_TOKEN }}
+          
+          - name: Build and push Docker image
+            uses: docker/build-push-action@v2
+            with:
+              context: ./wormhole-rep
+              push: true
+              file: ./wormhole-rep/Dockerfile.multistage
+              tags: ${{ env.REGISTRY}}/${{ env.IMAGE_NAME }}:latest
