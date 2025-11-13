@@ -25,7 +25,6 @@ custom_error! {
 }
 
 impl NetworkInterface {
-
     /// Pull the file from the network
     /// Returns a copy of the file's buffer if it was pulled
     ///
@@ -61,18 +60,13 @@ impl NetworkInterface {
                     // trying on host `pull_from`
                     self.to_network_message_tx
                         .send(ToNetworkMessage::SpecificMessage(
-                            (
-                                MessageContent::RequestFile(file),
-                                Some(tx),
-                            ),
+                            (MessageContent::RequestFile(file), Some(tx)),
                             vec![host.clone()], // NOTE - naive choice for now
                         ))
                         .expect("pull_file: unable to request on the network thread");
 
                     // processing status
-                    match rx
-                        .blocking_recv()
-                    {
+                    match rx.blocking_recv() {
                         Some(_) => return Ok(()),
                         _ => continue,
                     }

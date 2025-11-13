@@ -21,8 +21,8 @@ use parking_lot::RwLock;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
-use crate::pods::filesystem::{remove_inode::RemoveInodeError, rename::RenameError};
 use crate::pods::arbo::{FsEntry, Metadata};
+use crate::pods::filesystem::{remove_inode::RemoveInodeError, rename::RenameError};
 
 use crate::pods::{
     arbo::{Arbo, Inode, InodeId, LOCK_TIMEOUT},
@@ -263,7 +263,6 @@ impl NetworkInterface {
             .expect("send_file: unable to update modification on the network thread");
         Ok(())
     }
-
 
     pub fn revoke_remote_hosts(&self, id: InodeId) -> WhResult<()> {
         self.update_hosts(id, vec![self.hostname()?])?;

@@ -8,7 +8,10 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     error::WhResult,
-    pods::{arbo::{ArboIndex, Ino, Inode, InodeId, Metadata}, filesystem::diffs::{Delta, Signature}},
+    pods::{
+        arbo::{ArboIndex, Ino, Inode, InodeId, Metadata},
+        filesystem::diffs::{Delta, Signature},
+    },
 };
 
 /// Message Content
@@ -34,7 +37,6 @@ pub enum MessageContent {
 
     // RequestFileSignature(Ino),
     // FileSignature(Ino, Vec<u8>),
-
     RequestFile(InodeId),
     PullAnswer(InodeId, Vec<u8>),
 
@@ -85,45 +87,49 @@ impl fmt::Debug for MessageContent {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             MessageContent::Inode(inode) => write!(
-                        f,
-                        "Inode({{{}, name: {}, parent:{}, {}}})",
-                        inode.id,
-                        inode.name,
-                        inode.parent,
-                        match inode.entry {
-                            crate::pods::arbo::FsEntry::File(_) => 'f',
-                            crate::pods::arbo::FsEntry::Directory(_) => 'd',
-                        }
-                    ),
+                f,
+                "Inode({{{}, name: {}, parent:{}, {}}})",
+                inode.id,
+                inode.name,
+                inode.parent,
+                match inode.entry {
+                    crate::pods::arbo::FsEntry::File(_) => 'f',
+                    crate::pods::arbo::FsEntry::Directory(_) => 'd',
+                }
+            ),
             MessageContent::RedundancyFile(id, _) => write!(f, "RedundancyFile({id}, <bin>)"),
             MessageContent::FsAnswer(_, peers, _) => write!(f, "FsAnswer(<bin>, {peers:?}, <bin>"),
             MessageContent::PullAnswer(id, _) => write!(f, "PullAnswer({id}, <bin>)"),
             MessageContent::Remove(id) => write!(f, "Remove({id})"),
             MessageContent::RequestFile(id) => write!(f, "RequestFile({id})"),
             MessageContent::Rename(parent, new_parent, name, new_name, overwrite) => write!(
-                        f,
-                        "Rename(parent: {}, new_parent: {}, name: {}, new_name: {}, overwrite: {})",
-                        parent, new_parent, name, new_name, overwrite
-                    ),
+                f,
+                "Rename(parent: {}, new_parent: {}, name: {}, new_name: {}, overwrite: {})",
+                parent, new_parent, name, new_name, overwrite
+            ),
             MessageContent::EditHosts(id, hosts) => write!(f, "EditHosts({id}, {hosts:?})"),
             MessageContent::RevokeFile(id, address, _) => {
-                        write!(f, "RevokeFile({id}, {address}, <metadata>)")
-                    }
+                write!(f, "RevokeFile({id}, {address}, <metadata>)")
+            }
             MessageContent::AddHosts(id, hosts) => write!(f, "AddHosts({id}, {hosts:?})"),
             MessageContent::RemoveHosts(id, hosts) => write!(f, "RemoveHosts({id}, {hosts:?})"),
             MessageContent::EditMetadata(id, metadata) => {
-                        write!(f, "EditMetadata({id}, {{ perm: {}}})", metadata.perm)
-                    }
+                write!(f, "EditMetadata({id}, {{ perm: {}}})", metadata.perm)
+            }
             MessageContent::SetXAttr(id, name, data) => write!(
-                        f,
-                        "SetXAttr({id}, {name}, {}",
-                        String::from_utf8(data.clone()).unwrap_or("<bin>".to_string())
-                    ),
+                f,
+                "SetXAttr({id}, {name}, {}",
+                String::from_utf8(data.clone()).unwrap_or("<bin>".to_string())
+            ),
             MessageContent::RemoveXAttr(id, name) => write!(f, "RemoveXAttr({id}, {name})"),
             MessageContent::RequestFs => write!(f, "RequestFs"),
             MessageContent::Disconnect => write!(f, "Disconnect"),
-            MessageContent::FileDelta(ino, meta, _, _) => write!(f, "FileDelta({ino}, {:?})", meta.mtime),
-            MessageContent::FileChanged(ino, meta) => write!(f, "FileChanged({ino}, {:?})", meta.mtime),
+            MessageContent::FileDelta(ino, meta, _, _) => {
+                write!(f, "FileDelta({ino}, {:?})", meta.mtime)
+            }
+            MessageContent::FileChanged(ino, meta) => {
+                write!(f, "FileChanged({ino}, {:?})", meta.mtime)
+            }
             MessageContent::DeltaRequest(ino, _) => write!(f, "DeltaRequest({ino})"),
             // MessageContent::RequestFileSignature(ino) => write!(f, "RequestFileSignature({ino}, <bin>)"),
             // MessageContent::FileSignature(ino, _) => write!(f, "FileSignature({ino}, <bin>)"),

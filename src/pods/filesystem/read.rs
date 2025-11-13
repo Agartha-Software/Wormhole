@@ -67,13 +67,11 @@ impl FsInterface {
         buf: &mut [u8],
     ) -> Result<usize, ReadError> {
         match self.network_interface.pull_file_sync(ino)? {
-            None => {
-                Ok(self.disk.read_file(
-                    &Arbo::n_read_lock(&self.arbo, "read_file")?.n_get_path_from_inode_id(ino)?,
-                    offset,
-                    buf,
-                )?)
-            }
+            None => Ok(self.disk.read_file(
+                &Arbo::n_read_lock(&self.arbo, "read_file")?.n_get_path_from_inode_id(ino)?,
+                offset,
+                buf,
+            )?),
             Some(data) => {
                 let size = data.len().saturating_sub(offset);
                 if size > 0 {

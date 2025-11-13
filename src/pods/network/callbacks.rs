@@ -68,26 +68,27 @@ impl Callbacks {
     /// context.
     ///
     pub fn request_sync<F, E>(&self, call: &Request, procedure: F) -> Shot
-        where
+    where
         PullError: From<E>,
         F: FnOnce() -> Result<(), E>,
-        {
-        let (need_procedure, mut waiter) = if let Some(mut callbacks) = self.callbacks.try_write_for(LOCK_TIMEOUT) {
-            if let Some(cb) = callbacks.get(call) {
-                // safety: the sender is removed before it is pushed.
-                // If the sender is present, no content has been sent, and none will be sent until the lock is released
-                (false, cb.subscribe())
+    {
+        let (need_procedure, mut waiter) =
+            if let Some(mut callbacks) = self.callbacks.try_write_for(LOCK_TIMEOUT) {
+                if let Some(cb) = callbacks.get(call) {
+                    // safety: the sender is removed before it is pushed.
+                    // If the sender is present, no content has been sent, and none will be sent until the lock is released
+                    (false, cb.subscribe())
+                } else {
+                    let (tx, rx) = broadcast::channel(1);
+                    callbacks.insert(call.clone(), tx);
+                    (true, rx)
+                }
             } else {
-                let (tx, rx) = broadcast::channel(1);
-                callbacks.insert(call.clone(), tx);
-                (true, rx)
-            }
-        } else {
-            return Err(WhError::WouldBlock {
-                called_from: "unable to read_lock callbacks".to_string(),
-            }
-            .into());
-        };
+                return Err(WhError::WouldBlock {
+                    called_from: "unable to read_lock callbacks".to_string(),
+                }
+                .into());
+            };
 
         if need_procedure {
             procedure()?;

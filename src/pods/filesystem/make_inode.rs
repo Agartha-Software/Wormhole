@@ -4,8 +4,11 @@ use crate::{
     error::WhError,
     pods::{
         arbo::{Arbo, FsEntry, Inode},
-        filesystem::{diffs::{Sig, Signature}, File},
         filesystem::permissions::has_write_perm,
+        filesystem::{
+            diffs::{Sig, Signature},
+            File,
+        },
     },
 };
 

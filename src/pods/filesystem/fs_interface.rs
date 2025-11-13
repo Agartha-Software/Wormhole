@@ -3,8 +3,8 @@ use crate::network::message::Address;
 use crate::pods::arbo::{Arbo, FsEntry, Inode, InodeId, Metadata, GLOBAL_CONFIG_INO};
 use crate::pods::disk_managers::DiskManager;
 use crate::pods::filesystem::attrs::AcknoledgeSetAttrError;
-use crate::pods::network::callbacks::Request;
 use crate::pods::filesystem::permissions::has_execute_perm;
+use crate::pods::network::callbacks::Request;
 use crate::pods::network::network_interface::NetworkInterface;
 use crate::pods::network::pull_file::PullError;
 
@@ -174,8 +174,9 @@ impl FsInterface {
             .map_err(|e| PullError::WriteError { io: Arc::new(e) });
         let _ = self.network_interface.callbacks.resolve(
             Request::Pull(id),
-            status.as_ref()
-                .map_err(|e|e.clone())
+            status
+                .as_ref()
+                .map_err(|e| e.clone())
                 .map(|_| Some(Arc::new(binary))),
         );
         status.map_err(io::Error::other)?;

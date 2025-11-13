@@ -1,7 +1,7 @@
 use crate::fuse::linux_attrs::time_or_now_to_system_time;
 use crate::fuse::linux_mknod::filetype_from_mode;
 use crate::pods::filesystem::attrs::SetAttrError;
-use crate::pods::filesystem::file_handle::{AccessMode, OpenFlags};
+use crate::pods::filesystem::file_handle::{AccessMode, FileHandleManager, OpenFlags};
 use crate::pods::filesystem::flush::FlushError;
 use crate::pods::filesystem::fs_interface::{FsInterface, SimpleFileType};
 use crate::pods::filesystem::make_inode::MakeInodeError;
@@ -98,18 +98,20 @@ impl Filesystem for FuseController {
         flags: Option<u32>,
         reply: ReplyAttr,
     ) {
-        match self.fs_interface.setattr(
-            ino,
-            mode,
-            uid,
-            gid,
-            size,
-            atime.map(time_or_now_to_system_time),
-            mtime.map(time_or_now_to_system_time),
-            ctime,
-            file_handle,
-            flags,
-        )
+        match self
+            .fs_interface
+            .setattr(
+                ino,
+                mode,
+                uid,
+                gid,
+                size,
+                atime.map(time_or_now_to_system_time),
+                mtime.map(time_or_now_to_system_time),
+                ctime,
+                file_handle,
+                flags,
+            )
             .inspect_err(|e| log::error!("setattr({ino}): {e}"))
         {
             Ok(meta) => reply.attr(&TTL, &meta.with_ids(req.uid(), req.gid())),

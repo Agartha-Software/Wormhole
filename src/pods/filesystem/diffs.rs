@@ -191,14 +191,14 @@ mod test {
         let mut rng = rand::rng();
         let file = {
             let mut data: Vec<u8> = Vec::new();
-            data.resize_with(7830, ||rng.random());
+            data.resize_with(7830, || rng.random());
             File(Arc::new(data))
         };
 
         let sig = RSyncSig::new(&file).unwrap();
 
         let mut change: Vec<u8> = Vec::new();
-        change.resize_with(1057, ||rng.random());
+        change.resize_with(1057, || rng.random());
 
         let changed_file = {
             let mut data = (*file.0).clone();

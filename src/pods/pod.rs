@@ -6,10 +6,8 @@ use crate::data::tree_hosts::{CliHostTree, TreeLine};
 use crate::error::{WhError, WhResult};
 #[cfg(target_os = "linux")]
 use crate::fuse::fuse_impl::mount_fuse;
-use crate::network::message::{
-    FromNetworkMessage, MessageContent, ToNetworkMessage,
-};
 use crate::ipc::answers::{InspectInfo, PeerInfo};
+use crate::network::message::{FromNetworkMessage, MessageContent, ToNetworkMessage};
 use crate::network::HandshakeError;
 use crate::pods::arbo::{
     FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME, LOCAL_CONFIG_INO, LOCK_TIMEOUT, ROOT,

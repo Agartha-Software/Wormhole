@@ -11,7 +11,8 @@ use crate::{
             read::ReadError,
             write::WriteError,
         },
-        network::pull_file::PullError, whpath::WhPath,
+        network::pull_file::PullError,
+        whpath::WhPath,
     },
 };
 use custom_error::custom_error;
@@ -121,14 +122,20 @@ impl FsInterface {
             None => {
                 log::warn!("accept_delta: received delta but isn't currently tracking the file!");
                 return Ok(());
-            },
+            }
         };
         let local_sig = Signature::new_using(&file, sig.implementor())?;
-        log::trace!("signing <<\n{}\n>> = {:?}", file.0.escape_ascii(), local_sig);
+        log::trace!(
+            "signing <<\n{}\n>> = {:?}",
+            file.0.escape_ascii(),
+            local_sig
+        );
         if local_sig == sig {
             let patched = delta.patch(&file)?;
-            log::trace!("accept_delta: patched = {}", String::from_utf8_lossy(&patched.0));
-
+            log::trace!(
+                "accept_delta: patched = {}",
+                String::from_utf8_lossy(&patched.0)
+            );
 
             let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface.write")?;
             let path = arbo.n_get_path_from_inode_id(ino)?;
@@ -199,15 +206,7 @@ impl FsInterface {
         self.network_interface
             .to_network_message_tx
             .send(ToNetworkMessage::SpecificMessage(
-                (
-                    MessageContent::FileDelta(
-                        ino,
-                        inode.meta,
-                        sig,
-                        delta,
-                    ),
-                    None,
-                ),
+                (MessageContent::FileDelta(ino, inode.meta, sig, delta), None),
                 vec![origin],
             ))
             .map_err(|e| WhError::WouldBlock {

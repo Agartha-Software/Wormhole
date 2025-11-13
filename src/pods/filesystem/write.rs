@@ -74,9 +74,7 @@ impl FsInterface {
         drop(arbo);
 
         let new_size = offset + data.len();
-        let written = self
-            .disk
-            .write_file(&path, data, offset)?;
+        let written = self.disk.write_file(&path, data, offset)?;
 
         self.affect_write_locally(id, new_size)?;
         Ok(written)

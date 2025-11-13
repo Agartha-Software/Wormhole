@@ -115,7 +115,7 @@ impl PeerIPC {
                         stream,
                         receiver_in,
                         sender_out,
-                        accept.hostname
+                        accept.hostname,
                     )),
                 )
             }

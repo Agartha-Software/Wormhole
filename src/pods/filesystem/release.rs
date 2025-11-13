@@ -14,9 +14,8 @@ impl FsInterface {
                 self.network_interface.apply_redundancy(handle.ino);
             }
         } else {
-            return Err(WhError::InodeNotFound.into())
+            return Err(WhError::InodeNotFound.into());
         }
         Ok(())
     }
-
 }
