@@ -1,4 +1,4 @@
-use crate::{error::{WhError}, pods::{arbo::InodeId, filesystem::flush::FlushError}};
+use crate::{error::WhError, pods::filesystem::flush::FlushError};
 
 use super::{
     file_handle::{FileHandleManager, UUID},
@@ -6,7 +6,7 @@ use super::{
 };
 
 impl FsInterface {
-    pub fn release(&self, file_handle: UUID, ino: InodeId) -> Result<(), FlushError> {
+    pub fn release(&self, file_handle: UUID) -> Result<(), FlushError> {
         let mut file_handles = FileHandleManager::write_lock(&self.file_handles, "release")?;
         if let Some(mut handle) = file_handles.handles.remove(&file_handle) {
             if handle.dirty {
@@ -14,7 +14,6 @@ impl FsInterface {
                 self.network_interface.apply_redundancy(handle.ino);
             }
         } else {
-            log::error!("release: leaking handle for ino {ino}");
             return Err(WhError::InodeNotFound.into())
         }
         Ok(())

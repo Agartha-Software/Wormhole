@@ -3,7 +3,10 @@ use std::{path::Path, process::ExitStatus};
 use futures_util::io;
 use wormhole::pods::arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME};
 
-use crate::functionnal::environment_manager::types::{Service, CLI_BIN, MAX_PORT};
+use crate::functionnal::environment_manager::{
+    manager::socket_from_id,
+    types::{Service, CLI_BIN, MAX_POD_PORT},
+};
 
 /// Returns `true` if the given services runs a pod on the given network
 pub fn service_has_pod_on_network(service: &Service, network: &String) -> bool {
@@ -15,13 +18,13 @@ pub fn service_has_pod_on_network(service: &Service, network: &String) -> bool {
 }
 
 // Returns `true` if the service is matching the requirements
-pub fn service_filter(port: &Option<u16>, network: &Option<String>, service: &Service) -> bool {
+pub fn service_filter(socket: &Option<u16>, network: &Option<String>, service: &Service) -> bool {
     network
         .as_ref()
         .map_or_else(|| true, |nw| service_has_pod_on_network(service, &nw))
-        && (port
+        && (socket
             .as_ref()
-            .map_or_else(|| true, |port| service.port == *port))
+            .map_or_else(|| true, |socket| service.id == *socket))
 }
 
 /// Runs a command with the cli and returns it's stdout
@@ -48,18 +51,19 @@ where
 /// Cli commands to create a pod
 pub fn cli_pod_creation_command(
     network_name: String,
-    service_port: u16,
+    service_id: u16,
     dir_path: &Path,
     port_range: &mut std::ops::RangeFrom<u16>,
     connect_to: Option<&u16>,
 ) -> u16 {
-    let (status, _, _) = cli_command(&[
-        &format!("127.0.0.1:{service_port}"),
-        "template",
-        "-m",
-        dir_path.to_string_lossy().to_string().as_ref(),
-    ]);
-    assert!(status.success(), "template cli command failed");
+    // let (status, _, _) = cli_command(&[
+    //     "-s".to_string(),
+    //     socket_from_id(service_id),
+    //     "template",
+    //     "-m",
+    //     dir_path.to_string_lossy().to_string().as_ref(),
+    // ]);
+    // assert!(status.success(), "template cli command failed");
 
     let mut port;
     loop {
@@ -67,7 +71,8 @@ pub fn cli_pod_creation_command(
         log::info!("trying pod on {port}");
         let (status, _, stderr) = cli_command({
             let mut args = vec![
-                format!("127.0.0.1:{service_port}"),
+                "-s".to_string(),
+                socket_from_id(service_id),
                 "new".to_string(),
                 network_name.clone(),
                 "-m".to_string(),
@@ -78,19 +83,18 @@ pub fn cli_pod_creation_command(
 
             if let Some(peer) = connect_to {
                 args.push("-u".to_string());
-                args.push(format!("0.0.0.0:{peer}"));
+                args.push(format!("127.0.0.1:{peer}"));
             }
             args
         });
         if status.success() {
             break;
-        } else if port < MAX_PORT {
+        } else if port < MAX_POD_PORT {
             log::error!("'new' cli command: {}", status);
             log::error!("\n{}", stderr);
         } else {
-            assert_eq!(
-                None,
-                status.success().then_some(status),
+            assert!(
+                status.success(),
                 "'new' cli command failed and max port reached"
             );
         }

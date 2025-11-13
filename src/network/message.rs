@@ -4,7 +4,6 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
@@ -180,7 +179,6 @@ impl fmt::Display for ToNetworkMessage {
     }
 }
 
-#[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FileSystemSerialized {
     pub fs_index: ArboIndex,

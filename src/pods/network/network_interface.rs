@@ -22,10 +22,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
 use crate::pods::filesystem::{remove_inode::RemoveInodeError, rename::RenameError};
-use crate::pods::{
-    arbo::{FsEntry, Metadata},
-    whpath::WhPath,
-};
+use crate::pods::arbo::{FsEntry, Metadata};
 
 use crate::pods::{
     arbo::{Arbo, Inode, InodeId, LOCK_TIMEOUT},
@@ -52,7 +49,6 @@ pub fn get_all_peers_address(peers: &Arc<RwLock<Vec<PeerIPC>>>) -> WhResult<Vec<
 #[derive(Debug)]
 pub struct NetworkInterface {
     pub arbo: Arc<RwLock<Arbo>>,
-    pub mount_point: WhPath,
     pub url: Option<String>,
     pub to_network_message_tx: UnboundedSender<ToNetworkMessage>,
     pub to_redundancy_tx: UnboundedSender<RedundancyMessage>,
@@ -66,7 +62,6 @@ impl NetworkInterface {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         arbo: Arc<RwLock<Arbo>>,
-        mount_point: WhPath,
         url: Option<String>,
         to_network_message_tx: UnboundedSender<ToNetworkMessage>,
         to_redundancy_tx: UnboundedSender<RedundancyMessage>,
@@ -77,7 +72,6 @@ impl NetworkInterface {
         Self {
             arbo,
             url,
-            mount_point,
             to_network_message_tx,
             to_redundancy_tx,
             callbacks: Callbacks::new(),
@@ -197,7 +191,7 @@ impl NetworkInterface {
     ) -> Result<(), RenameError> {
         let mut arbo = Arbo::n_write_lock(&self.arbo, "arbo_rename_file")?;
 
-        arbo.n_mv_inode(parent, new_parent, name, new_name)?;
+        arbo.mv_inode(parent, new_parent, name, new_name)?;
 
         self.to_network_message_tx
             .send(ToNetworkMessage::BroadcastMessage(MessageContent::Rename(
@@ -220,7 +214,7 @@ impl NetworkInterface {
     ) -> Result<(), RenameError> {
         let mut arbo = Arbo::n_write_lock(&self.arbo, "arbo_rename_file")?;
 
-        arbo.n_mv_inode(parent, new_parent, name, new_name)
+        arbo.mv_inode(parent, new_parent, name, new_name)
             .map_err(|err| match err {
                 WhError::InodeNotFound => RenameError::DestinationParentNotFound,
                 WhError::InodeIsNotADirectory => RenameError::DestinationParentNotFolder,
