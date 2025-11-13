@@ -96,6 +96,15 @@ impl From<&Utf8Path> for WhPath {
     }
 }
 
+#[cfg(target_os = "windows")]
+impl TryFrom<&winfsp::U16CStr> for WhPath {
+    type Error = WhPathError;
+
+    fn try_from(value: &winfsp::U16CStr) -> Result<Self, Self::Error> {
+        Self::try_from(value.to_string().map_err(|_| WhPathError::NotValidUtf8)?)
+    }
+}
+
 impl AsRef<Path> for WhPath {
     fn as_ref(&self) -> &Path {
         self.inner.as_std_path()
