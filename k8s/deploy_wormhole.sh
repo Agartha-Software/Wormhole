@@ -121,10 +121,10 @@ print_color "$BOLD$CYAN" "=== Step 2: Deploying 'wormhole.yaml' ==="
 kubectl apply -f "$SCRIPT_DIR/wormhole.yaml"
 
 print_color "$YELLOW" "Waiting for all 3 pods to be ready..."
-# Attendre que le StatefulSet ait 3 réplicas prêts
+# Wait for the StatefulSet to have 3 replicas ready
 kubectl -n wormhole rollout status statefulset/wormhole --timeout=300s
 
-# Puis attendre la readiness des pods (ils existent désormais)
+# Then wait for the pods to be ready (they now exist)
 kubectl -n wormhole wait pod -l app=wormhole --for=condition=Ready --timeout=300s
 print_color "$GREEN" "All 3 pods are 'Running'."
 
