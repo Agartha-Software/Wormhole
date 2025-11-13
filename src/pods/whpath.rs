@@ -1,9 +1,10 @@
 use camino::{FromPathBufError, Iter, Utf8Component, Utf8Path, Utf8PathBuf};
 use custom_error::custom_error;
+#[cfg(target_os = "linux")]
 use openat::AsPath;
+#[cfg(target_os = "linux")]
 use std::ffi::CString;
 use std::fmt::{Debug, Display};
-use std::ops::Deref;
 use std::{
     ffi::{OsStr, OsString},
     path::{Component, Path, PathBuf},
@@ -113,6 +114,7 @@ impl AsRef<OsStr> for WhPath {
     }
 }
 
+#[cfg(target_os = "linux")]
 impl<'a> AsPath for &'a WhPath {
     type Buffer = CString;
     fn to_path(self) -> Option<CString> {
