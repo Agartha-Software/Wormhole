@@ -50,6 +50,12 @@ pub struct WhPath {
     inner: Utf8PathBuf,
 }
 
+impl PartialEq for WhPath {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+}
+
 impl TryFrom<PathBuf> for WhPath {
     type Error = WhPathError;
 

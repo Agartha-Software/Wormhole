@@ -171,13 +171,17 @@ fn create_all_dirs(arbo: &Arbo, from: InodeId, disk: &dyn DiskManager) -> io::Re
             let current_path = arbo
                 .n_get_path_from_inode_id(from.id)
                 .map_err(|e| e.into_io())?;
-            disk.new_dir(&current_path, from.meta.perm).or_else(|e| {
-                if e.kind() == io::ErrorKind::AlreadyExists {
-                    Ok(())
-                } else {
-                    Err(e)
-                }
-            })?;
+
+            // skipping root folder
+            if current_path != WhPath::root() {
+                disk.new_dir(&current_path, from.meta.perm).or_else(|e| {
+                    if e.kind() == io::ErrorKind::AlreadyExists {
+                        Ok(())
+                    } else {
+                        Err(e)
+                    }
+                })?;
+            }
 
             for child in children {
                 create_all_dirs(arbo, *child, disk)?
