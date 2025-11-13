@@ -231,6 +231,18 @@ impl WhPath {
         Self::try_from(relative_path)
     }
 
+    #[cfg(target_os = "windows")]
+    /// On Windows, '/' is not considered absolute (see PathBuf impl).
+    /// However "\\" (that should be considered relative) is not considered same as "" (also relative)
+    ///
+    /// Should be used with winfsp that gives paths starting with "\\"
+    pub fn from_fake_absolute(path: &winfsp::U16CStr) -> Result<Self, WhPathError> {
+        path.to_string()
+            .map_err(|_| WhPathError::NotValidUtf8)?
+            .trim_start_matches("\\")
+            .try_into()
+    }
+
     pub fn iter(&self) -> Iter<'_> {
         self.inner.iter()
     }

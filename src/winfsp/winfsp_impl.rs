@@ -154,7 +154,7 @@ impl FileSystemContext for FSPController {
         }
 
         let test = Utf8PathBuf::try_from(OsString::from(file_name));
-        let path: WhPath = file_name.try_into()?;
+        let path = WhPath::from_fake_absolute(file_name)?;
 
         let file_info: FileInfo =
             (&Arbo::read_lock(&self.fs_interface.arbo, "get_security_by_name")?
@@ -203,7 +203,8 @@ impl FileSystemContext for FSPController {
         let display_name = file_name.display();
         log::trace!("open({display_name})");
 
-        let path: WhPath = file_name.try_into()?;
+        let path = WhPath::from_fake_absolute(file_name)?;
+        log::trace!("open path({path})");
         let inode = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::open")?
             .get_inode_from_path(&path)
             .inspect_err(|e| log::warn!("open({display_name})::{e};"))
@@ -257,7 +258,7 @@ impl FileSystemContext for FSPController {
         // thread::sleep(std::time::Duration::from_secs(2));
         log::info!("create({}, type: {:?})", file_name.display(), kind);
 
-        let path: WhPath = file_name.try_into()?;
+        let path = WhPath::from_fake_absolute(file_name)?;
         let name = (*path).file_name().ok_or(STATUS_OBJECT_NAME_NOT_FOUND)?;
 
         let arbo = Arbo::write_lock(&self.fs_interface.arbo, "winfsp::create")?;
@@ -430,12 +431,12 @@ impl FileSystemContext for FSPController {
             new_file_name.display()
         );
 
-        let path: WhPath = file_name.try_into()?;
+        let path = WhPath::from_fake_absolute(file_name)?;
         let parent = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::rename")?
             .get_inode_from_path(&path.parent().unwrap_or(WhPath::root()))?
             .id;
 
-        let new_path: WhPath = new_file_name.try_into()?;
+        let new_path = WhPath::from_fake_absolute(new_file_name)?;
         let new_parent = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::rename")?
             .get_inode_from_path(&new_path.parent().unwrap_or(WhPath::root()))?
             .id;
