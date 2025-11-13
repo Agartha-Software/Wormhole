@@ -7,6 +7,7 @@ use std::{
     time::SystemTime,
 };
 
+use camino::Utf8PathBuf;
 use custom_error::custom_error;
 use nt_time::FileTime;
 use ntapi::ntioapi::FILE_DIRECTORY_FILE;
@@ -119,8 +120,10 @@ pub fn mount_fsp(
         fs::rename(&path, &aliased)?;
     }
 
+    let path = path.to_string_lossy().to_string().replace("\\", "/");
     log::debug!("mounting host @ {:?} ...", &path);
     host.mount(&path)?;
+
     log::debug!("mounted host...");
     host.start_with_threads(1)?;
     log::debug!("started host...");
@@ -149,6 +152,7 @@ impl FileSystemContext for FSPController {
             return Ok(security);
         }
 
+        let test = Utf8PathBuf::try_from(OsString::from(file_name));
         let path: PathBuf = PathBuf::from(OsString::from(file_name));
 
         let file_info: FileInfo =

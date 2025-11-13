@@ -9,8 +9,6 @@
 //! Checkout the [Service](../wormhole_service/index.html)
 //!
 
-use std::ffi::OsStr;
-
 pub mod cli;
 pub mod config;
 pub mod data;
@@ -29,13 +27,3 @@ pub const INSTANCE_PATH: &str = "%APPDATA%/local/wormhole";
 pub const INSTANCE_PATH: &'static str = "/usr/local/share/wormhole/";
 #[cfg(target_os = "linux")]
 pub mod fuse;
-
-/// This function was created to reduce the boiler plate of string conversion.
-/// Putting this logic in only one place makes it easier to edit the day where
-/// we find a system on which that conversion breaks.
-pub fn osstring_convert(origin: &OsStr) -> String {
-    origin
-        .to_str()
-        .expect("OsStr -> String conversion failed")
-        .to_string()
-}

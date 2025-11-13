@@ -1,8 +1,11 @@
-use std::{fmt, path::PathBuf};
+use std::fmt;
 
-use crate::{network::message::Address, pods::arbo::InodeId};
+use crate::{
+    network::message::Address,
+    pods::{arbo::InodeId, whpath::WhPath},
+};
 
-pub type TreeLine = (u8, InodeId, PathBuf, Vec<Address>); // (indentation_level, ino, path, hosts)
+pub type TreeLine = (u8, InodeId, WhPath, Vec<Address>); // (indentation_level, ino, path, hosts)
 pub struct CliHostTree {
     pub lines: Vec<TreeLine>,
 }

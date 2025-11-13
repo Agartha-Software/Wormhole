@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, io, path::PathBuf};
+use std::io;
 
 use custom_error::custom_error;
 
@@ -7,6 +7,7 @@ use crate::{
     pods::{
         arbo::{Arbo, InodeId, Metadata},
         filesystem::permissions::has_write_perm,
+        whpath::WhPath,
     },
 };
 
@@ -34,7 +35,7 @@ custom_error! {
 }
 
 impl FsInterface {
-    fn construct_file_path(&self, parent: InodeId, name: &OsStr) -> WhResult<PathBuf> {
+    fn construct_file_path(&self, parent: InodeId, name: &str) -> WhResult<WhPath> {
         let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface.rename.construct_file_path")?;
         let mut parent_path = arbo.n_get_path_from_inode_id(parent)?;
 
@@ -46,8 +47,8 @@ impl FsInterface {
         &self,
         parent: InodeId,
         new_parent: InodeId,
-        name: &OsStr,
-        new_name: &OsStr,
+        name: &str,
+        new_name: &str,
     ) -> Result<(), RenameError> {
         let parent_path = self.construct_file_path(parent, name)?;
         let new_parent_path = self.construct_file_path(new_parent, new_name)?;
@@ -80,7 +81,7 @@ impl FsInterface {
     fn rename_special(
         &self,
         new_parent: InodeId,
-        new_name: &OsStr,
+        new_name: &str,
         source_ino: u64,
         dest_ino: Option<u64>,
     ) -> Result<(), RenameError> {
@@ -159,8 +160,8 @@ impl FsInterface {
         &self,
         parent: InodeId,
         new_parent: InodeId,
-        name: &OsStr,
-        new_name: &OsStr,
+        name: &str,
+        new_name: &str,
         overwrite: bool,
     ) -> Result<(), RenameError> {
         if parent == new_parent && name == new_name {
@@ -224,8 +225,8 @@ impl FsInterface {
         &self,
         parent: InodeId,
         new_parent: InodeId,
-        name: &OsStr,
-        new_name: &OsStr,
+        name: &str,
+        new_name: &str,
         overwrite: bool,
     ) -> Result<(), RenameError> {
         let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface::remove_inode")?;

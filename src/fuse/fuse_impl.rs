@@ -13,6 +13,7 @@ use crate::pods::filesystem::rename::RenameError;
 use crate::pods::filesystem::write::WriteError;
 use crate::pods::filesystem::xattrs::GetXAttrError;
 use crate::pods::network::pull_file::PullError;
+use crate::pods::whpath::osstr_to_str;
 use fuser::{
     BackgroundSession, Filesystem, MountOption, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty,
     ReplyEntry, ReplyXattr, Request,
@@ -20,7 +21,6 @@ use fuser::{
 use libc::{XATTR_CREATE, XATTR_REPLACE};
 use std::ffi::OsStr;
 use std::io;
-use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -37,6 +37,11 @@ impl Filesystem for FuseController {
     // READING
 
     fn lookup(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
+        let name = match osstr_to_str(name) {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
         match self.fs_interface.get_entry_from_name(parent, name) {
             Ok(Some(inode)) => {
                 reply.entry(&TTL, &inode.meta.with_ids(req.uid(), req.gid()), 0);
@@ -44,10 +49,10 @@ impl Filesystem for FuseController {
             Ok(None) => {
                 reply.error(libc::EACCES);
             }
-            Err(_) => {
-                reply.error(libc::ENOENT);
+            Err(e) => {
+                reply.error(e.to_libc());
             }
-        };
+        }
     }
 
     fn getattr(&mut self, req: &Request, ino: u64, _fh: Option<u64>, reply: ReplyAttr) {
@@ -121,6 +126,11 @@ impl Filesystem for FuseController {
         size: u32,
         reply: ReplyXattr,
     ) {
+        let name = match osstr_to_str(name) {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
         let attr = self.fs_interface.get_inode_xattr(ino, name);
 
         let data = match attr {
@@ -152,6 +162,11 @@ impl Filesystem for FuseController {
         _position: u32, // Postion undocumented
         reply: ReplyEmpty,
     ) {
+        let name = match osstr_to_str(name) {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
         // As we follow linux implementation in spirit, data size limit at 64kb
         if data.len() > 64000 {
             return reply.error(libc::ENOSPC);
@@ -198,6 +213,11 @@ impl Filesystem for FuseController {
         name: &OsStr,
         reply: ReplyEmpty,
     ) {
+        let name = match osstr_to_str(name) {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
         match self
             .fs_interface
             .network_interface
@@ -324,6 +344,11 @@ impl Filesystem for FuseController {
         _rdev: u32,
         reply: ReplyEntry,
     ) {
+        let name = match osstr_to_str(name) {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
         let permissions = mode as u16;
         let kind = match filetype_from_mode(mode) {
             Some(kind) => kind,
@@ -362,10 +387,15 @@ impl Filesystem for FuseController {
         _umask: u32,
         reply: ReplyEntry,
     ) {
+        let name = match osstr_to_str(name) {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
         match self
             .fs_interface
             .make_inode(parent, name, mode as u16, SimpleFileType::Directory)
-            .inspect_err(|e| log::error!("mkdir({parent}, {}): {e}", name.display()))
+            .inspect_err(|e| log::error!("mkdir({parent}, {}): {e}", name))
         {
             Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
             Err(MakeInodeError::LocalCreationFailed { io }) => {
@@ -383,6 +413,11 @@ impl Filesystem for FuseController {
     }
 
     fn unlink(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
+        let name = match osstr_to_str(name) {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
         match self.fs_interface.fuse_remove_inode(parent, name) {
             Ok(()) => reply.ok(),
             Err(RemoveFileError::WhError { source }) => reply.error(source.to_libc()),
@@ -397,6 +432,11 @@ impl Filesystem for FuseController {
     }
 
     fn rmdir(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
+        let name = match osstr_to_str(name) {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
         match self.fs_interface.fuse_remove_inode(parent, name) {
             Ok(()) => reply.ok(),
             Err(RemoveFileError::WhError { source }) => reply.error(source.to_libc()),
@@ -420,6 +460,15 @@ impl Filesystem for FuseController {
         flags: u32,
         reply: fuser::ReplyEmpty,
     ) {
+        let name = match osstr_to_str(name) {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+        let newname = match osstr_to_str(newname) {
+            Ok(newname) => newname,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
         match self
             .fs_interface
             .rename(
@@ -642,8 +691,8 @@ pub fn mount_fuse(
         MountOption::FSName(format!(
             "wormhole@{}",
             mount_point
-                .file_stem()
-                .ok_or(io::ErrorKind::NotADirectory)?
+                .file_name()
+                .ok_or(io::ErrorKind::InvalidFilename)?
                 .to_string_lossy()
         )),
     ];

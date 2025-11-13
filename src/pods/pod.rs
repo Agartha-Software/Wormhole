@@ -18,6 +18,7 @@ use crate::pods::disk_managers::unix_disk_manager::UnixDiskManager;
 use crate::pods::disk_managers::dummy_disk_manager::DummyDiskManager;
 use crate::pods::disk_managers::DiskManager;
 use crate::pods::network::redundancy::redundancy_worker;
+use crate::pods::whpath::WhPath;
 #[cfg(target_os = "windows")]
 use crate::winfsp::winfsp_impl::{mount_fsp, WinfspHost};
 use custom_error::custom_error;
@@ -170,13 +171,17 @@ fn create_all_dirs(arbo: &Arbo, from: InodeId, disk: &dyn DiskManager) -> io::Re
             let current_path = arbo
                 .n_get_path_from_inode_id(from.id)
                 .map_err(|e| e.into_io())?;
-            disk.new_dir(&current_path, from.meta.perm).or_else(|e| {
-                if e.kind() == io::ErrorKind::AlreadyExists {
-                    Ok(())
-                } else {
-                    Err(e)
-                }
-            })?;
+
+            // skipping root folder
+            if current_path != WhPath::root() {
+                disk.new_dir(&current_path, from.meta.perm).or_else(|e| {
+                    if e.kind() == io::ErrorKind::AlreadyExists {
+                        Ok(())
+                    } else {
+                        Err(e)
+                    }
+                })?;
+            }
 
             for child in children {
                 create_all_dirs(arbo, *child, disk)?
@@ -255,10 +260,10 @@ impl Pod {
             .get_inode(GLOBAL_CONFIG_INO)
             .map(|inode| inode.meta.perm)
         {
-            let _ = disk_manager.new_file(Path::new(GLOBAL_CONFIG_FNAME), perms);
+            let _ = disk_manager.new_file(&WhPath::try_from(GLOBAL_CONFIG_FNAME).unwrap(), perms);
             disk_manager
                 .write_file(
-                    Path::new(GLOBAL_CONFIG_FNAME),
+                    &WhPath::try_from(GLOBAL_CONFIG_FNAME).unwrap(),
                     toml::to_string(&proto.global_config)
                         .expect("infallible")
                         .as_bytes(),
@@ -274,10 +279,10 @@ impl Pod {
             .get_inode(LOCAL_CONFIG_INO)
             .map(|inode| inode.meta.perm)
         {
-            let _ = disk_manager.new_file(Path::new(LOCAL_CONFIG_FNAME), perms);
+            let _ = disk_manager.new_file(&WhPath::try_from(LOCAL_CONFIG_FNAME).unwrap(), perms);
             disk_manager
                 .write_file(
-                    Path::new(LOCAL_CONFIG_FNAME),
+                    &WhPath::try_from(LOCAL_CONFIG_FNAME).unwrap(),
                     toml::to_string(&proto.local_config)
                         .expect("infallible")
                         .as_bytes(),
@@ -359,7 +364,7 @@ impl Pod {
 
     // SECTION getting info from the pod (for the cli)
 
-    pub fn get_file_hosts(&self, path: &Path) -> Result<Vec<Address>, PodInfoError> {
+    pub fn get_file_hosts(&self, path: &WhPath) -> Result<Vec<Address>, PodInfoError> {
         let binding = Arbo::n_read_lock(&self.network_interface.arbo, "Pod::get_info")?;
         let entry = &binding
             .get_inode_from_path(path)
@@ -376,7 +381,7 @@ impl Pod {
 
     pub fn get_file_tree_and_hosts(
         &self,
-        path: Option<&Path>,
+        path: Option<&WhPath>,
     ) -> Result<CliHostTree, PodInfoError> {
         let arbo = Arbo::n_read_lock(&self.network_interface.arbo, "Pod::get_info")?;
 
@@ -521,7 +526,7 @@ impl Pod {
 
         fs_interface
             .disk
-            .write_file(Path::new(ARBO_FILE_FNAME), &arbo_bin, 0)
+            .write_file(&WhPath::try_from(ARBO_FILE_FNAME).unwrap(), &arbo_bin, 0)
             .map_err(|io| PodStopError::ArboSavingFailed { source: io })?;
 
         *peers.write() = Vec::new(); // dropping PeerIPCs

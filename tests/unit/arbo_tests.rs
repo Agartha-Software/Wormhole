@@ -2,7 +2,6 @@ extern crate wormhole;
 use serial_test::parallel;
 use std::{
     collections::HashMap,
-    ffi::OsStr,
     time::{Duration, SystemTime},
 };
 use wormhole::pods::{
@@ -47,32 +46,20 @@ fn test_inserting_and_retreiving_files() {
     let mut arbo = Arbo::new();
 
     assert!(
-        arbo.add_inode_from_parameters(
-            OsStr::new("file1"),
-            10,
-            ROOT,
-            FsEntry::File(Vec::new()),
-            0o777
-        )
-        .is_ok(),
+        arbo.add_inode_from_parameters("file1", 10, ROOT, FsEntry::File(Vec::new()), 0o777)
+            .is_ok(),
         "can't add file1 in / folder"
     );
     assert!(
-        arbo.add_inode_from_parameters(
-            OsStr::new("file2"),
-            11,
-            ROOT,
-            FsEntry::File(Vec::new()),
-            0o777
-        )
-        .is_ok(),
+        arbo.add_inode_from_parameters("file2", 11, ROOT, FsEntry::File(Vec::new()), 0o777)
+            .is_ok(),
         "can't add file2 in / folder"
     );
 
     let result_one = Inode {
         id: 10,
         parent: 1,
-        name: OsStr::new("file1").into(),
+        name: "file1".into(),
         entry: FsEntry::File(Vec::new()),
         meta: Metadata {
             ino: 10,
@@ -97,7 +84,7 @@ fn test_inserting_and_retreiving_files() {
     let result_two = Inode {
         id: 11,
         parent: 1,
-        name: OsStr::new("file2").into(),
+        name: "file2".into(),
         entry: FsEntry::File(Vec::new()),
         meta: Metadata {
             ino: 11,
