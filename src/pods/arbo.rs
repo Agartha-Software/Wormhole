@@ -1,5 +1,4 @@
-use crate::{data::tree_hosts::TreeLine, error::WhResult, network::message::Address};
-use crate::{error::WhResult, pods::whpath::WhPath};
+use crate::{data::tree_hosts::TreeLine, error::WhResult, network::message::Address, pods::whpath::WhPath};
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -651,7 +650,7 @@ impl Arbo {
         Ok(())
     }
 
-    pub fn get_file_tree_and_hosts(&self, path: Option<&Path>) -> WhResult<Vec<TreeLine>> {
+    pub fn get_file_tree_and_hosts(&self, path: Option<&WhPath>) -> WhResult<Vec<TreeLine>> {
         let ino = if let Some(path) = path {
             self.get_inode_from_path(path)
                 .map_err(|_| WhError::InodeNotFound)?

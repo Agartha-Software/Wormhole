@@ -6,7 +6,7 @@ use crate::pods::whpath::WhPath;
 #[cfg(target_os = "linux")]
 pub mod unix_disk_manager;
 #[cfg(target_os = "windows")]
-pub mod dummy_disk_manager;
+pub mod windows_disk_manager;
 
 pub struct DiskSizeInfo {
     pub free_size: usize,
@@ -16,7 +16,11 @@ pub struct DiskSizeInfo {
 pub trait DiskManager: Send + Sync + Debug {
     fn new_file(&self, path: &WhPath, permissions: u16) -> io::Result<()>;
 
-    fn new_file(&self, path: &WhPath, permissions: u16) -> io::Result<()>;
+    fn set_permisions(&self, path: &WhPath, permissions: u16) -> io::Result<()>;
+
+    fn remove_file(&self, path: &WhPath) -> io::Result<()>;
+
+    fn remove_dir(&self, path: &WhPath) -> io::Result<()>;
 
     fn write_file(&self, path: &WhPath, binary: &[u8], offset: usize) -> io::Result<usize>;
 

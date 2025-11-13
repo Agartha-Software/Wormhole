@@ -69,7 +69,7 @@ impl From<WhError> for FspError {
             WhError::NetworkDied { called_from: _ } => STATUS_NETWORK_UNREACHABLE.into(),
             WhError::WouldBlock { called_from: _ } => STATUS_PENDING.into(),
             WhError::InodeIsADirectory => STATUS_FILE_IS_A_DIRECTORY.into(),
-            WhError::UnsupportedPath => CRYPT_E_BAD_ENCODE.into(), // REVIEW unsure about this type
+            WhError::WhPathError { e: _ } => CRYPT_E_BAD_ENCODE.into(), // REVIEW unsure about this type
         }
     }
 }
