@@ -5,6 +5,7 @@ use openat::AsPath;
 #[cfg(target_os = "linux")]
 use std::ffi::CString;
 use std::fmt::{Debug, Display};
+use std::io;
 use std::{
     ffi::{OsStr, OsString},
     path::{Component, Path, PathBuf},
@@ -22,6 +23,26 @@ custom_error! {pub WhPathError
 impl From<FromPathBufError> for WhPathError {
     fn from(_: FromPathBufError) -> Self {
         Self::NotValidUtf8
+    }
+}
+
+impl WhPathError {
+    pub fn to_io(&self) -> io::Error {
+        match self {
+            WhPathError::NotRelative => {
+                io::Error::new(io::ErrorKind::Other, "WhPath: path is not relative")
+            }
+            WhPathError::NotValidUtf8 => {
+                io::Error::new(io::ErrorKind::InvalidData, "WhPath: not UTF-8")
+            }
+            WhPathError::NotValidPath => {
+                io::Error::new(io::ErrorKind::InvalidFilename, "WhPath: not normalized")
+            }
+            WhPathError::InvalidOperation => io::Error::new(
+                io::ErrorKind::Other,
+                "Operation would compromise WhPath integrity",
+            ),
+        }
     }
 }
 
@@ -120,6 +141,12 @@ impl AsRef<str> for WhPath {
 impl AsRef<OsStr> for WhPath {
     fn as_ref(&self) -> &OsStr {
         self.inner.as_os_str()
+    }
+}
+
+impl AsRef<Utf8Path> for WhPath {
+    fn as_ref(&self) -> &Utf8Path {
+        &self.inner
     }
 }
 
@@ -262,9 +289,11 @@ pub fn normalize_utf8path(path: impl AsRef<Utf8Path>) -> Result<Utf8PathBuf, WhP
 }
 
 pub fn osstring_to_string(osstr: OsString) -> WhResult<String> {
-    osstr.into_string().map_err(|_| WhError::UnsupportedPath)
+    osstr
+        .into_string()
+        .map_err(|_| WhPathError::NotValidUtf8.into())
 }
 
 pub fn osstr_to_str(osstr: &OsStr) -> WhResult<&str> {
-    osstr.to_str().ok_or(WhError::UnsupportedPath)
+    osstr.to_str().ok_or(WhPathError::NotValidUtf8.into())
 }

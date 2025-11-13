@@ -335,8 +335,8 @@ impl Arbo {
         let children = match &mut parent.entry {
             // REVIEW: Can we expect parent to always be a file to not flood wherror with errors that will never happen
             FsEntry::File(_) => panic!("Parent is a file"),
-            FsEntry::Directory(children) => Ok(children),
-        }?;
+            FsEntry::Directory(children) => children,
+        };
 
         children.retain(|parent_child| *parent_child != child);
         Ok(())
@@ -483,7 +483,7 @@ impl Arbo {
             .ok_or(WhError::InodeNotFound)?;
 
         let mut parent_path = self.n_get_path_from_inode_id(inode.parent)?;
-        parent_path.push(&inode.name.clone());
+        parent_path.push(&inode.name.clone())?;
         Ok(parent_path)
     }
 
