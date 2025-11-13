@@ -6,12 +6,12 @@ This deploys one `wormholed` per node using a DaemonSet, with host networking so
 ```bash
 
 docker build -t ghcr.io/agartha-software/wormhole:latest .
-docker push agartha-software/wormhole:latest
+docker push ghcr.io/agartha-software/wormhole:latest
 ```
 
 #### 2) Apply manifests
 
-Edit `k8s/wormhole.yaml` and set `image: agartha-software/wormhole:latest`.
+Edit `k8s/wormhole.yaml` and set image: [ghcr.io/agartha-software/wormhole:latest](ghcr.io/agartha-software/wormhole:latest).
 
 ```bash
 kubectl apply -f k8s/wormhole.yaml

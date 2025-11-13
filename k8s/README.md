@@ -5,7 +5,7 @@ This guide shows how to deploy 3 Wormhole pods on Kubernetes and connect them to
 ### Prerequisites
 - kubectl configured to your cluster
 - A Kubernetes cluster (kind, k3s, minikube, etc.)
-- The container image `ghcr.io/agartha-software/wormhole:latest` accessible from the cluster
+- The container image [ghcr.io/agartha-software/wormhole:latest](ghcr.io/agartha-software/wormhole:latest) accessible from the cluster
   - If private, a GitHub token with `read:packages` and a Kubernetes imagePullSecret
 
 ### Why create a dedicated cluster (kind)
