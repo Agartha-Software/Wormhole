@@ -20,10 +20,10 @@ FROM ubuntu:24.04 AS test
 WORKDIR /test
 COPY --from=builder /build/target/release/wormholed /bin/wormholed
 COPY --from=builder /build/target/release/wormhole /bin/wormhole
-COPY tests/run_xfstests_docker.sh /tests/run_xfstests_docker.sh
-COPY tests/xfstests_noop_mount.sh /tests/xfstests_noop_mount.sh
 
-# Install dependencies for xfstests
+COPY tests/run_xfstests_docker.sh /tests/run_xfstests_docker.sh
+COPY tests/mount.fuse.wormhole /sbin/mount.fuse.wormhole
+
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     git \
@@ -51,19 +51,14 @@ RUN apt-get update && \
     quota \
     && apt-get clean
 
-# Clone and compile xfstests
 RUN cd /opt && \
     git clone --depth 1 https://git.kernel.org/pub/scm/fs/xfs/xfstests-dev.git && \
     cd xfstests-dev && \
     make && \
     make install
 
-# Create mount points
 RUN mkdir -p /mnt/test /mnt/scratch
-RUN chmod +x /tests/run_xfstests_docker.sh /tests/xfstests_noop_mount.sh
 
-# Set working directory
+RUN chmod +x /tests/run_xfstests_docker.sh /sbin/mount.fuse.wormhole
+
 WORKDIR /opt/xfstests-dev
-
-CMD ["/tests/run_xfstests_docker.sh"]
-#CMD ["/bin/wormholed"]

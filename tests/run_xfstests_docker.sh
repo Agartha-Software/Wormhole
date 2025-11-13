@@ -1,115 +1,88 @@
 #!/bin/bash
-# This script is executed as root in the Docker container.
 set -e
 
 # --- Configuration ---
 WORMHOLE_DAEMON="/bin/wormholed"
-WORMHOLE_CLI="/bin/wormhole"
 PID_FILE="/test/fuse.pid"
-
-# Utilise les variables de l'environnement (docker-compose)
-: "${TEST_DIR:=/mnt/wormhole-test}"
-: "${SCRATCH_MNT:=${TEST_DIR}/scratch}"
-: "${FSTYP:=fuse}"
-
 
 # --- Cleanup function ---
 cleanup() {
     echo "--- Cleanup ---"
-    
     if [ -f "$PID_FILE" ]; then
         echo "Stopping the wormholed service (PID $(cat "$PID_FILE"))..."
         kill "$(cat "$PID_FILE")" || echo "Daemon already stopped."
         rm -f "$PID_FILE"
         sleep 1
     fi
-
-    if mount | grep -q -- "$TEST_DIR"; then
-        echo "Unmounting $TEST_DIR..."
-        fusermount -u "$TEST_DIR" || umount "$TEST_DIR" || echo "Unmount failed, continuing cleanup..."
+    if mount | grep -q -- "/mnt/test"; then
+        fusermount -u /mnt/test || echo "Cleanup: /mnt/test unmount failed."
     fi
-    
-    if [ -d "$TEST_DIR" ]; then
-        echo "Deleting the folder $TEST_DIR"
-        rmdir "$TEST_DIR" || echo "Could not remove $TEST_DIR (maybe not empty)."
+    if mount | grep -q -- "/mnt/scratch"; then
+        fusermount -u /mnt/scratch || echo "Cleanup: /mnt/scratch unmount failed."
     fi
 }
 trap cleanup EXIT ERR
 
-    # --- Preparation ---
+# --- Preparation ---
 echo "--- Preparation of the test environment ---"
-# 1. Start the 'wormholed' service
 echo "Starting the wormholed service..."
 "$WORMHOLE_DAEMON" &
 echo "$!" > "$PID_FILE"
 echo "Daemon started with PID $(cat "$PID_FILE")"
 sleep 2
-# 2. Create the mount point
-mkdir -p "$TEST_DIR"
-# 3. Use the CLI to mount the pod
-echo "Creating the pod 'testpod' and mounting FUSE on $TEST_DIR..."
-"$WORMHOLE_CLI" new testpod -p 5000 -m "$TEST_DIR"
-# 4. Wait for the mount
-echo "Waiting for the mount..."
-sleep 3
-if ! mount | grep -q -- "$TEST_DIR"; then
-    echo "ERROR : The FUSE mount point could not be detected!"
-    exit 1
-fi
-echo "FUSE mount detected on $TEST_DIR."
-# 5. Create scratch directory
-echo "Creating scratch directory at $SCRATCH_MNT..."
-mkdir -p "$SCRATCH_MNT"
-
 
 # --- Execution of the Tests ---
 echo "--- Execution of xfstests ---"
-
-# Déplacez-vous dans le répertoire xfstests
 cd /opt/xfstests-dev
 
-# --- NOUVELLE CONFIGURATION (basée sur README.fuse) ---
-echo "Creating local.config file based on README.fuse..."
+# --- Créer local.config (Corrigé) ---
+echo "Creating local.config file..."
 cat << EOF > local.config
-# --- Configuration FUSE (basée sur README.fuse) ---
-export FSTYP="${FSTYP}"
-export FUSE_SUBTYP="wormhole" 
+# 1. FSTYP est 'fuse' pour que xfstests le reconnaisse
+export FSTYP="fuse"
+export FUSE_SUBTYP=".wormhole"
+# (On supprime FUSE_SUBTYP, il est inutile et crée des conflits)
 
-# Placeholders (comme dans le README)
+# 2. Placeholders (acceptés car FSTYP=fuse)
 export TEST_DEV="non1"
 export SCRATCH_DEV="non2"
 
-# Nos vrais chemins
-export TEST_DIR="${TEST_DIR}"
-export SCRATCH_MNT="${SCRATCH_MNT}"
+# 3. Dossiers standards
+export TEST_DIR="/mnt/test"
+export SCRATCH_MNT="/mnt/scratch"
 
-# Nos overrides pour FUSE pré-monté
-export MKFS_PROG="/bin/true"
-export MOUNT_PROG="/tests/xfstests_noop_mount.sh"
-export UMOUNT_PROG="/tests/xfstests_noop_mount.sh"
-
-# Options du README (au cas où)
-export MOUNT_OPTIONS="-osource=${TEST_DIR},allow_other,default_permissions"
-export TEST_FS_MOUNT_OPTS="-osource=${TEST_DIR},allow_other,default_permissions"
+# 4. Options de montage avec 'subtype=wormhole'
+#    pour que /sbin/mount.fuse appelle /sbin/mount.fuse.wormhole
+export TEST_FS_MOUNT_OPTS="-osubtype=wormhole,pod_name=testpod,port=5000,allow_other,default_permissions"
+export MOUNT_OPTIONS="-osubtype=wormhole,pod_name=scratchpod,port=5001,allow_other,default_permissions"
 EOF
 
 echo "local.config created:"
 cat local.config
 echo "---------------------"
 
-# --- GESTION D'ERREUR (Corrigée) ---
+# --- Lancement du test (Capture d'erreur Corrigée) ---
 TEST_TO_RUN="generic/001"
 LOG_FILE_PATH="results/$TEST_TO_RUN.log"
 CHECK_OUTPUT_FILE="/tmp/check_output.log"
 
 echo "Running xfstests test '$TEST_TO_RUN'..."
-rm -f "$LOG_FILE_PATH" "$CHECK_OUTPUT_FILE"
+rm -f "$LOG_FILE_PATH" "$CHECK_OUTPUT_FILE" "results/.config" /tmp/mount_helper.log
 
+# -- CORRECTION DU BUG "exit code 0" --
+# 1. Désactiver 'set -e' temporairement
+set +e
+# 2. Exécuter la commande et rediriger la sortie
+./check "$TEST_TO_RUN" > "$CHECK_OUTPUT_FILE" 2>&1
+# 3. Capturer le VRAI code de sortie
+EXIT_CODE=$?
+# 4. Réactiver 'set -e'
+set -e
 
-# Vérifiez le code de sortie.
-if ! ./check -T "$TEST_TO_RUN" > "$CHECK_OUTPUT_FILE" 2>&1; then
+# 5. Vérifier le vrai code de sortie
+if [ "$EXIT_CODE" -ne 0 ]; then
     echo "-----------------------------------------------------"
-    echo "ERROR: xfstests FAILED with exit code $?"
+    echo "ERROR: xfstests FAILED with exit code $EXIT_CODE"
     echo "-----------------------------------------------------"
     
     echo "Displaying captured output from './check' (from $CHECK_OUTPUT_FILE):"
@@ -128,9 +101,14 @@ if ! ./check -T "$TEST_TO_RUN" > "$CHECK_OUTPUT_FILE" 2>&1; then
         ls -l results/ || echo "'results' directory not found."
     fi
     
-    exit $?
+    echo "---"
+    echo "Checking mount helper log (/tmp/mount_helper.log)..."
+    cat /tmp/mount_helper.log || echo "Mount helper log not found."
+    
+    exit $EXIT_CODE
 fi
 
+# Si on arrive ici, le test a réussi
 echo "--- Test '$TEST_TO_RUN' finished successfully ---"
 echo "Log file is at $LOG_FILE_PATH:"
 echo "---------------------"

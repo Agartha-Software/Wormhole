@@ -4,13 +4,9 @@ services:
       context: .
       dockerfile: Dockerfile
       target: test
-
-    environment:
-      # On ne fournit que les chemins que notre script va utiliser.
-      # Le script run_...sh générera local.config avec TEST_DEV, FSTYP, etc.
-      - TEST_DIR=/mnt/wormhole-test
-      - SCRATCH_MNT=/mnt/wormhole-test/scratch
-  
+    
+    command: /tests/run_xfstests_docker.sh
+    
     devices:
       - '/dev/fuse:/dev/fuse'
     cap_add:
