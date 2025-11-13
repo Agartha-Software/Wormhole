@@ -550,6 +550,26 @@ impl Filesystem for FuseController {
         }
     }
 
+    fn fsync(&mut self, _req: &Request<'_>, ino: u64, fh: u64, datasync: bool, reply: ReplyEmpty) {
+        let mut file_handles =
+            match FileHandleManager::write_lock(&self.fs_interface.file_handles, "release") {
+                Ok(handles) => handles,
+                Err(_) => {
+                    reply.error(libc::EWOULDBLOCK);
+                    return;
+                }
+            };
+        let handle = file_handles.handles.get_mut(&fh);
+        match self.fs_interface.flush(ino, handle) {
+            Ok(_) => reply.ok(),
+            Err(FlushError::DiffError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::PullError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::ReadError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::WriteError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::WhError { source }) => reply.error(source.to_libc()),
+        }
+    }
+
     fn access(&mut self, _req: &Request<'_>, ino: u64, mask: i32, reply: ReplyEmpty) {
         let meta = match self.fs_interface.n_get_inode_attributes(ino) {
             Ok(meta) => meta,
