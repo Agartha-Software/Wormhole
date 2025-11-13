@@ -143,141 +143,148 @@ fn test_path_normalization() {
 #[parallel]
 #[test]
 fn test_utf8_path_normalization() {
-    let windows_root_path = Utf8PathBuf::from(r"C:\windows\system32.dll");
-    let windows_root_path_dot = Utf8PathBuf::from(r"C:\windows\.\system32.dll");
-    let windows_verbatim_root_path = Utf8PathBuf::from(r"\\?\C:\windows\system32.dll");
-    let windows_verbatim_root_path_dot = Utf8PathBuf::from(r"\\?\C:\windows\.\system32.dll");
-    let windows_relative_path = Utf8PathBuf::from(r".\relative\path");
-    let windows_relative_path_no_prefix = Utf8PathBuf::from(r".\relative\path");
-    let windows_relative_path_one_up = Utf8PathBuf::from(r".\relative\path\..");
-    let windows_relative_path_one_up_one_down = Utf8PathBuf::from(r".\relative\path\..\down");
-    let windows_relative_impossible_up = Utf8PathBuf::from(r".\relative\path\..\..\..");
-    let windows_relative_impossible_up2 = Utf8PathBuf::from(r".\relative\path\..\..\..\..");
-    let windows_root_impossible_up = Utf8PathBuf::from(r"C:\relative\path\..\..\..");
-    let windows_root_impossible_up2 = Utf8PathBuf::from(r"C:\relative\path\..\..\..\..");
-    let windows_verbatim_root_impossible_up = Utf8PathBuf::from(r"\\?\C:\relative\path\..\..\..");
-    let windows_verbatim_root_impossible_up2 =
-        Utf8PathBuf::from(r"\\?\C:\relative\path\..\..\..\..");
-    let windows_root_that_goes_all_up = Utf8PathBuf::from(r"C:\relative\path\..\..");
-    let windows_relative_that_goes_all_up = Utf8PathBuf::from(r".\relative\path\..\..");
+    #[cfg(target_os = "windows")]
+    {
+        let windows_root_path = Utf8PathBuf::from(r"C:\windows\system32.dll");
+        let windows_root_path_dot = Utf8PathBuf::from(r"C:\windows\.\system32.dll");
+        let windows_verbatim_root_path = Utf8PathBuf::from(r"\\?\C:\windows\system32.dll");
+        let windows_verbatim_root_path_dot = Utf8PathBuf::from(r"\\?\C:\windows\.\system32.dll");
+        let windows_relative_path = Utf8PathBuf::from(r".\relative\path");
+        let windows_relative_path_no_prefix = Utf8PathBuf::from(r".\relative\path");
+        let windows_relative_path_one_up = Utf8PathBuf::from(r".\relative\path\..");
+        let windows_relative_path_one_up_one_down = Utf8PathBuf::from(r".\relative\path\..\down");
+        let windows_relative_impossible_up = Utf8PathBuf::from(r".\relative\path\..\..\..");
+        let windows_relative_impossible_up2 = Utf8PathBuf::from(r".\relative\path\..\..\..\..");
+        let windows_root_impossible_up = Utf8PathBuf::from(r"C:\relative\path\..\..\..");
+        let windows_root_impossible_up2 = Utf8PathBuf::from(r"C:\relative\path\..\..\..\..");
+        let windows_verbatim_root_impossible_up =
+            Utf8PathBuf::from(r"\\?\C:\relative\path\..\..\..");
+        let windows_verbatim_root_impossible_up2 =
+            Utf8PathBuf::from(r"\\?\C:\relative\path\..\..\..\..");
+        let windows_root_that_goes_all_up = Utf8PathBuf::from(r"C:\relative\path\..\..");
+        let windows_relative_that_goes_all_up = Utf8PathBuf::from(r".\relative\path\..\..");
 
-    let linux_root_path = Utf8PathBuf::from("/linux/system32.dll");
-    let linux_root_path_dot = Utf8PathBuf::from("/linux/./system32.dll");
-    let linux_relative_path = Utf8PathBuf::from("./relative/path");
-    let linux_relative_path_no_prefix = Utf8PathBuf::from("relative/path");
-    let linux_relative_path_dot = Utf8PathBuf::from("./relative/./path");
-    let linux_relative_path_one_up = Utf8PathBuf::from("./relative/path/..");
-    let linux_relative_path_one_up_one_down = Utf8PathBuf::from("./relative/path/../down");
-    let linux_relative_impossible_up = Utf8PathBuf::from("./relative/path/../../..");
-    let linux_relative_impossible_up2 = Utf8PathBuf::from("./relative/path/../../../..");
-    let linux_root_impossible_up = Utf8PathBuf::from("/relative/path/../../..");
-    let linux_root_impossible_up2 = Utf8PathBuf::from("/relative/path/../../../..");
-    let linux_root_that_goes_all_up = Utf8PathBuf::from("/relative/path/../..");
-    let linux_relative_that_goes_all_up = Utf8PathBuf::from("./relative/path/../..");
+        // Windows absolute roots
+        let r = normalize_path(&windows_root_path);
+        assert!(r.is_ok());
+        assert_eq!(r.unwrap(), Utf8PathBuf::from(r"C:\windows\system32.dll"));
 
-    // Windows absolute roots
-    let r = normalize_path(&windows_root_path);
-    assert!(r.is_ok());
-    assert_eq!(r.unwrap(), Utf8PathBuf::from(r"C:\windows\system32.dll"));
+        let r = normalize_path(&windows_root_path_dot);
+        assert!(r.is_ok());
+        assert_eq!(r.unwrap(), Utf8PathBuf::from(r"C:\windows\system32.dll"));
 
-    let r = normalize_path(&windows_root_path_dot);
-    assert!(r.is_ok());
-    assert_eq!(r.unwrap(), Utf8PathBuf::from(r"C:\windows\system32.dll"));
+        let r = normalize_path(&windows_verbatim_root_path);
+        assert!(r.is_ok());
+        assert_eq!(
+            r.unwrap(),
+            Utf8PathBuf::from(r"\\?\C:\windows\system32.dll")
+        );
 
-    let r = normalize_path(&windows_verbatim_root_path);
-    assert!(r.is_ok());
-    assert_eq!(
-        r.unwrap(),
-        Utf8PathBuf::from(r"\\?\C:\windows\system32.dll")
-    );
+        let r = normalize_path(&windows_verbatim_root_path_dot);
+        assert!(r.is_ok());
+        assert_eq!(
+            r.unwrap(),
+            Utf8PathBuf::from(r"\\?\C:\windows\system32.dll")
+        );
 
-    let r = normalize_path(&windows_verbatim_root_path_dot);
-    assert!(r.is_ok());
-    assert_eq!(
-        r.unwrap(),
-        Utf8PathBuf::from(r"\\?\C:\windows\system32.dll")
-    );
+        let r = normalize_path(&windows_root_that_goes_all_up);
+        assert!(r.is_ok());
+        assert_eq!(r.unwrap(), Utf8PathBuf::from(r"C:\"));
 
-    let r = normalize_path(&windows_root_that_goes_all_up);
-    assert!(r.is_ok());
-    assert_eq!(r.unwrap(), Utf8PathBuf::from(r"C:\"));
+        // Windows relative paths
+        let r = normalize_path(&windows_relative_path);
+        assert!(r.is_ok());
+        assert_eq!(r.unwrap(), Utf8PathBuf::from(r"relative\path"));
 
-    // Windows relative paths
-    let r = normalize_path(&windows_relative_path);
-    assert!(r.is_ok());
-    assert_eq!(r.unwrap(), Utf8PathBuf::from(r"relative\path"));
+        let r = normalize_path(&windows_relative_path_no_prefix);
+        assert!(r.is_ok());
+        assert_eq!(r.unwrap(), Utf8PathBuf::from(r"relative\path"));
 
-    let r = normalize_path(&windows_relative_path_no_prefix);
-    assert!(r.is_ok());
-    assert_eq!(r.unwrap(), Utf8PathBuf::from(r"relative\path"));
+        let r = normalize_path(&windows_relative_path_one_up);
+        assert!(r.is_ok());
+        assert_eq!(r.unwrap(), Utf8PathBuf::from(r"relative"));
 
-    let r = normalize_path(&windows_relative_path_one_up);
-    assert!(r.is_ok());
-    assert_eq!(r.unwrap(), Utf8PathBuf::from(r"relative"));
+        let r = normalize_path(&windows_relative_path_one_up_one_down);
+        assert!(r.is_ok());
+        assert_eq!(r.unwrap(), Utf8PathBuf::from(r"relative\down"));
 
-    let r = normalize_path(&windows_relative_path_one_up_one_down);
-    assert!(r.is_ok());
-    assert_eq!(r.unwrap(), Utf8PathBuf::from(r"relative\down"));
+        let r = normalize_path(&windows_relative_that_goes_all_up);
+        assert!(r.is_ok());
+        assert_eq!(r.unwrap(), Utf8PathBuf::default());
 
-    let r = normalize_path(&windows_relative_that_goes_all_up);
-    assert!(r.is_ok());
-    assert_eq!(r.unwrap(), Utf8PathBuf::default());
+        // Windows relative paths that go up too far
+        assert!(normalize_path(&windows_relative_impossible_up).is_err());
+        assert!(normalize_path(&windows_relative_impossible_up2).is_err());
 
-    // Windows relative paths that go up too far
-    assert!(normalize_path(&windows_relative_impossible_up).is_err());
-    assert!(normalize_path(&windows_relative_impossible_up2).is_err());
+        // Windows absolute paths that try to go above root
+        assert!(normalize_path(&windows_root_impossible_up).is_err());
+        assert!(normalize_path(&windows_root_impossible_up2).is_err());
 
-    // Windows absolute paths that try to go above root
-    assert!(normalize_path(&windows_root_impossible_up).is_err());
-    assert!(normalize_path(&windows_root_impossible_up2).is_err());
+        // Verbatim Windows absolute paths that try to go above root
+        assert!(normalize_path(&windows_verbatim_root_impossible_up).is_err());
+        assert!(normalize_path(&windows_verbatim_root_impossible_up2).is_err());
+    }
 
-    // Verbatim Windows absolute paths that try to go above root
-    assert!(normalize_path(&windows_verbatim_root_impossible_up).is_err());
-    assert!(normalize_path(&windows_verbatim_root_impossible_up2).is_err());
+    #[cfg(target_os = "linux")]
+    {
+        let linux_root_path = Utf8PathBuf::from("/linux/system32.dll");
+        let linux_root_path_dot = Utf8PathBuf::from("/linux/./system32.dll");
+        let linux_relative_path = Utf8PathBuf::from("./relative/path");
+        let linux_relative_path_no_prefix = Utf8PathBuf::from("relative/path");
+        let linux_relative_path_dot = Utf8PathBuf::from("./relative/./path");
+        let linux_relative_path_one_up = Utf8PathBuf::from("./relative/path/..");
+        let linux_relative_path_one_up_one_down = Utf8PathBuf::from("./relative/path/../down");
+        let linux_relative_impossible_up = Utf8PathBuf::from("./relative/path/../../..");
+        let linux_relative_impossible_up2 = Utf8PathBuf::from("./relative/path/../../../..");
+        let linux_root_impossible_up = Utf8PathBuf::from("/relative/path/../../..");
+        let linux_root_impossible_up2 = Utf8PathBuf::from("/relative/path/../../../..");
+        let linux_root_that_goes_all_up = Utf8PathBuf::from("/relative/path/../..");
+        let linux_relative_that_goes_all_up = Utf8PathBuf::from("./relative/path/../..");
 
-    // Linux absolute roots
-    let r = normalize_path(&linux_root_path);
-    assert!(r.is_ok());
-    assert_eq!(r.unwrap(), Utf8PathBuf::from("/linux/system32.dll"));
+        // Linux absolute roots
+        let r = normalize_path(&linux_root_path);
+        assert!(r.is_ok());
+        assert_eq!(r.unwrap(), Utf8PathBuf::from("/linux/system32.dll"));
 
-    let r = normalize_path(&linux_root_path_dot);
-    assert!(r.is_ok());
-    assert_eq!(r.unwrap(), Utf8PathBuf::from("/linux/system32.dll"));
+        let r = normalize_path(&linux_root_path_dot);
+        assert!(r.is_ok());
+        assert_eq!(r.unwrap(), Utf8PathBuf::from("/linux/system32.dll"));
 
-    let r = normalize_path(&linux_root_that_goes_all_up);
-    assert!(r.is_ok());
-    assert_eq!(r.unwrap(), Utf8PathBuf::from("/"));
+        let r = normalize_path(&linux_root_that_goes_all_up);
+        assert!(r.is_ok());
+        assert_eq!(r.unwrap(), Utf8PathBuf::from("/"));
 
-    // Linux relative paths
-    let r = normalize_path(&linux_relative_path);
-    assert!(r.is_ok());
-    assert_eq!(r.unwrap(), Utf8PathBuf::from("relative/path"));
+        // Linux relative paths
+        let r = normalize_path(&linux_relative_path);
+        assert!(r.is_ok());
+        assert_eq!(r.unwrap(), Utf8PathBuf::from("relative/path"));
 
-    let r = normalize_path(&linux_relative_path_no_prefix);
-    assert!(r.is_ok());
-    assert_eq!(r.unwrap(), Utf8PathBuf::from("relative/path"));
+        let r = normalize_path(&linux_relative_path_no_prefix);
+        assert!(r.is_ok());
+        assert_eq!(r.unwrap(), Utf8PathBuf::from("relative/path"));
 
-    let r = normalize_path(&linux_relative_that_goes_all_up);
-    assert!(r.is_ok());
-    assert_eq!(r.unwrap(), Utf8PathBuf::default());
+        let r = normalize_path(&linux_relative_that_goes_all_up);
+        assert!(r.is_ok());
+        assert_eq!(r.unwrap(), Utf8PathBuf::default());
 
-    let r = normalize_path(&linux_relative_path_dot);
-    assert!(r.is_ok());
-    assert_eq!(r.unwrap(), Utf8PathBuf::from("relative/path"));
+        let r = normalize_path(&linux_relative_path_dot);
+        assert!(r.is_ok());
+        assert_eq!(r.unwrap(), Utf8PathBuf::from("relative/path"));
 
-    let r = normalize_path(&linux_relative_path_one_up);
-    assert!(r.is_ok());
-    assert_eq!(r.unwrap(), Utf8PathBuf::from("relative"));
+        let r = normalize_path(&linux_relative_path_one_up);
+        assert!(r.is_ok());
+        assert_eq!(r.unwrap(), Utf8PathBuf::from("relative"));
 
-    let r = normalize_path(&linux_relative_path_one_up_one_down);
-    assert!(r.is_ok());
-    assert_eq!(r.unwrap(), Utf8PathBuf::from("relative/down"));
+        let r = normalize_path(&linux_relative_path_one_up_one_down);
+        assert!(r.is_ok());
+        assert_eq!(r.unwrap(), Utf8PathBuf::from("relative/down"));
 
-    // Linux relative paths that go up too far -> error
-    assert!(normalize_path(&linux_relative_impossible_up).is_err());
-    assert!(normalize_path(&linux_relative_impossible_up2).is_err());
+        // Linux relative paths that go up too far -> error
+        assert!(normalize_path(&linux_relative_impossible_up).is_err());
+        assert!(normalize_path(&linux_relative_impossible_up2).is_err());
 
-    // Linux absolute paths that try to go above root -> error
-    assert!(normalize_path(&linux_root_impossible_up).is_err());
-    assert!(normalize_path(&linux_root_impossible_up2).is_err());
+        // Linux absolute paths that try to go above root -> error
+        assert!(normalize_path(&linux_root_impossible_up).is_err());
+        assert!(normalize_path(&linux_root_impossible_up2).is_err());
+    }
 }

@@ -1,4 +1,4 @@
-use camino::{FromPathBufError, Iter, Utf8Component, Utf8Path, Utf8PathBuf};
+use camino::{FromPathBufError, Iter, Utf8Path, Utf8PathBuf};
 use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use openat::AsPath;
@@ -8,15 +8,15 @@ use std::fmt::{Debug, Display};
 use std::io;
 use std::{
     ffi::{OsStr, OsString},
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
-use crate::error::{WhError, WhResult};
+use crate::error::WhResult;
 
 custom_error! {pub WhPathError
     NotRelative = "Path is not relative",
     NotValidUtf8 = "Path is not valid UTF-8",
-    NotValidPath = "Path is not valid / can't be normalized",
+    NotNormalized = "Path is not normal",
     InvalidOperation = "Operation would compromise WhPath integrity",
 }
 
@@ -35,7 +35,7 @@ impl WhPathError {
             WhPathError::NotValidUtf8 => {
                 io::Error::new(io::ErrorKind::InvalidData, "WhPath: not UTF-8")
             }
-            WhPathError::NotValidPath => {
+            WhPathError::NotNormalized => {
                 io::Error::new(io::ErrorKind::InvalidFilename, "WhPath: not normalized")
             }
             WhPathError::InvalidOperation => io::Error::new(
@@ -63,9 +63,14 @@ impl TryFrom<PathBuf> for WhPath {
         if p.is_absolute() {
             return Err(Self::Error::NotRelative);
         }
-        let normalized_path = normalize_path(&p)?;
-        let valid_path = Utf8PathBuf::try_from(normalized_path)?;
-        Ok(Self { inner: valid_path })
+        if p.components()
+            .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".")
+        {
+            return Err(Self::Error::NotNormalized);
+        }
+        Ok(Self {
+            inner: Utf8PathBuf::try_from(p)?,
+        })
     }
 }
 
@@ -209,7 +214,7 @@ impl WhPath {
         if path.is_absolute() {
             return Err(WhPathError::InvalidOperation);
         } else {
-            Ok(self.inner.push(&normalize_utf8path(path)?))
+            Ok(self.inner.push(path))
         }
     }
 
@@ -220,11 +225,13 @@ impl WhPath {
             return Err(WhPathError::InvalidOperation);
         } else {
             Ok(Self {
-                inner: self.inner.join(normalize_utf8path(path)?),
+                inner: self.inner.join(path),
             })
         }
     }
 }
+
+/*
 
 /// Normalize a path without accessing the filesystem
 ///
@@ -249,7 +256,7 @@ pub fn normalize_path(path: impl AsRef<Path>) -> Result<PathBuf, WhPathError> {
             Component::CurDir => {}
             Component::ParentDir => {
                 if !ret.pop() {
-                    return Err(WhPathError::NotValidPath);
+                    return Err(WhPathError::NotNormalized);
                 }
             }
             Component::Normal(c) => {
@@ -283,7 +290,7 @@ pub fn normalize_utf8path(path: impl AsRef<Utf8Path>) -> Result<Utf8PathBuf, WhP
             Utf8Component::CurDir => {}
             Utf8Component::ParentDir => {
                 if !ret.pop() {
-                    return Err(WhPathError::NotValidPath);
+                    return Err(WhPathError::NotNormalized);
                 }
             }
             Utf8Component::Normal(c) => {
@@ -293,6 +300,7 @@ pub fn normalize_utf8path(path: impl AsRef<Utf8Path>) -> Result<Utf8PathBuf, WhP
     }
     Ok(ret)
 }
+*/
 
 pub fn osstring_to_string(osstr: OsString) -> WhResult<String> {
     osstr
