@@ -99,7 +99,9 @@ pub enum WriteConfigAnswer {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ShowConfigAnswer {
-    Success(String, String),
+    SuccessBoth(String, String),
+    SuccessLocal(String),
+    SuccessGlobal(String),
     PodNotFound,
     ConfigBlock,
 }

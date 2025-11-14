@@ -1,15 +1,38 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
+
+use parking_lot::RwLock;
+use serde::Serialize;
 
 use crate::{
     cli::ConfigType,
-    config::{types::Config, GlobalConfig, LocalConfig},
     ipc::{
         answers::ShowConfigAnswer,
         commands::PodId,
         service::{commands::find_pod, connection::send_answer},
     },
-    pods::pod::Pod,
+    pods::{arbo::LOCK_TIMEOUT, pod::Pod},
 };
+
+async fn config_as_str<Conf, Stream>(
+    config: &Arc<RwLock<Conf>>,
+    stream: &mut Stream,
+) -> std::io::Result<Option<String>>
+where
+    Conf: Serialize + Clone,
+    Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
+{
+    let config = match config.try_read_for(LOCK_TIMEOUT) {
+        Some(config) => config,
+        None => {
+            send_answer(ShowConfigAnswer::ConfigBlock, stream).await?;
+            return Ok(None);
+        }
+    };
+
+    Ok(Some(
+        toml::to_string(&config.clone()).expect("Serialization should'nt be able to fail"),
+    ))
+}
 
 pub async fn show<Stream>(
     args: PodId,
@@ -22,25 +45,24 @@ where
 {
     match find_pod(&args, pods) {
         Some((_, pod)) => {
-            let local_config = match LocalConfig::read_lock(&pod.local_config, "show config") {
-                Ok(local_config) => local_config,
-                Err(_) => {
-                    send_answer(ShowConfigAnswer::ConfigBlock, stream).await?;
-                    return Ok(false);
+            match config_type {
+                ConfigType::Local => {
+                    if let Some(local) = config_as_str(&pod.local_config, stream).await? {
+                        send_answer(ShowConfigAnswer::SuccessLocal(local), stream).await?;
+                    }
                 }
-            };
-
-            match GlobalConfig::read_lock(&pod.global_config, "show config") {
-                Ok(global_config) => {
-                    let local_str = toml::to_string(&local_config.clone())
-                        .expect("Serialization should'nt be able to fail");
-                    let global_str = toml::to_string(&global_config.clone())
-                        .expect("Serialization should'nt be able to fail");
-
-                    send_answer(ShowConfigAnswer::Success(local_str, global_str), stream).await?;
+                ConfigType::Global => {
+                    if let Some(global) = config_as_str(&pod.global_config, stream).await? {
+                        send_answer(ShowConfigAnswer::SuccessGlobal(global), stream).await?;
+                    }
                 }
-                Err(_) => {
-                    send_answer(ShowConfigAnswer::ConfigBlock, stream).await?;
+                ConfigType::Both => {
+                    if let Some(local) = config_as_str(&pod.local_config, stream).await? {
+                        if let Some(global) = config_as_str(&pod.global_config, stream).await? {
+                            send_answer(ShowConfigAnswer::SuccessBoth(local, global), stream)
+                                .await?;
+                        }
+                    }
                 }
             };
         }
