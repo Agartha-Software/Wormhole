@@ -514,7 +514,7 @@ impl Pod {
             network_airport_handle,
             peer_broadcast_handle,
             new_peer_handle,
-            redundancy_worker_handle: _,
+            redundancy_worker_handle,
             global_config: _,
             local_config: _,
         } = self;
@@ -523,6 +523,8 @@ impl Pod {
         drop(fuse_handle);
         #[cfg(target_os = "windows")]
         drop(fsp_host);
+
+        redundancy_worker_handle.abort();
 
         fs_interface
             .disk
