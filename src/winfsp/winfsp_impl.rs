@@ -23,14 +23,14 @@ use winfsp::{
 };
 use winfsp_sys::{FspCleanupDelete, FILE_ACCESS_RIGHTS};
 
-use crate::pods::{
+use crate::{error::WhError, pods::{
     arbo::{Arbo, InodeId},
     filesystem::{
         file_handle::{AccessMode, OpenFlags},
         fs_interface::{FsInterface, SimpleFileType},
     },
-    whpath::{WhPath, WhPathError},
-};
+    whpath::{WhPath, WhPathError, osstr_to_str},
+}};
 
 #[derive(PartialEq, Debug)]
 pub struct WormholeHandle {
@@ -55,6 +55,7 @@ impl std::fmt::Debug for WinfspHost {
 
 custom_error! {pub AliasedPathError
     NoFolderName = "Can't get folder name",
+    WhError{source: WhError} = "{source}",
 }
 
 /// Add a '.' the last element (dir or file name): /test/dir => /test/.dir
@@ -66,6 +67,16 @@ pub(crate) fn aliased_path(path: &Path) -> Result<PathBuf, AliasedPathError> {
     buf.set_file_name(file_name);
 
     Ok(buf)
+}
+
+/// Removes a '.' the last element (dir or file name): /test/.dir => /test/dir
+pub(crate) fn unaliased_path(path: &Path) -> Result<PathBuf, AliasedPathError> {
+    let file_name = osstr_to_str(path.file_name().ok_or(AliasedPathError::NoFolderName)?)?
+        .trim_start_matches('.');
+
+    let mut path = path.to_path_buf();
+    path.set_file_name(file_name);
+    Ok(path)
 }
 
 impl Drop for FSPController {
