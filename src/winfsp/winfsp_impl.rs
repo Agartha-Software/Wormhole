@@ -392,7 +392,7 @@ impl FileSystemContext for FSPController {
         entries.sort_by(|a, b| a.name.cmp(&b.name));
         let marker = match marker.inner_as_cstr() {
             Some(inner) => Some(inner.to_string().map_err(|_| WhPathError::NotValidUtf8)?),
-            None => None
+            None => None,
         };
 
         for entry in entries
