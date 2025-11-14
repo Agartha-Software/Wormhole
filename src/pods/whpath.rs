@@ -138,7 +138,8 @@ impl From<&Inode> for WhPath {
         let p: Utf8PathBuf = value.name.clone().into();
 
         if p.components()
-            .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".") || p.is_absolute()
+            .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".")
+            || p.is_absolute()
         {
             log::warn!("WhPath::From<&Inode> -> not normalized or absolute path: {p:?}")
         }
