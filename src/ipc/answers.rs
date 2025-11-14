@@ -106,6 +106,12 @@ pub enum ShowConfigAnswer {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ValidateConfigAnswer {
-    Success(String),
+    Success,
     PodNotFound,
+    MissingGlobal,
+    MissingLocal,
+    MissingBoth,
+    InvalidGlobal(String),
+    InvalidLocal(String),
+    InvalidBoth(String, String),
 }
