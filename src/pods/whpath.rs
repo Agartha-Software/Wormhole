@@ -13,6 +13,7 @@ use std::{
 };
 
 use crate::error::WhResult;
+use crate::pods::arbo::Inode;
 
 custom_error! {pub WhPathError
     NotRelative = "Path is not relative",
@@ -129,6 +130,15 @@ impl From<&Utf8Path> for WhPath {
     }
 }
 
+impl From<&Inode> for WhPath {
+    /// From inode is UNCHECKED as inodes names should already be correct
+    fn from(value: &Inode) -> Self {
+        Self {
+            inner: value.name.clone().into()
+        }
+    }
+}
+
 #[cfg(target_os = "windows")]
 impl TryFrom<&winfsp::U16CStr> for WhPath {
     type Error = WhPathError;
@@ -209,6 +219,7 @@ impl WhPath {
         }
     }
 
+    /// Allows for a easy path.typed_ref<T>() instead of a heavy rust type notation of AsRef
     pub fn typed_ref<T>(&self) -> &T
     where
         T: ?Sized,
