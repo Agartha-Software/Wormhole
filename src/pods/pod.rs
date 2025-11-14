@@ -531,6 +531,7 @@ impl Pod {
             .write_file(&WhPath::try_from(ARBO_FILE_FNAME).unwrap(), &arbo_bin, 0)
             .map_err(|io| PodStopError::ArboSavingFailed { source: io })?;
 
+        drop(fs_interface);
         *peers.write() = Vec::new(); // dropping PeerIPCs
         network_airport_handle.abort();
         new_peer_handle.abort();
