@@ -39,7 +39,7 @@ impl FsInterface {
         let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface.rename.construct_file_path")?;
         let mut parent_path = arbo.n_get_path_from_inode_id(parent)?;
 
-        parent_path.push(name);
+        parent_path.push(name.try_into()?);
         return Ok(parent_path);
     }
 

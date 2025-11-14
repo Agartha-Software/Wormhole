@@ -80,7 +80,7 @@ impl FsInterface {
                 Err(err) => return Err(MakeInodeError::WhError { source: err }),
             }
             let mut new_path = arbo.n_get_path_from_inode_id(parent_ino)?;
-            new_path.push(&name);
+            new_path.push(name.try_into().map_err(|e| WhError::from(e))?);
             new_path
         };
         let new_entry = match kind {

@@ -466,7 +466,7 @@ impl Arbo {
         };
 
         let mut parent_path = self.get_path_from_inode_id(inode.parent)?;
-        parent_path.push(&inode.name.clone());
+        parent_path.push(inode.into());
         Ok(parent_path)
     }
 
@@ -485,7 +485,7 @@ impl Arbo {
             .ok_or(WhError::InodeNotFound)?;
 
         let mut parent_path = self.n_get_path_from_inode_id(inode.parent)?;
-        parent_path.push(&inode.name.clone())?;
+        parent_path.push(inode.into());
         Ok(parent_path)
     }
 
