@@ -30,7 +30,7 @@ where
     };
 
     Ok(Some(
-        toml::to_string(&config.clone()).expect("Serialization should'nt be able to fail"),
+        toml::to_string(&config.clone()).expect("Serialization shouldn't be able to fail"),
     ))
 }
 

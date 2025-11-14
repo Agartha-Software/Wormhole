@@ -94,6 +94,7 @@ pub enum WriteConfigAnswer {
     PodNotFound,
     NotADirectory,
     WriteFailed(String),
+    CantOverwrite,
     ConfigBlock,
 }
 

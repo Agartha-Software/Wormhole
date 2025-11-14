@@ -3,7 +3,7 @@ use std::io;
 use interprocess::local_socket::tokio::Stream;
 
 use crate::{
-    cli::IdentifyNewPodArgs,
+    cli::WriteConfigArgs,
     ipc::{
         answers::WriteConfigAnswer,
         cli::connection::{recieve_answer, send_command},
@@ -11,10 +11,10 @@ use crate::{
     },
 };
 
-pub async fn write(args: IdentifyNewPodArgs, mut stream: Stream) -> io::Result<String> {
-    let pod = PodId::from(args);
+pub async fn write(args: WriteConfigArgs, mut stream: Stream) -> io::Result<String> {
+    let pod = PodId::from(args.group);
 
-    send_command(Command::WriteConfg(pod), &mut stream).await?;
+    send_command(Command::WriteConfg(pod, args.overwrite), &mut stream).await?;
 
     match recieve_answer::<WriteConfigAnswer>(&mut stream).await? {
         WriteConfigAnswer::Success => Ok("Configuration created successfully!".into()),
@@ -33,6 +33,12 @@ pub async fn write(args: IdentifyNewPodArgs, mut stream: Stream) -> io::Result<S
         WriteConfigAnswer::WriteFailed(err) => Err(io::Error::new(
             io::ErrorKind::Interrupted,
             format!("Failed to write the configuration: {err}"),
+        )),
+        WriteConfigAnswer::CantOverwrite => Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!(
+                "Couldn't write configuration files, at least one of them already exist...\n--overwrite to overwrite existing files"
+            ),
         )),
     }
 }

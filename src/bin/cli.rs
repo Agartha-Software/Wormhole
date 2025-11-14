@@ -38,7 +38,7 @@ async fn main() -> ExitCode {
 
     match command_network(cmd.command, stream).await {
         Ok(answer) => {
-            println!("{answer}");
+            println!("{}", answer);
             ExitCode::SUCCESS
         }
         Err(err) => {

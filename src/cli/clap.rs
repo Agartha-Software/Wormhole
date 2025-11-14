@@ -103,12 +103,6 @@ pub struct IdentifyNewPodGroup {
 }
 
 #[derive(Debug, Args, Clone)]
-pub struct IdentifyNewPodArgs {
-    #[clap(flatten)]
-    pub group: IdentifyNewPodGroup,
-}
-
-#[derive(Debug, Args, Clone)]
 pub struct IdentifyPodArgs {
     #[clap(flatten)]
     pub group: IdentifyPodGroup,

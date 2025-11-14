@@ -19,13 +19,23 @@ fn write_defaults(path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // Return true no error have been sent and the command can continue
-async fn write_local_config<Stream>(pod: &Pod, stream: &mut Stream) -> std::io::Result<bool>
+async fn write_local_config<Stream>(
+    pod: &Pod,
+    stream: &mut Stream,
+    overwrite: bool,
+) -> std::io::Result<bool>
 where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
 {
     if let Ok(config) = LocalConfig::read_lock(&pod.local_config, "Write local config command") {
         let mut local_path = pod.get_mountpoint().clone();
         local_path.push(".local_config.toml");
+
+        if !overwrite && PathBuf::from(local_path.to_string()).exists() {
+            send_answer(WriteConfigAnswer::CantOverwrite, stream).await?;
+            return Ok(false);
+        }
+
         if let Err(err) = config.write(local_path) {
             send_answer(WriteConfigAnswer::WriteFailed(err.to_string()), stream).await?;
             return Ok(false);
@@ -38,13 +48,23 @@ where
 }
 
 // Return true no error have been sent and the command can continue
-async fn write_global_config<Stream>(pod: &Pod, stream: &mut Stream) -> std::io::Result<bool>
+async fn write_global_config<Stream>(
+    pod: &Pod,
+    stream: &mut Stream,
+    overwrite: bool,
+) -> std::io::Result<bool>
 where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
 {
     if let Ok(config) = GlobalConfig::read_lock(&pod.global_config, "Write global config command") {
         let mut global_path = pod.get_mountpoint().clone();
         global_path.push(".global_config.toml");
+
+        if !overwrite && PathBuf::from(global_path.to_string()).exists() {
+            send_answer(WriteConfigAnswer::CantOverwrite, stream).await?;
+            return Ok(false);
+        }
+
         if let Err(err) = config.write(global_path) {
             send_answer(WriteConfigAnswer::WriteFailed(err.to_string()), stream).await?;
             return Ok(false);
@@ -58,6 +78,7 @@ where
 
 pub async fn write<Stream>(
     args: PodId,
+    overwrite: bool,
     pods: &mut HashMap<String, Pod>,
     stream: &mut Stream,
 ) -> std::io::Result<bool>
@@ -66,8 +87,8 @@ where
 {
     match find_pod(&args, pods) {
         Some((_, pod)) => {
-            if write_local_config(pod, stream).await? {
-                if write_global_config(pod, stream).await? {
+            if write_local_config(pod, stream, overwrite).await? {
+                if write_global_config(pod, stream, overwrite).await? {
                     send_answer(WriteConfigAnswer::Success, stream).await?;
                 }
             }
