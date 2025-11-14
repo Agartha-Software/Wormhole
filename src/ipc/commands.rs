@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::cli::{
-    IdentifyNewPodArgs, IdentifyNewPodGroup, IdentifyPodArgs, IdentifyPodGroup, Mode,
+    ConfigType, IdentifyNewPodArgs, IdentifyNewPodGroup, IdentifyPodArgs, IdentifyPodGroup, Mode,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -76,7 +76,7 @@ pub enum Command {
     Inspect(PodId),
     Tree(PodId),
     WriteConfg(PodId),
-    ShowConfig(PodId),
-    ValidateConfig(PodId),
+    ShowConfig(PodId, ConfigType),
+    ValidateConfig(PodId, ConfigType),
     Status,
 }

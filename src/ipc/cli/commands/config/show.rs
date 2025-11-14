@@ -3,7 +3,7 @@ use std::io;
 use interprocess::local_socket::tokio::Stream;
 
 use crate::{
-    cli::IdentifyPodArgs,
+    cli::IdentifyPodAndConfigArgs,
     ipc::{
         answers::ShowConfigAnswer,
         cli::connection::{recieve_answer, send_command},
@@ -11,10 +11,10 @@ use crate::{
     },
 };
 
-pub async fn show(args: IdentifyPodArgs, mut stream: Stream) -> io::Result<String> {
-    let pod = PodId::from(args);
+pub async fn show(args: IdentifyPodAndConfigArgs, mut stream: Stream) -> io::Result<String> {
+    let pod = PodId::from(args.group);
 
-    send_command(Command::ShowConfig(pod), &mut stream).await?;
+    send_command(Command::ShowConfig(pod, args.config_type), &mut stream).await?;
 
     match recieve_answer::<ShowConfigAnswer>(&mut stream).await? {
         ShowConfigAnswer::Success(mut local_str, mut global_str) => {

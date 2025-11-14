@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
+    cli::ConfigType,
     config::{types::Config, GlobalConfig, LocalConfig},
     ipc::{
         answers::ShowConfigAnswer,
@@ -12,6 +13,7 @@ use crate::{
 
 pub async fn show<Stream>(
     args: PodId,
+    config_type: ConfigType,
     pods: &mut HashMap<String, Pod>,
     stream: &mut Stream,
 ) -> std::io::Result<bool>

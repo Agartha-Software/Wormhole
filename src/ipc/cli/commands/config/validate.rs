@@ -3,7 +3,7 @@ use std::io;
 use interprocess::local_socket::tokio::Stream;
 
 use crate::{
-    cli::IdentifyPodArgs,
+    cli::{ConfigType, IdentifyPodAndConfigArgs},
     ipc::{
         answers::ValidateConfigAnswer,
         cli::connection::{recieve_answer, send_command},
@@ -11,12 +11,18 @@ use crate::{
     },
 };
 
-pub async fn validate(args: IdentifyPodArgs, mut stream: Stream) -> io::Result<String> {
-    let pod = PodId::from(args);
+pub async fn validate(args: IdentifyPodAndConfigArgs, mut stream: Stream) -> io::Result<String> {
+    let pod = PodId::from(args.group);
 
-    send_command(Command::ValidateConfig(pod), &mut stream).await?;
+    send_command(
+        Command::ValidateConfig(pod, args.config_type.clone()),
+        &mut stream,
+    )
+    .await?;
 
     match recieve_answer::<ValidateConfigAnswer>(&mut stream).await? {
+        ValidateConfigAnswer::Success if args.config_type == ConfigType::Local => Ok("The pod local configuration file is valid!".into()),
+        ValidateConfigAnswer::Success if args.config_type == ConfigType::Global => Ok("The pod global configuration file is valid!".into()),
         ValidateConfigAnswer::Success => Ok("The pod configuration files are valid!".into()),
         ValidateConfigAnswer::PodNotFound => Err(io::Error::new(
             io::ErrorKind::NotFound,

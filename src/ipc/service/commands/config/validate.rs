@@ -1,6 +1,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use crate::{
+    cli::ConfigType,
     config::{types::Config, GlobalConfig, LocalConfig},
     ipc::{
         answers::ValidateConfigAnswer,
@@ -12,6 +13,7 @@ use crate::{
 
 pub async fn validate<Stream>(
     args: PodId,
+    config_type: ConfigType,
     pods: &mut HashMap<String, Pod>,
     stream: &mut Stream,
 ) -> std::io::Result<bool>
@@ -28,27 +30,34 @@ where
             global_path.push(".global_config.toml");
             let global_pathbuf = PathBuf::from(global_path.to_string());
 
-            match (local_pathbuf.exists(), global_pathbuf.exists()) {
+            match (
+                local_pathbuf.exists() || !config_type.is_local(),
+                global_pathbuf.exists() || !config_type.is_global(),
+            ) {
                 (true, true) => (),
-                (true, false) => send_answer(ValidateConfigAnswer::MissingLocal, stream).await?,
-                (false, true) => send_answer(ValidateConfigAnswer::MissingGlobal, stream).await?,
+                (false, true) => send_answer(ValidateConfigAnswer::MissingLocal, stream).await?,
+                (true, false) => send_answer(ValidateConfigAnswer::MissingGlobal, stream).await?,
                 (false, false) => send_answer(ValidateConfigAnswer::MissingBoth, stream).await?,
             }
 
             match (
-                LocalConfig::read(local_path),
-                GlobalConfig::read(global_path),
+                LocalConfig::read(local_path)
+                    .err()
+                    .filter(|_| config_type.is_local()),
+                GlobalConfig::read(global_path)
+                    .err()
+                    .filter(|_| config_type.is_global()),
             ) {
-                (Ok(_), Ok(_)) => send_answer(ValidateConfigAnswer::Success, stream),
-                (Err(local_err), Ok(_)) => send_answer(
+                (None, None) => send_answer(ValidateConfigAnswer::Success, stream),
+                (Some(local_err), None) => send_answer(
                     ValidateConfigAnswer::InvalidLocal(local_err.to_string()),
                     stream,
                 ),
-                (Ok(_), Err(global_err)) => send_answer(
+                (None, Some(global_err)) => send_answer(
                     ValidateConfigAnswer::InvalidGlobal(global_err.to_string()),
                     stream,
                 ),
-                (Err(local_err), Err(global_err)) => send_answer(
+                (Some(local_err), Some(global_err)) => send_answer(
                     ValidateConfigAnswer::InvalidBoth(
                         local_err.to_string(),
                         global_err.to_string(),
