@@ -17,7 +17,7 @@ pub async fn validate(args: IdentifyPodArgs, mut stream: Stream) -> io::Result<S
     send_command(Command::ValidateConfig(pod), &mut stream).await?;
 
     match recieve_answer::<ValidateConfigAnswer>(&mut stream).await? {
-        ValidateConfigAnswer::Success => Ok("answer".into()),
+        ValidateConfigAnswer::Success => Ok("The pod configuration files are valid!".into()),
         ValidateConfigAnswer::PodNotFound => Err(io::Error::new(
             io::ErrorKind::NotFound,
             "The given pod couldn't be found.",

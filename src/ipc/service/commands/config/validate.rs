@@ -21,11 +21,11 @@ where
     match find_pod(&args, pods) {
         Some((_, pod)) => {
             let mut local_path = pod.get_mountpoint().clone();
-            local_path.push("local_config.toml");
+            local_path.push(".local_config.toml");
             let local_pathbuf = PathBuf::from(local_path.to_string());
 
             let mut global_path = pod.get_mountpoint().clone();
-            global_path.push("global_config.toml");
+            global_path.push(".global_config.toml");
             let global_pathbuf = PathBuf::from(global_path.to_string());
 
             match (local_pathbuf.exists(), global_pathbuf.exists()) {
