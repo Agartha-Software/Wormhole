@@ -318,6 +318,16 @@ impl FileSystemContext for FSPController {
         log::trace!("ok();");
     }
 
+    fn set_delete(
+        &self,
+        context: &Self::FileContext,
+        _file_name: &winfsp::U16CStr,
+        _delete_file: bool, // handled by winfsp
+    ) -> winfsp::Result<()> {
+        log::trace!("set_delete({:?});", context);
+        Ok(())
+    }
+
     fn flush(
         &self,
         _context: Option<&Self::FileContext>,
@@ -519,16 +529,6 @@ impl FileSystemContext for FSPController {
         self.get_file_info_internal(context, file_info)
             .inspect_err(|e| log::warn!("set_file_info::{e}"))?;
         log::debug!("ok();");
-        Ok(())
-    }
-
-    fn set_delete(
-        &self,
-        context: &Self::FileContext,
-        _file_name: &winfsp::U16CStr,
-        _delete_file: bool, // handled by winfsp
-    ) -> winfsp::Result<()> {
-        log::trace!("set_delete({:?});", context);
         Ok(())
     }
 
