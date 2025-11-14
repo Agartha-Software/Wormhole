@@ -46,7 +46,7 @@ impl Filesystem for FuseController {
             Ok(None) => {
                 reply.error(libc::EACCES);
             }
-            Err(e) => {
+            Err(_e) => {
                 reply.error(libc::ENOENT);
             }
         };

@@ -13,7 +13,7 @@ pub async fn inspect<Stream>(
 where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
 {
-    match find_pod(args, pods) {
+    match find_pod(&args, pods) {
         Some((name, pod)) => {
             send_answer(
                 InspectAnswer::Information(InspectInfo {

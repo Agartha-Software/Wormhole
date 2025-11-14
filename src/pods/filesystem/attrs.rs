@@ -147,7 +147,7 @@ impl FsInterface {
 
         meta.ctime = ctime.unwrap_or(SystemTime::now());
 
-        //crtime is ignored because crtime is macos only and should'nt be updated after file creation anyway
+        //crtime is ignored because crtime is macos only and shouldn't be updated after file creation anyway
         //
         // REVIEW- we could implement this code for a perfect macos 1 to 1, but I think allowing such a feature
         // on only one os is a very weird behavior
