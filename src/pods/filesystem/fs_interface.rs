@@ -4,13 +4,13 @@ use crate::pods::arbo::{Arbo, FsEntry, Inode, InodeId, Metadata, GLOBAL_CONFIG_I
 use crate::pods::disk_managers::DiskManager;
 use crate::pods::filesystem::attrs::AcknoledgeSetAttrError;
 use crate::pods::filesystem::permissions::has_execute_perm;
-use crate::pods::network::callbacks::Callback;
+use crate::pods::network::callbacks::Request;
 use crate::pods::network::network_interface::NetworkInterface;
+use crate::pods::network::pull_file::PullError;
 
 use futures::io;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::io::ErrorKind;
 use std::sync::Arc;
 
 use super::file_handle::FileHandleManager;
@@ -31,9 +31,9 @@ pub enum SimpleFileType {
     Directory,
 }
 
-impl Into<SimpleFileType> for &FsEntry {
-    fn into(self) -> SimpleFileType {
-        match self {
+impl From<&FsEntry> for SimpleFileType {
+    fn from(entry: &FsEntry) -> SimpleFileType {
+        match entry {
             FsEntry::File(_) => SimpleFileType::File,
             FsEntry::Directory(_) => SimpleFileType::Directory,
         }
@@ -65,7 +65,7 @@ impl FsInterface {
         self.disk.set_file_size(&path, meta.size as usize)?;
         self.network_interface
             .update_metadata(ino, meta)
-            .map_err(|err| std::io::Error::new(ErrorKind::Other, err))
+            .map_err(|err| std::io::Error::other(err))
     }
 
     // !SECTION
@@ -157,11 +157,12 @@ impl FsInterface {
             .and_then(|path| arbo.n_get_inode(id).map(|inode| (path, inode.meta.perm)))
         {
             Ok(value) => value,
-            Err(_) => {
+            Err(e) => {
                 return self
                     .network_interface
                     .callbacks
-                    .resolve(Callback::Pull(id), false)
+                    .resolve(Request::Pull(id), Err(e.into()))
+                    .map_err(|e| e.into_io())
             }
         };
         drop(arbo);
@@ -169,12 +170,16 @@ impl FsInterface {
         let status = self
             .disk
             .write_file(&path, &binary, 0)
-            .inspect_err(|e| log::error!("writing pulled file: {e}"));
-        let _ = self
-            .network_interface
-            .callbacks
-            .resolve(Callback::Pull(id), status.is_ok());
-        status?;
+            .inspect_err(|e| log::error!("writing pulled file: {e}"))
+            .map_err(|e| PullError::WriteError { io: Arc::new(e) });
+        let _ = self.network_interface.callbacks.resolve(
+            Request::Pull(id),
+            status
+                .as_ref()
+                .map_err(|e| e.clone())
+                .map(|_| Some(Arc::new(binary))),
+        );
+        status.map_err(io::Error::other)?;
         self.network_interface
             .add_inode_hosts(
                 id,
@@ -281,8 +286,7 @@ impl FsInterface {
         let arbo = Arbo::read_lock(&self.arbo, "send_arbo")?;
         let path = arbo.get_path_from_inode_id(inode)?;
         let mut size = arbo.get_inode(inode)?.meta.size as usize;
-        let mut data = Vec::new();
-        data.resize(size, 0);
+        let mut data = vec![0; size];
         size = self.disk.read_file(&path, 0, &mut data)?;
         data.resize(size, 0);
         self.network_interface.send_file(inode, data, to)
@@ -296,8 +300,7 @@ impl FsInterface {
         let size = arbo.n_get_inode(inode)?.meta.size;
         drop(arbo);
 
-        let mut buff = Vec::new();
-        buff.resize(size as usize, 0);
+        let mut buff = vec![0; size as usize];
         self.disk
             .read_file(&path, 0, &mut buff)
             .map_err(|_| crate::error::WhError::InodeNotFound)?;
