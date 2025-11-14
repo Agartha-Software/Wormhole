@@ -17,7 +17,13 @@ pub async fn show(args: IdentifyPodArgs, mut stream: Stream) -> io::Result<Strin
     send_command(Command::ShowConfig(pod), &mut stream).await?;
 
     match recieve_answer::<ShowConfigAnswer>(&mut stream).await? {
-        ShowConfigAnswer::Success(answer) => Ok(answer),
+        ShowConfigAnswer::Success(mut local_str, mut global_str) => {
+            local_str = local_str.replace("\n", "\n   ");
+            global_str = global_str.replace("\n", "\n   ");
+            Ok(format!(
+                "Local configuration:\n   {local_str}\nGlobal configuration:\n   {global_str}"
+            ))
+        }
         ShowConfigAnswer::PodNotFound => Err(io::Error::new(
             io::ErrorKind::NotFound,
             "The given pod couldn't be found.",

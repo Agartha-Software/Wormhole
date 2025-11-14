@@ -20,26 +20,22 @@ where
 {
     match find_pod(&args, pods) {
         Some((_, pod)) => {
-            let global_config = match GlobalConfig::read_lock(&pod.global_config, "show config") {
-                Ok(global_config) => global_config,
+            let local_config = match LocalConfig::read_lock(&pod.local_config, "show config") {
+                Ok(local_config) => local_config,
                 Err(_) => {
                     send_answer(ShowConfigAnswer::ConfigBlock, stream).await?;
                     return Ok(false);
                 }
             };
 
-            match LocalConfig::read_lock(&pod.local_config, "show config") {
-                Ok(local_config) => {
-                    let global_str = toml::to_string(&global_config.clone())
-                        .expect("Serialization should'nt be able to fail");
+            match GlobalConfig::read_lock(&pod.global_config, "show config") {
+                Ok(global_config) => {
                     let local_str = toml::to_string(&local_config.clone())
                         .expect("Serialization should'nt be able to fail");
+                    let global_str = toml::to_string(&global_config.clone())
+                        .expect("Serialization should'nt be able to fail");
 
-                    send_answer(
-                        ShowConfigAnswer::Success(format!("{global_str}\n{local_str}",)),
-                        stream,
-                    )
-                    .await?;
+                    send_answer(ShowConfigAnswer::Success(local_str, global_str), stream).await?;
                 }
                 Err(_) => {
                     send_answer(ShowConfigAnswer::ConfigBlock, stream).await?;
