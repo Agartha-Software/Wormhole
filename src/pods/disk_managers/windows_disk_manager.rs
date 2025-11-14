@@ -5,7 +5,10 @@ use std::{
 
 use tokio::io;
 
-use crate::{pods::whpath::WhPath, winfsp::winfsp_impl::aliased_path};
+use crate::{
+    pods::whpath::WhPath,
+    winfsp::winfsp_impl::{aliased_path, unaliased_path},
+};
 
 use super::{DiskManager, DiskSizeInfo};
 
@@ -34,11 +37,17 @@ impl WindowsDiskManager {
 impl Drop for WindowsDiskManager {
     fn drop(&mut self) {
         log::debug!("Drop of WindowsDiskManager");
-        let aliased = aliased_path(&self.mount_point).unwrap();
-
-        if std::fs::metadata(&aliased).is_ok() {
-            log::debug!("moving from {:?} to {:?} ...", &aliased, &self.mount_point);
-            let _ = std::fs::rename(aliased, &self.mount_point);
+        if let Ok(unaliased) = unaliased_path(&self.mount_point) {
+            log::debug!(
+                "moving from {:?} to {:?} ...",
+                &self.mount_point,
+                &unaliased
+            );
+            let _ = std::fs::rename(&self.mount_point, &unaliased).inspect_err(|e| {
+                log::error!("UNABLE TO RESET WORKING DIR TO IT'S ORIGINAL LOCATION: {e}")
+            });
+        } else {
+            log::error!("UNABLE TO RESET WORKING DIR TO IT'S ORIGINAL LOCATION (could not regenerate original path)")
         }
     }
 }
