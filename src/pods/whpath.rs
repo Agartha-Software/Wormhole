@@ -133,9 +133,17 @@ impl From<&Utf8Path> for WhPath {
 impl From<&Inode> for WhPath {
     /// From inode is UNCHECKED as inodes names should already be correct
     fn from(value: &Inode) -> Self {
-        Self {
-            inner: value.name.clone().into()
+        // REVIEW - Here to gauge if inodes of name ".."/"." are common or just in readdir
+        // Should be removed before merge
+        let p: Utf8PathBuf = value.name.clone().into();
+
+        if p.components()
+            .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".") || p.is_absolute()
+        {
+            log::warn!("WhPath::From<&Inode> -> not normalized or absolute path: {p:?}")
         }
+
+        Self { inner: p }
     }
 }
 
