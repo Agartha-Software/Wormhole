@@ -4,7 +4,7 @@
 
 use clap::Parser;
 use std::process::ExitCode;
-use wormhole::cli::Cli;
+use wormhole::cli::{print_err, Cli};
 use wormhole::ipc::cli::{command_network, start_local_socket};
 use wormhole::ipc::service::SOCKET_DEFAULT_NAME;
 
@@ -19,14 +19,17 @@ async fn main() -> ExitCode {
         //TODO: don't open stream on local cmd
         Ok(stream) => stream,
         Err(err) => {
-            eprintln!("Connection to the service failed: {}: {err}", err.kind());
+            print_err(format!(
+                "Connection to the service failed: {}: {err}",
+                err.kind()
+            ));
             if cmd.socket.as_str() == SOCKET_DEFAULT_NAME {
-                eprintln!("Check if the service is running.");
+                print_err("Check if the service is running.");
             } else {
-                eprintln!(
+                print_err(format!(
                     "Check if a service listening to '{}' is running.",
-                    cmd.socket
-                );
+                    cmd.socket,
+                ));
             }
             return ExitCode::FAILURE;
         }
@@ -39,7 +42,7 @@ async fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(err) => {
-            eprintln!("{err}");
+            print_err(err.to_string());
             ExitCode::FAILURE
         }
     }
