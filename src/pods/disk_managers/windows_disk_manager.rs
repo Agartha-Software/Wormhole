@@ -62,7 +62,6 @@ impl DiskManager for WindowsDiskManager {
     }
 
     fn write_file(&self, path: &WhPath, binary: &[u8], offset: usize) -> io::Result<usize> {
-        log::warn!("writing buffer {:?}", binary);
         std::fs::File::options()
             .write(true)
             .open(&self.mount_point.join(path))?
