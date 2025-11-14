@@ -258,19 +258,8 @@ impl WhPath {
         self.inner.iter()
     }
 
-    pub fn push(&mut self, path: impl AsRef<Utf8Path>) -> Result<(), WhPathError> {
-        let path = path.as_ref();
-
-        if path.is_absolute() {
-            return Err(WhPathError::InvalidOperation);
-        } else if path
-            .components()
-            .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".")
-        {
-            return Err(WhPathError::NotNormalized);
-        } else {
-            Ok(self.inner.push(path))
-        }
+    pub fn push(&mut self, path: WhPath) {
+        self.inner.push(path.inner);
     }
 
     pub fn join(&self, path: impl AsRef<Utf8Path>) -> Result<Self, WhPathError> {
