@@ -5,7 +5,7 @@ use std::{
 
 use tokio::io;
 
-use crate::{pods::whpath::WhPath, winfsp::winfsp_impl::aliased_path};
+use crate::{pods::{filesystem::permissions, whpath::WhPath}, winfsp::winfsp_impl::aliased_path};
 
 use super::{DiskManager, DiskSizeInfo};
 
@@ -46,6 +46,11 @@ impl Drop for WindowsDiskManager {
 /// always takes a WhPath and infers the real disk path
 impl DiskManager for WindowsDiskManager {
     fn new_file(&self, path: &WhPath, _permissions: u16) -> io::Result<()> {
+        log::debug!(
+            "windows disk manager creating file on path {} -> {:?}",
+            path,
+            self.mount_point.join(path)
+        );
         std::fs::File::create(&self.mount_point.join(path))?;
         Ok(())
     }
@@ -64,8 +69,8 @@ impl DiskManager for WindowsDiskManager {
             path,
             self.mount_point.join(path)
         );
-        return std::fs::File::open(&self.mount_point.join(path))?
-            .seek_write(binary, offset as u64);
+        std::fs::File::create(&self.mount_point.join(path))?
+            .seek_write(binary, offset as u64).inspect_err(|e| log::error!("write file error {e}"))
     }
 
     fn set_file_size(&self, path: &WhPath, size: usize) -> io::Result<()> {
