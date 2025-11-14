@@ -76,5 +76,7 @@ pub enum Command {
     Inspect(PodId),
     Tree(PodId),
     WriteConfg(PodId),
+    ShowConfig(PodId),
+    ValidateConfig(PodId),
     Status,
 }

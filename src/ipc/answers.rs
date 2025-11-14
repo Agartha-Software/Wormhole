@@ -96,3 +96,16 @@ pub enum WriteConfigAnswer {
     WriteFailed(String),
     ConfigBlock,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum ShowConfigAnswer {
+    Success(String),
+    PodNotFound,
+    ConfigBlock,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum ValidateConfigAnswer {
+    Success(String),
+    PodNotFound,
+}

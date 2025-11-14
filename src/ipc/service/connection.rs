@@ -4,7 +4,7 @@ use crate::{
     ipc::{
         commands::Command,
         service::commands::{
-            freeze, gethosts, inspect, new, remove, status, tree, unfreeze, write,
+            freeze, gethosts, inspect, new, remove, show, status, tree, unfreeze, validate, write,
         },
     },
     pods::pod::Pod,
@@ -76,5 +76,7 @@ where
         Command::Status => status(stream).await,
         Command::Tree(data) => tree(data, pods, stream).await,
         Command::WriteConfg(data) => write(data, pods, stream).await,
+        Command::ShowConfig(data) => show(data, pods, stream).await,
+        Command::ValidateConfig(data) => validate(data, pods, stream).await,
     }
 }
