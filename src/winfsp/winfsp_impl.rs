@@ -12,7 +12,7 @@ use winapi::shared::{
     ntstatus::STATUS_INVALID_DEVICE_REQUEST,
     winerror::{ERROR_ALREADY_EXISTS, ERROR_GEN_FAILURE},
 };
-use windows::Win32::Foundation::{NTSTATUS, STATUS_CANCELLED, STATUS_OBJECT_NAME_NOT_FOUND};
+use windows::Win32::Foundation::{NTSTATUS, STATUS_OBJECT_NAME_NOT_FOUND};
 use winfsp::{
     filesystem::{DirInfo, FileInfo, FileSecurity, FileSystemContext, WideNameInfo},
     host::{FileSystemHost, VolumeParams},
@@ -42,6 +42,7 @@ pub struct FSPController {
     // pub provider: Arc<RwLock<Provider<WindowsFolderHandle>>>,
 }
 
+#[allow(unused)] // unused: field `0` is used through ffi
 pub struct WinfspHost(FileSystemHost<FSPController>);
 
 impl std::fmt::Debug for WinfspHost {
