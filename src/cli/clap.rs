@@ -143,7 +143,7 @@ pub struct NewArgs {
     #[arg(long, short)]
     pub port: Option<u16>,
     /// Mount point to create the pod in. By default creates a mount point in the working directory with the name of the pod
-    #[arg(long = "mount", short, value_parser=parse_canonicalize)]
+    #[arg(long = "mount", short, value_parser=parse_canonicalize_non_existant)]
     pub mountpoint: Option<PathBuf>,
     /// Network to join
     #[arg(long, short)]
