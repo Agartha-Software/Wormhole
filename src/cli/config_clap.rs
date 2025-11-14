@@ -45,10 +45,10 @@ pub struct WriteConfigArgs {
 #[derive(Debug, Subcommand)]
 #[command(version, name = "config")]
 pub enum ConfigCommand {
-    /// Write a pod configuration (global and local) to file, using defaults if the pod doesn’t exist
+    /// Write a pod configuration (global and/or local) to file, using defaults if the pod doesn’t exist
     Write(WriteConfigArgs),
     /// Show the configuration of a given pod
     Show(IdentifyPodAndConfigArgs),
-    /// Validate that the configuration files of a pod have a valid format
+    /// Validate that the configuration files of a pod are valid
     Validate(IdentifyPodAndConfigArgs),
 }
