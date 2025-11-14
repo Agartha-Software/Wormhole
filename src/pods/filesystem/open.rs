@@ -3,6 +3,7 @@ use crate::pods::{
     filesystem::{
         diffs::{Sig, Signature},
         file_handle::{AccessMode, FileHandleManager, OpenFlags},
+        fs_interface::SimpleFileType,
         permissions::{has_execute_perm, has_read_perm, has_write_perm},
     },
 };
@@ -106,16 +107,17 @@ impl FsInterface {
             //TODO: Trunc ~~over the network~~ locally only
         }
 
-        let sig = if matches!(access, AccessMode::Write) {
-            let file = self.get_whole_file_sync(ino).ok();
-            file.as_ref().and_then(|f| {
-                Signature::new(f)
-                    .ok()
-                    .inspect(|sig| log::trace!("signing <<\n{:?}\n>> = {:?}", f, sig))
-            })
-        } else {
-            None
-        };
+        let sig =
+            if matches!(meta.kind, SimpleFileType::File) && matches!(access, AccessMode::Write) {
+                let file = self.get_whole_file_sync(ino).ok();
+                file.as_ref().and_then(|f| {
+                    Signature::new(f)
+                        .ok()
+                        .inspect(|sig| log::trace!("signing <<\n{:?}\n>> = {:?}", f, sig))
+                })
+            } else {
+                None
+            };
 
         // libc::O_CREAT is never set, The flag is set only with the create syscall
 

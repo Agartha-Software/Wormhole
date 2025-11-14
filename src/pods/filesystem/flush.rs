@@ -45,6 +45,10 @@ impl FsInterface {
         let arbo = self.arbo.read();
         let inode = arbo.n_get_inode(ino)?.clone();
         drop(arbo);
+        let tracking = match &inode.entry {
+            FsEntry::File(tracking) => tracking,
+            FsEntry::Directory(_) => return Err(WhError::InodeIsADirectory.into()),
+        };
         if let Some((signature, dirty)) =
             handle.and_then(|h| h.signature.as_mut().map(|s| (s, &mut h.dirty)))
         {
@@ -58,37 +62,35 @@ impl FsInterface {
             *signature = Signature::new(&file)?;
             *dirty = false;
 
-            if let FsEntry::File(tracking) = &inode.entry {
-                for peer in &peers {
-                    if tracking.contains(peer) {
-                        self.network_interface
-                            .to_network_message_tx
-                            .send(ToNetworkMessage::SpecificMessage(
-                                (
-                                    MessageContent::FileDelta(
-                                        ino,
-                                        inode.meta.clone(),
-                                        old_sig.clone(),
-                                        delta.clone(),
-                                    ),
-                                    None,
+            for peer in &peers {
+                if tracking.contains(peer) {
+                    self.network_interface
+                        .to_network_message_tx
+                        .send(ToNetworkMessage::SpecificMessage(
+                            (
+                                MessageContent::FileDelta(
+                                    ino,
+                                    inode.meta.clone(),
+                                    old_sig.clone(),
+                                    delta.clone(),
                                 ),
-                                vec![peer.clone()],
-                            ))
-                            .map_err(|e| WhError::WouldBlock {
-                                called_from: e.to_string(),
-                            })?;
-                    } else {
-                        self.network_interface
-                            .to_network_message_tx
-                            .send(ToNetworkMessage::SpecificMessage(
-                                (MessageContent::FileChanged(ino, inode.meta.clone()), None),
-                                vec![peer.clone()],
-                            ))
-                            .map_err(|e| WhError::WouldBlock {
-                                called_from: e.to_string(),
-                            })?;
-                    }
+                                None,
+                            ),
+                            vec![peer.clone()],
+                        ))
+                        .map_err(|e| WhError::WouldBlock {
+                            called_from: e.to_string(),
+                        })?;
+                } else {
+                    self.network_interface
+                        .to_network_message_tx
+                        .send(ToNetworkMessage::SpecificMessage(
+                            (MessageContent::FileChanged(ino, inode.meta.clone()), None),
+                            vec![peer.clone()],
+                        ))
+                        .map_err(|e| WhError::WouldBlock {
+                            called_from: e.to_string(),
+                        })?;
                 }
             }
         } else {

@@ -22,7 +22,7 @@ use winfsp_sys::{FspCleanupDelete, FILE_ACCESS_RIGHTS};
 use crate::pods::{
     arbo::{Arbo, InodeId},
     filesystem::{
-        file_handle::{AccessMode, OpenFlags},
+        file_handle::{AccessMode, FileHandleManager, OpenFlags},
         fs_interface::{FsInterface, SimpleFileType},
     },
     whpath::WhPath,
@@ -322,11 +322,18 @@ impl FileSystemContext for FSPController {
 
     fn flush(
         &self,
-        _context: Option<&Self::FileContext>,
-        _file_info: &mut winfsp::filesystem::FileInfo,
+        context: Option<&Self::FileContext>,
+        file_info: &mut winfsp::filesystem::FileInfo,
     ) -> winfsp::Result<()> {
+        if let Some(context) = context {
+            let mut file_handles =
+                FileHandleManager::write_lock(&self.fs_interface.file_handles, "release")?;
+
+            let handle = file_handles.handles.get_mut(&context.handle);
+            self.fs_interface.flush(context.ino, handle)?;
+            self.get_file_info_internal(context, file_info)?;
+        }
         Ok(())
-        //         Err(NTSTATUS(STATUS_INVALID_DEVICE_REQUEST).into())
     }
 
     fn get_file_info(
