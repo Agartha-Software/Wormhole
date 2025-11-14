@@ -75,7 +75,9 @@ where
         Command::Remove(request) => remove(request, pods, stream).await,
         Command::Status => status(stream).await,
         Command::Tree(pod_id) => tree(pod_id, pods, stream).await,
-        Command::WriteConfg(pod_id, overwrite) => write(pod_id, overwrite, pods, stream).await,
+        Command::WriteConfg(pod_id, overwrite, config_type) => {
+            write(pod_id, overwrite, config_type, pods, stream).await
+        }
         Command::ShowConfig(pod_id, config_type) => show(pod_id, config_type, pods, stream).await,
         Command::ValidateConfig(data, config_type) => {
             validate(data, config_type, pods, stream).await

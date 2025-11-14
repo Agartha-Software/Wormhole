@@ -26,7 +26,7 @@ pub struct IdentifyPodAndConfigArgs {
     #[clap(flatten)]
     pub group: IdentifyPodGroup,
     /// Which configuration file
-    #[arg(default_value = "both", name = "TYPE")]
+    #[arg(long, short, default_value = "both", long = "type", short = 't')]
     pub config_type: ConfigType,
 }
 
@@ -34,8 +34,11 @@ pub struct IdentifyPodAndConfigArgs {
 pub struct WriteConfigArgs {
     #[clap(flatten)]
     pub group: IdentifyNewPodGroup,
+    /// Which configuration file
+    #[arg(long, short, default_value = "both", long = "type", short = 't')]
+    pub config_type: ConfigType,
     /// Overwrite existing files
-    #[clap(long, short, action=ArgAction::SetFalse)]
+    #[arg(long, short, action=ArgAction::SetTrue)]
     pub overwrite: bool,
 }
 
