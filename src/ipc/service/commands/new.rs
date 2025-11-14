@@ -7,7 +7,6 @@ use crate::{
     pods::{
         arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
         pod::Pod,
-        whpath::JoinPath,
     },
 };
 
@@ -21,7 +20,7 @@ where
 {
     if pods
         .values()
-        .any(|p| p.get_mountpoint().as_str() == args.mountpoint.as_str())
+        .any(|p| *p.get_mountpoint() == args.mountpoint)
     {
         send_answer(NewAnswer::AlreadyExist, stream).await?;
         return Ok(false);
@@ -58,14 +57,7 @@ where
         }
     };
 
-    let answer = match Pod::new(
-        global_config,
-        local_config,
-        args.mountpoint.as_os_str().into(),
-        server,
-    )
-    .await
-    {
+    let answer = match Pod::new(global_config, local_config, &args.mountpoint, server).await {
         Ok(pod) => {
             pods.insert(args.name, pod);
             NewAnswer::Success(port)

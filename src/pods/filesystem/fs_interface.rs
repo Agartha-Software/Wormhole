@@ -1,16 +1,21 @@
 use crate::error::WhResult;
 use crate::network::message::Address;
-use crate::pods::arbo::{Arbo, FsEntry, Inode, InodeId, Metadata, GLOBAL_CONFIG_INO};
+use crate::pods::arbo::{
+    Arbo, FsEntry, Inode, InodeId, Metadata, GLOBAL_CONFIG_FNAME, GLOBAL_CONFIG_INO,
+};
 use crate::pods::disk_managers::DiskManager;
 use crate::pods::filesystem::attrs::AcknoledgeSetAttrError;
 use crate::pods::filesystem::permissions::has_execute_perm;
 use crate::pods::network::callbacks::Callback;
 use crate::pods::network::network_interface::NetworkInterface;
+use crate::pods::whpath::{osstr_to_str, WhPath};
 
 use futures::io;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use std::ffi::OsStr;
 use std::io::ErrorKind;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::file_handle::FileHandleManager;
@@ -74,15 +79,13 @@ impl FsInterface {
 
     /// get an entry
     /// return Ok(None) if no permissions to access entries
-    pub fn get_entry_from_name(&self, parent: InodeId, name: String) -> WhResult<Option<Inode>> {
+    pub fn get_entry_from_name(&self, parent: InodeId, name: &str) -> WhResult<Option<Inode>> {
         let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface.get_entry_from_name")?;
         let p_inode = arbo.n_get_inode(parent)?;
         if !has_execute_perm(p_inode.meta.perm) {
             return Ok(None);
         }
-        Ok(Some(
-            arbo.n_get_inode_child_by_name(p_inode, &name)?.clone(),
-        ))
+        Ok(Some(arbo.n_get_inode_child_by_name(p_inode, name)?.clone()))
     }
 
     pub fn get_inode_attributes(&self, ino: InodeId) -> io::Result<Metadata> {
@@ -254,10 +257,7 @@ impl FsInterface {
             .map(|inode| inode.meta.size)
             .ok();
         let global_config_path = if global_config_file_size.is_some() {
-            Some(
-                arbo.get_path_from_inode_id(GLOBAL_CONFIG_INO)?
-                    .set_relative(),
-            )
+            Some(WhPath::try_from(GLOBAL_CONFIG_FNAME).expect("GLOBAL_CONFIG_FNAME const error"))
         } else {
             None
         };

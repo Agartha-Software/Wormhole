@@ -186,8 +186,8 @@ impl NetworkInterface {
         &self,
         parent: InodeId,
         new_parent: InodeId,
-        name: &String,
-        new_name: &String,
+        name: &str,
+        new_name: &str,
         overwrite: bool,
     ) -> Result<(), RenameError> {
         let mut arbo = Arbo::n_write_lock(&self.arbo, "arbo_rename_file")?;
@@ -198,8 +198,8 @@ impl NetworkInterface {
             .send(ToNetworkMessage::BroadcastMessage(MessageContent::Rename(
                 parent,
                 new_parent,
-                name.clone(),
-                new_name.clone(),
+                name.to_owned(),
+                new_name.to_owned(),
                 overwrite,
             )))
             .expect("broadcast_rename_file: unable to update modification on the network thread");
@@ -210,8 +210,8 @@ impl NetworkInterface {
         &self,
         parent: InodeId,
         new_parent: InodeId,
-        name: &String,
-        new_name: &String,
+        name: &str,
+        new_name: &str,
     ) -> Result<(), RenameError> {
         let mut arbo = Arbo::n_write_lock(&self.arbo, "arbo_rename_file")?;
 
@@ -585,7 +585,7 @@ impl NetworkInterface {
                     }),
                 MessageContent::SetXAttr(ino, key, data) => fs_interface
                     .network_interface
-                    .recept_inode_xattr(ino, key, data)
+                    .recept_inode_xattr(ino, &key, data)
                     .or_else(|err| {
                         Err(std::io::Error::new(
                             std::io::ErrorKind::Other,
@@ -594,7 +594,7 @@ impl NetworkInterface {
                     }),
                 MessageContent::RemoveXAttr(ino, key) => fs_interface
                     .network_interface
-                    .recept_remove_inode_xattr(ino, key)
+                    .recept_remove_inode_xattr(ino, &key)
                     .or_else(|err| {
                         Err(std::io::Error::new(
                             std::io::ErrorKind::Other,

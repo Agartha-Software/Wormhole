@@ -34,7 +34,7 @@ impl FsInterface {
     pub fn create(
         &self,
         parent_ino: u64,
-        name: String,
+        name: &str,
         kind: SimpleFileType,
         flags: OpenFlags,
         access: AccessMode,
@@ -61,7 +61,7 @@ impl FsInterface {
     pub fn make_inode(
         &self,
         parent_ino: u64,
-        name: String,
+        name: &str,
         permissions: u16,
         kind: SimpleFileType,
     ) -> Result<Inode, MakeInodeError> {
@@ -80,7 +80,7 @@ impl FsInterface {
                 Err(err) => return Err(MakeInodeError::WhError { source: err }),
             }
             let mut new_path = arbo.n_get_path_from_inode_id(parent_ino)?;
-            new_path.push(&name);
+            new_path.push(name.try_into().map_err(|e| WhError::from(e))?);
             new_path
         };
         let new_entry = match kind {
@@ -88,7 +88,7 @@ impl FsInterface {
             SimpleFileType::Directory => FsEntry::Directory(Vec::new()),
         };
 
-        let special_ino = Arbo::get_special(&name, parent_ino);
+        let special_ino = Arbo::get_special(name, parent_ino);
         if special_ino.is_some() && kind != SimpleFileType::File {
             return Err(MakeInodeError::ProtectedNameIsFolder);
         }
@@ -96,13 +96,7 @@ impl FsInterface {
             .ok_or(())
             .or_else(|_| self.network_interface.n_get_next_inode())?;
 
-        let new_inode = Inode::new(
-            name.clone(),
-            parent_ino,
-            new_inode_id,
-            new_entry,
-            permissions,
-        );
+        let new_inode = Inode::new(name, parent_ino, new_inode_id, new_entry, permissions);
 
         match kind {
             SimpleFileType::File => self
