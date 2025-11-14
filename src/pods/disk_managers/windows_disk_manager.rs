@@ -64,6 +64,7 @@ impl DiskManager for WindowsDiskManager {
 
     fn set_file_size(&self, path: &WhPath, size: usize) -> io::Result<()> {
         std::fs::File::create(&self.mount_point.join(path))?.set_len(size as u64).inspect_err(|e| log::error!("WDM::set_file_size Error: {e}"))
+    }
 
     fn mv_file(&self, path: &WhPath, new_path: &WhPath) -> io::Result<()> {
         // let mut original_path = path.clone(); // NOTE - Would be better if rename was non mutable
