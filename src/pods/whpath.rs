@@ -2,6 +2,8 @@ use camino::{FromPathBufError, Iter, Utf8Path, Utf8PathBuf};
 use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use openat::AsPath;
+use serde::de::Visitor;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 #[cfg(target_os = "linux")]
 use std::ffi::CString;
 use std::fmt::{Debug, Display};
@@ -45,15 +47,24 @@ impl WhPathError {
                 io::ErrorKind::Other,
                 "Operation would compromise WhPath integrity",
             ),
-            WhPathError::InvalidName => {
-                io::Error::new(io::ErrorKind::Other, "Can't create a name from a multi-component path")
-            }
+            WhPathError::InvalidName => io::Error::new(
+                io::ErrorKind::Other,
+                "Can't create a name from a multi-component path",
+            ),
         }
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct WhPath {
     inner: Utf8PathBuf,
+}
+
+impl Into<String> for WhPath {
+    fn into(self) -> String {
+        self.inner.to_string()
+    }
 }
 
 impl PartialEq for WhPath {
@@ -196,14 +207,6 @@ impl<'a> AsPath for &'a WhPath {
     type Buffer = CString;
     fn to_path(self) -> Option<CString> {
         CString::new(self.inner.as_str().as_bytes()).ok()
-    }
-}
-
-impl Debug for WhPath {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("WhPath")
-            .field("inner", &self.inner)
-            .finish()
     }
 }
 
@@ -388,6 +391,7 @@ pub fn is_valid_for_name<T: AsRef<Path>>(p: T) -> Result<(), WhPathError> {
 
 // SECTION Name (name of the inodes)
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Name(WhPath);
 
 impl TryFrom<String> for Name {
