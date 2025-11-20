@@ -8,9 +8,9 @@ mod status;
 mod tree;
 mod unfreeze;
 
+pub use config::check::check;
+pub use config::save::save;
 pub use config::show::show;
-pub use config::validate::validate;
-pub use config::write::write;
 pub use gethosts::gethosts;
 pub use inspect::inspect;
 pub use new::new;

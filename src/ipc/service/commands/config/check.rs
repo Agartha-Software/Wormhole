@@ -4,14 +4,14 @@ use crate::{
     cli::ConfigType,
     config::{types::Config, GlobalConfig, LocalConfig},
     ipc::{
-        answers::ValidateConfigAnswer,
+        answers::CheckConfigAnswer,
         commands::PodId,
         service::{commands::find_pod, connection::send_answer},
     },
     pods::pod::Pod,
 };
 
-pub async fn validate<Stream>(
+pub async fn check<Stream>(
     args: PodId,
     config_type: ConfigType,
     pods: &mut HashMap<String, Pod>,
@@ -35,9 +35,9 @@ where
                 global_pathbuf.exists() || !config_type.is_global(),
             ) {
                 (true, true) => (),
-                (false, true) => send_answer(ValidateConfigAnswer::MissingLocal, stream).await?,
-                (true, false) => send_answer(ValidateConfigAnswer::MissingGlobal, stream).await?,
-                (false, false) => send_answer(ValidateConfigAnswer::MissingBoth, stream).await?,
+                (false, true) => send_answer(CheckConfigAnswer::MissingLocal, stream).await?,
+                (true, false) => send_answer(CheckConfigAnswer::MissingGlobal, stream).await?,
+                (false, false) => send_answer(CheckConfigAnswer::MissingBoth, stream).await?,
             }
 
             match (
@@ -48,26 +48,23 @@ where
                     .err()
                     .filter(|_| config_type.is_global()),
             ) {
-                (None, None) => send_answer(ValidateConfigAnswer::Success, stream),
+                (None, None) => send_answer(CheckConfigAnswer::Success, stream),
                 (Some(local_err), None) => send_answer(
-                    ValidateConfigAnswer::InvalidLocal(local_err.to_string()),
+                    CheckConfigAnswer::InvalidLocal(local_err.to_string()),
                     stream,
                 ),
                 (None, Some(global_err)) => send_answer(
-                    ValidateConfigAnswer::InvalidGlobal(global_err.to_string()),
+                    CheckConfigAnswer::InvalidGlobal(global_err.to_string()),
                     stream,
                 ),
                 (Some(local_err), Some(global_err)) => send_answer(
-                    ValidateConfigAnswer::InvalidBoth(
-                        local_err.to_string(),
-                        global_err.to_string(),
-                    ),
+                    CheckConfigAnswer::InvalidBoth(local_err.to_string(), global_err.to_string()),
                     stream,
                 ),
             }
             .await?;
         }
-        None => send_answer(ValidateConfigAnswer::PodNotFound, stream).await?,
+        None => send_answer(CheckConfigAnswer::PodNotFound, stream).await?,
     }
     Ok(false)
 }
