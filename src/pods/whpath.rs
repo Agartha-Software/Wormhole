@@ -2,7 +2,6 @@ use camino::{FromPathBufError, Iter, Utf8Path, Utf8PathBuf};
 use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use openat::AsPath;
-use std::borrow::Borrow;
 #[cfg(target_os = "linux")]
 use std::ffi::CString;
 use std::fmt::{Debug, Display};
@@ -15,7 +14,6 @@ use std::{
 
 use crate::error::WhResult;
 use crate::pods::arbo::Inode;
-use crate::pods::whpath;
 
 custom_error! {pub WhPathError
     NotRelative = "Path is not relative",
@@ -47,6 +45,9 @@ impl WhPathError {
                 io::ErrorKind::Other,
                 "Operation would compromise WhPath integrity",
             ),
+            WhPathError::InvalidName => {
+                io::Error::new(io::ErrorKind::Other, "Can't create a name from a multi-component path")
+            }
         }
     }
 }
