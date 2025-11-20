@@ -138,7 +138,8 @@ impl From<&Inode> for WhPath {
         let p: Utf8PathBuf = value.name.clone().into();
 
         if p.components()
-            .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".") || p.is_absolute()
+            .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".")
+            || p.is_absolute()
         {
             log::warn!("WhPath::From<&Inode> -> not normalized or absolute path: {p:?}")
         }
@@ -270,20 +271,9 @@ impl WhPath {
         self.inner.push(path.inner);
     }
 
-    pub fn join(&self, path: impl AsRef<Utf8Path>) -> Result<Self, WhPathError> {
-        let path = path.as_ref();
-
-        if path.is_absolute() {
-            return Err(WhPathError::InvalidOperation);
-        } else if path
-            .components()
-            .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".")
-        {
-            return Err(WhPathError::NotNormalized);
-        } else {
-            Ok(Self {
-                inner: self.inner.join(path),
-            })
+    pub fn join(&self, path: &WhPath) -> Self {
+        Self {
+            inner: self.inner.join(&path.inner),
         }
     }
 
