@@ -30,7 +30,7 @@ where
 pub async fn show<Stream>(
     args: PodId,
     config_type: ConfigType,
-    pods: &mut HashMap<String, Pod>,
+    pods: &HashMap<String, Pod>,
     stream: &mut Stream,
 ) -> std::io::Result<bool>
 where

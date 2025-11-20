@@ -14,7 +14,7 @@ use crate::{
 pub async fn check<Stream>(
     args: PodId,
     config_type: ConfigType,
-    pods: &mut HashMap<String, Pod>,
+    pods: &HashMap<String, Pod>,
     stream: &mut Stream,
 ) -> std::io::Result<bool>
 where

@@ -24,7 +24,7 @@ fn get_tree(pod: &Pod, path: Option<PathBuf>) -> TreeAnswer {
 
 pub async fn tree<Stream>(
     args: PodId,
-    pods: &mut HashMap<String, Pod>,
+    pods: &HashMap<String, Pod>,
     stream: &mut Stream,
 ) -> std::io::Result<bool>
 where
