@@ -65,21 +65,18 @@ pub fn parse_canonicalize_non_existant(path_str: &str) -> std::io::Result<PathBu
     if path.exists() {
         return canonicalize(path);
     }
-    match path.parent() {
-        Some(parent) => {
-            let name = path.file_name().ok_or(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Path doesn't exist", // If have a parent should have a children
-            ))?;
-            let mut canon = canonicalize(parent.to_path_buf())?;
-            canon.push(name);
-            Ok(canon)
-        }
-        None => Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "Path doesn't exist",
-        )),
-    }
+
+    let name = path.file_name().ok_or(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "Path doesn't exist",
+    ))?;
+
+    let mut parent = match path.parent() {
+        Some(parent) => canonicalize(parent.to_path_buf())?,
+        None => std::env::current_dir()?,
+    };
+    parent.push(name);
+    Ok(parent)
 }
 
 #[derive(Debug, Args, Clone)]
