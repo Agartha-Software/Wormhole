@@ -62,14 +62,8 @@ impl TryFrom<PathBuf> for WhPath {
     type Error = WhPathError;
 
     fn try_from(p: PathBuf) -> Result<Self, Self::Error> {
-        if p.is_absolute() {
-            return Err(Self::Error::NotRelative);
-        }
-        if p.components()
-            .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".")
-        {
-            return Err(Self::Error::NotNormalized);
-        }
+        is_valid_for_whpath(&p)?;
+
         Ok(Self {
             inner: Utf8PathBuf::try_from(p)?,
         })
@@ -120,14 +114,8 @@ impl TryFrom<Utf8PathBuf> for WhPath {
     type Error = WhPathError;
 
     fn try_from(p: Utf8PathBuf) -> Result<Self, Self::Error> {
-        if p.is_absolute() {
-            return Err(Self::Error::NotRelative);
-        }
-        if p.components()
-            .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".")
-        {
-            return Err(Self::Error::NotNormalized);
-        }
+        is_valid_for_whpath(&p)?;
+
         Ok(Self { inner: p })
     }
 }
@@ -136,14 +124,8 @@ impl TryFrom<&Utf8Path> for WhPath {
     type Error = WhPathError;
 
     fn try_from(p: &Utf8Path) -> Result<Self, Self::Error> {
-        if p.is_absolute() {
-            return Err(Self::Error::NotRelative);
-        }
-        if p.components()
-            .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".")
-        {
-            return Err(Self::Error::NotNormalized);
-        }
+        is_valid_for_whpath(&p)?;
+
         Ok(Self { inner: p.into() })
     }
 }
@@ -155,10 +137,7 @@ impl From<&Inode> for WhPath {
         // Should be removed before merge
         let p: Utf8PathBuf = value.name.clone().into();
 
-        if p.components()
-            .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".")
-            || p.is_absolute()
-        {
+        if is_valid_for_whpath(&p).is_err() {
             log::warn!("WhPath::From<&Inode> -> not normalized or absolute path: {p:?}")
         }
 
@@ -382,4 +361,18 @@ pub fn osstring_to_string(osstr: OsString) -> WhResult<String> {
 
 pub fn osstr_to_str(osstr: &OsStr) -> WhResult<&str> {
     osstr.to_str().ok_or(WhPathError::NotValidUtf8.into())
+}
+
+pub fn is_valid_for_whpath<T: AsRef<Path>>(p: T) -> Result<(), WhPathError> {
+    let p = p.as_ref();
+
+    if p.is_absolute() {
+        return Err(WhPathError::NotRelative);
+    }
+    if p.components()
+        .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".")
+    {
+        return Err(WhPathError::NotNormalized);
+    }
+    Ok(())
 }
