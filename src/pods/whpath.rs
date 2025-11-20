@@ -2,6 +2,7 @@ use camino::{FromPathBufError, Iter, Utf8Path, Utf8PathBuf};
 use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use openat::AsPath;
+use std::borrow::Borrow;
 #[cfg(target_os = "linux")]
 use std::ffi::CString;
 use std::fmt::{Debug, Display};
@@ -434,5 +435,11 @@ impl TryFrom<OsString> for Name {
         is_valid_for_name(&p)?;
 
         Ok(Self(p.try_into()?))
+    }
+}
+
+impl AsRef<WhPath> for Name {
+    fn as_ref(&self) -> &WhPath {
+        &self.0
     }
 }
