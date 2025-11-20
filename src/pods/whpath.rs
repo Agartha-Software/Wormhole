@@ -14,12 +14,14 @@ use std::{
 
 use crate::error::WhResult;
 use crate::pods::arbo::Inode;
+use crate::pods::whpath;
 
 custom_error! {pub WhPathError
     NotRelative = "Path is not relative",
     NotValidUtf8 = "Path is not valid UTF-8",
     NotNormalized = "Path is not normal",
     InvalidOperation = "Operation would compromise WhPath integrity",
+    InvalidName = "Can't create a name from a multi-component path",
 }
 
 impl From<FromPathBufError> for WhPathError {
@@ -363,6 +365,9 @@ pub fn osstr_to_str(osstr: &OsStr) -> WhResult<&str> {
     osstr.to_str().ok_or(WhPathError::NotValidUtf8.into())
 }
 
+/// Checks for:
+/// - Path is NOT absolute
+/// - Path is normalized
 pub fn is_valid_for_whpath<T: AsRef<Path>>(p: T) -> Result<(), WhPathError> {
     let p = p.as_ref();
 
@@ -375,4 +380,59 @@ pub fn is_valid_for_whpath<T: AsRef<Path>>(p: T) -> Result<(), WhPathError> {
         return Err(WhPathError::NotNormalized);
     }
     Ok(())
+}
+
+/// Checks that the path is only one component
+/// Does NOT check that the path is a valid `WhPath`. For that use `is_valid_for_whpath`
+pub fn is_valid_for_name<T: AsRef<Path>>(p: T) -> Result<(), WhPathError> {
+    let p = p.as_ref();
+
+    if p.components().count() > 1 {
+        return Err(WhPathError::InvalidName);
+    }
+    Ok(())
+}
+
+// SECTION Name (name of the inodes)
+
+pub struct Name(WhPath);
+
+impl TryFrom<String> for Name {
+    type Error = WhPathError;
+
+    fn try_from(p: String) -> Result<Self, Self::Error> {
+        is_valid_for_name(&p)?;
+
+        Ok(Self(p.try_into()?))
+    }
+}
+
+impl TryFrom<&str> for Name {
+    type Error = WhPathError;
+
+    fn try_from(p: &str) -> Result<Self, Self::Error> {
+        is_valid_for_name(p)?;
+
+        Ok(Self(p.try_into()?))
+    }
+}
+
+impl TryFrom<&OsStr> for Name {
+    type Error = WhPathError;
+
+    fn try_from(p: &OsStr) -> Result<Self, Self::Error> {
+        is_valid_for_name(&p)?;
+
+        Ok(Self(p.try_into()?))
+    }
+}
+
+impl TryFrom<OsString> for Name {
+    type Error = WhPathError;
+
+    fn try_from(p: OsString) -> Result<Self, Self::Error> {
+        is_valid_for_name(&p)?;
+
+        Ok(Self(p.try_into()?))
+    }
 }
