@@ -9,7 +9,7 @@ mod tree;
 mod unfreeze;
 
 pub use config::check::check;
-pub use config::save::save;
+pub use config::generate::generate;
 pub use config::show::show;
 pub use freeze::freeze;
 pub use gethosts::gethosts;

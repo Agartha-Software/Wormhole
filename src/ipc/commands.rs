@@ -67,7 +67,7 @@ pub enum Command {
     GetHosts(GetHostsRequest),
     Inspect(PodId),
     Tree(PodId),
-    SaveConfig(PodId, bool, ConfigType),
+    GenerateConfig(PodId, bool, ConfigType),
     ShowConfig(PodId, ConfigType),
     CheckConfig(PodId, ConfigType),
     Status,

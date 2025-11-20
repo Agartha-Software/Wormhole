@@ -89,7 +89,7 @@ pub enum TreeAnswer {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum SaveConfigAnswer {
+pub enum GenerateConfigAnswer {
     Success,
     SuccessDefault,
     PodNotFound,

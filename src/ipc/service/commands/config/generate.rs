@@ -5,24 +5,26 @@ use crate::cli::ConfigType;
 use crate::config::types::Config;
 use crate::config::{GlobalConfig, LocalConfig};
 use crate::ipc::service::commands::find_pod;
-use crate::ipc::{answers::SaveConfigAnswer, commands::PodId, service::connection::send_answer};
+use crate::ipc::{
+    answers::GenerateConfigAnswer, commands::PodId, service::connection::send_answer,
+};
 use crate::pods::pod::Pod;
 
 fn write_defaults(
     path: PathBuf,
     config_type: ConfigType,
     overwrite: bool,
-) -> Result<(), SaveConfigAnswer> {
+) -> Result<(), GenerateConfigAnswer> {
     if config_type.is_local() {
         let mut local_path = path.clone();
         local_path.push(".local_config.toml");
 
         if !overwrite && local_path.exists() {
-            return Err(SaveConfigAnswer::CantOverwrite(ConfigType::Local));
+            return Err(GenerateConfigAnswer::CantOverwrite(ConfigType::Local));
         }
         LocalConfig::default()
             .write(local_path)
-            .map_err(|err| SaveConfigAnswer::WriteFailed(err.to_string(), ConfigType::Local))?;
+            .map_err(|err| GenerateConfigAnswer::WriteFailed(err.to_string(), ConfigType::Local))?;
     }
 
     if config_type.is_global() {
@@ -30,11 +32,11 @@ fn write_defaults(
         global_path.push(".global_config.toml");
 
         if !overwrite && global_path.exists() {
-            return Err(SaveConfigAnswer::CantOverwrite(ConfigType::Global));
+            return Err(GenerateConfigAnswer::CantOverwrite(ConfigType::Global));
         }
-        GlobalConfig::default()
-            .write(global_path)
-            .map_err(|err| SaveConfigAnswer::WriteFailed(err.to_string(), ConfigType::Global))?;
+        GlobalConfig::default().write(global_path).map_err(|err| {
+            GenerateConfigAnswer::WriteFailed(err.to_string(), ConfigType::Global)
+        })?;
     }
     Ok(())
 }
@@ -53,20 +55,24 @@ where
         local_path.push(".local_config.toml");
 
         if !overwrite && PathBuf::from(local_path.to_string()).exists() {
-            send_answer(SaveConfigAnswer::CantOverwrite(ConfigType::Local), stream).await?;
+            send_answer(
+                GenerateConfigAnswer::CantOverwrite(ConfigType::Local),
+                stream,
+            )
+            .await?;
             return Ok(false);
         }
 
         if let Err(err) = config.write(local_path) {
             send_answer(
-                SaveConfigAnswer::WriteFailed(err.to_string(), ConfigType::Local),
+                GenerateConfigAnswer::WriteFailed(err.to_string(), ConfigType::Local),
                 stream,
             )
             .await?;
             return Ok(false);
         };
     } else {
-        send_answer(SaveConfigAnswer::ConfigBlock, stream).await?;
+        send_answer(GenerateConfigAnswer::ConfigBlock, stream).await?;
         return Ok(false);
     };
     Ok(true)
@@ -86,26 +92,30 @@ where
         global_path.push(".global_config.toml");
 
         if !overwrite && PathBuf::from(global_path.to_string()).exists() {
-            send_answer(SaveConfigAnswer::CantOverwrite(ConfigType::Global), stream).await?;
+            send_answer(
+                GenerateConfigAnswer::CantOverwrite(ConfigType::Global),
+                stream,
+            )
+            .await?;
             return Ok(false);
         }
 
         if let Err(err) = config.write(global_path) {
             send_answer(
-                SaveConfigAnswer::WriteFailed(err.to_string(), ConfigType::Global),
+                GenerateConfigAnswer::WriteFailed(err.to_string(), ConfigType::Global),
                 stream,
             )
             .await?;
             return Ok(false);
         };
     } else {
-        send_answer(SaveConfigAnswer::ConfigBlock, stream).await?;
+        send_answer(GenerateConfigAnswer::ConfigBlock, stream).await?;
         return Ok(false);
     };
     Ok(true)
 }
 
-pub async fn save<Stream>(
+pub async fn generate<Stream>(
     args: PodId,
     overwrite: bool,
     config_type: ConfigType,
@@ -119,33 +129,33 @@ where
         Some((_, pod)) => match config_type {
             ConfigType::Local => {
                 if write_local_config(pod, stream, overwrite).await? {
-                    send_answer(SaveConfigAnswer::Success, stream).await?;
+                    send_answer(GenerateConfigAnswer::Success, stream).await?;
                 }
             }
             ConfigType::Global => {
                 if write_global_config(pod, stream, overwrite).await? {
-                    send_answer(SaveConfigAnswer::Success, stream).await?;
+                    send_answer(GenerateConfigAnswer::Success, stream).await?;
                 }
             }
             ConfigType::Both => {
                 if write_local_config(pod, stream, overwrite).await? {
                     if write_global_config(pod, stream, overwrite).await? {
-                        send_answer(SaveConfigAnswer::Success, stream).await?;
+                        send_answer(GenerateConfigAnswer::Success, stream).await?;
                     }
                 }
             }
         },
         None => match args {
-            PodId::Name(_) => send_answer(SaveConfigAnswer::PodNotFound, stream).await?,
+            PodId::Name(_) => send_answer(GenerateConfigAnswer::PodNotFound, stream).await?,
             PodId::Path(path) => {
                 if path.exists() {
                     if !path.is_dir() {
-                        send_answer(SaveConfigAnswer::NotADirectory, stream).await?;
+                        send_answer(GenerateConfigAnswer::NotADirectory, stream).await?;
                         return Ok(false);
                     }
                 } else if let Err(err) = std::fs::create_dir(&path) {
                     send_answer(
-                        SaveConfigAnswer::WriteFailed(err.to_string(), ConfigType::Both),
+                        GenerateConfigAnswer::WriteFailed(err.to_string(), ConfigType::Both),
                         stream,
                     )
                     .await?;
@@ -153,7 +163,7 @@ where
                 }
 
                 match write_defaults(path, config_type, overwrite) {
-                    Ok(()) => send_answer(SaveConfigAnswer::SuccessDefault, stream).await?,
+                    Ok(()) => send_answer(GenerateConfigAnswer::SuccessDefault, stream).await?,
                     Err(err) => send_answer(err, stream).await?,
                 }
             }

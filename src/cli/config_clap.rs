@@ -31,13 +31,13 @@ pub struct IdentifyPodAndConfigArgs {
 }
 
 #[derive(Debug, Args, Clone)]
-pub struct SaveConfigArgs {
+pub struct GenerateConfigArgs {
     #[clap(flatten)]
     pub group: IdentifyNewPodGroup,
     /// Which configuration file
     #[arg(long, short, default_value = "both", long = "type", short = 't')]
     pub config_type: ConfigType,
-    /// Overwrite existing files
+    /// Overwrite files if they already exist
     #[arg(long, short, action=ArgAction::SetTrue)]
     pub force: bool,
 }
@@ -45,10 +45,10 @@ pub struct SaveConfigArgs {
 #[derive(Debug, Subcommand)]
 #[command(version, name = "config")]
 pub enum ConfigCommand {
-    /// Write a pod configuration (global and/or local) to file, using defaults if the pod doesn’t exist
-    Save(SaveConfigArgs),
+    /// Generate a pod configuration (global and/or local) to file, using defaults if the pod doesn’t exist
+    Generate(GenerateConfigArgs),
     /// Show the configuration of a given pod
     Show(IdentifyPodAndConfigArgs),
-    /// Validate that the configuration files of a pod are valid
+    /// Check the configuration files of a pod to be valid
     Check(IdentifyPodAndConfigArgs),
 }
