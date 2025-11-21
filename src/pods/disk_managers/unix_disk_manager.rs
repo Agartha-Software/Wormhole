@@ -53,7 +53,7 @@ impl UnixDiskManager {
 
 /// always takes a WhPath and infers the real disk path
 impl DiskManager for UnixDiskManager {
-    fn stop(self) -> io::Result<()> {
+    fn stop(&self) -> io::Result<()> {
         Ok(())
     }
 

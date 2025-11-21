@@ -37,14 +37,10 @@ impl WindowsDiskManager {
 
 /// always takes a WhPath and infers the real disk path
 impl DiskManager for WindowsDiskManager {
-    fn stop(self) -> io::Result<()> {
+    fn stop(&self) -> io::Result<()> {
         log::debug!("Stop of WindowsDiskManager");
-        let Self {
-            mount_point,
-            original_location,
-        } = self;
 
-        std::fs::rename(&mount_point, &original_location)
+        std::fs::rename(&self.mount_point, &self.original_location)
     }
 
     fn new_file(&self, path: &WhPath, _permissions: u16) -> io::Result<()> {

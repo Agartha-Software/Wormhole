@@ -76,7 +76,7 @@ impl DummyDiskManager {
 }
 
 impl DiskManager for DummyDiskManager {
-    fn stop(self) -> io::Result<()> {
+    fn stop(&self) -> io::Result<()> {
         Ok(())
     }
 
