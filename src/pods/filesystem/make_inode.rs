@@ -65,6 +65,21 @@ impl FsInterface {
         permissions: u16,
         kind: SimpleFileType,
     ) -> Result<Inode, MakeInodeError> {
+        let new_entry = match kind {
+            SimpleFileType::File => FsEntry::File(vec![self.network_interface.hostname()?.clone()]),
+            SimpleFileType::Directory => FsEntry::Directory(Vec::new()),
+        };
+
+        let special_ino = Arbo::get_special(name, parent_ino);
+        if special_ino.is_some() && kind != SimpleFileType::File {
+            return Err(MakeInodeError::ProtectedNameIsFolder);
+        }
+        let new_inode_id = special_ino
+            .ok_or(())
+            .or_else(|_| self.network_interface.n_get_next_inode())?;
+
+        let new_inode = Inode::new(name, parent_ino, new_inode_id, new_entry, permissions);
+
         let new_path = {
             let arbo = Arbo::n_read_lock(&self.arbo, "make inode")?;
 
@@ -80,23 +95,9 @@ impl FsInterface {
                 Err(err) => return Err(MakeInodeError::WhError { source: err }),
             }
             let mut new_path = arbo.n_get_path_from_inode_id(parent_ino)?;
-            new_path.push(name.try_into().map_err(|e| WhError::from(e))?);
+            new_path.push((&new_inode).into());
             new_path
         };
-        let new_entry = match kind {
-            SimpleFileType::File => FsEntry::File(vec![self.network_interface.hostname()?.clone()]),
-            SimpleFileType::Directory => FsEntry::Directory(Vec::new()),
-        };
-
-        let special_ino = Arbo::get_special(name, parent_ino);
-        if special_ino.is_some() && kind != SimpleFileType::File {
-            return Err(MakeInodeError::ProtectedNameIsFolder);
-        }
-        let new_inode_id = special_ino
-            .ok_or(())
-            .or_else(|_| self.network_interface.n_get_next_inode())?;
-
-        let new_inode = Inode::new(name, parent_ino, new_inode_id, new_entry, permissions);
 
         match kind {
             SimpleFileType::File => self
