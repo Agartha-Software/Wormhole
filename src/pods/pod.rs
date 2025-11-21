@@ -157,6 +157,9 @@ custom_error! {pub PodStopError
     PodNotRunning = "No pod with this name was found running.",
     FileNotReadable{file: InodeId, reason: String} = "Could not read file from disk: ({file}) {reason}",
     FileNotSent{file: InodeId} = "No pod was able to receive this file before stopping: ({file})",
+    #[cfg(target_os = "linux")]
+    DiskManagerStopFailed{e: io::Error} = "Unable to stop the disk manager properly. Should not be an error on your platform {e}",
+    #[cfg(target_os = "windows")]
     DiskManagerStopFailed{e: io::Error} = "Unable to stop the disk manager properly. Your files are still on the system folder: ('.'mount_path). {e}",
 }
 
