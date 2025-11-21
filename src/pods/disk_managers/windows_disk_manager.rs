@@ -6,8 +6,7 @@ use std::{
 use tokio::io;
 
 use crate::{
-    pods::whpath::WhPath,
-    winfsp::winfsp_impl::{aliased_path, unaliased_path},
+    pods::whpath::WhPath, winfsp::winfsp_impl::aliased_path,
 };
 
 use super::{DiskManager, DiskSizeInfo};
@@ -36,18 +35,18 @@ impl WindowsDiskManager {
     }
 }
 
-impl Drop for WindowsDiskManager {
-    fn drop(&mut self) {
-        log::debug!("Drop of WindowsDiskManager");
-
-        let _ = std::fs::rename(&self.mount_point, &self.original_location).inspect_err(|e| {
-            log::error!("UNABLE TO RESET WORKING DIR TO IT'S ORIGINAL LOCATION: {e}")
-        });
-    }
-}
-
 /// always takes a WhPath and infers the real disk path
 impl DiskManager for WindowsDiskManager {
+    fn stop(self) -> io::Result<()> {
+        log::debug!("Stop of WindowsDiskManager");
+        let Self {
+            mount_point,
+            original_location,
+        } = self;
+
+        std::fs::rename(&mount_point, &original_location)
+    }
+
     fn new_file(&self, path: &WhPath, _permissions: u16) -> io::Result<()> {
         std::fs::File::create(&self.mount_point.join(path))
             .inspect_err(|e| log::error!("WDM::new_file Error: {e}"))?;

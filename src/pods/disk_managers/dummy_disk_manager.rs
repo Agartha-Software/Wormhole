@@ -76,6 +76,10 @@ impl DummyDiskManager {
 }
 
 impl DiskManager for DummyDiskManager {
+    fn stop(self) -> io::Result<()> {
+        Ok(())
+    }
+
     fn new_file(&self, path: &Path, _permissions: u16) -> io::Result<()> {
         let f_path = path.parent().expect("no parent");
         let mut lock = self.files.write().expect("VirtDisk::new_file rwLock");
