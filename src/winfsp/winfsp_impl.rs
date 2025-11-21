@@ -9,6 +9,7 @@ use std::{
 
 use camino::Utf8PathBuf;
 use custom_error::custom_error;
+use futures::io;
 use nt_time::FileTime;
 use ntapi::ntioapi::FILE_DIRECTORY_FILE;
 use winapi::shared::{
@@ -112,15 +113,15 @@ pub fn mount_fsp(
     };
     log::debug!("creating host...");
     let mut host = FileSystemHost::<FSPController>::new(volume_params, wormhole_context)
-        .map_err(|_| std::io::Error::new(ErrorKind::Other, "oh no!"))?;
+        .map_err(|_| std::io::Error::new(ErrorKind::Other, "WinFSP FileSystemHost::new error"))?;
     log::debug!("created host...");
 
     let path = path.to_string_lossy().to_string().replace("\\", "/");
     log::debug!("mounting host @ {:?} ...", &path);
-    host.mount(&path)?;
+    host.mount(&path).map_err(|_| io::Error::new(io::ErrorKind::Other, "WinFSP mount error"))?;
 
     log::debug!("mounted host...");
-    host.start_with_threads(1)?;
+    host.start_with_threads(1).map_err(|_| io::Error::new(io::ErrorKind::Other, "WinFSP start_with_threads error"))?;
     log::debug!("started host...");
     Ok(WinfspHost(host))
 }
