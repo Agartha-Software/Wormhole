@@ -62,14 +62,8 @@ impl TryFrom<PathBuf> for WhPath {
     type Error = WhPathError;
 
     fn try_from(p: PathBuf) -> Result<Self, Self::Error> {
-        if p.is_absolute() {
-            return Err(Self::Error::NotRelative);
-        }
-        if p.components()
-            .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".")
-        {
-            return Err(Self::Error::NotNormalized);
-        }
+        is_valid_for_whpath(p)?;
+
         Ok(Self {
             inner: Utf8PathBuf::try_from(p)?,
         })
@@ -131,18 +125,9 @@ impl From<&Utf8Path> for WhPath {
 }
 
 impl From<&Inode> for WhPath {
-    /// From inode is UNCHECKED as inodes names should already be correct
+    /// From Inode is UNCHECKED as inodes names should already be correct
     fn from(value: &Inode) -> Self {
-        // REVIEW - Here to gauge if inodes of name ".."/"." are common or just in readdir
-        // Should be removed before merge
         let p: Utf8PathBuf = value.name.clone().into();
-
-        if p.components()
-            .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".")
-            || p.is_absolute()
-        {
-            log::warn!("WhPath::From<&Inode> -> not normalized or absolute path: {p:?}")
-        }
 
         Self { inner: p }
     }
@@ -156,30 +141,6 @@ impl TryFrom<&winfsp::U16CStr> for WhPath {
         Self::try_from(value.to_string().map_err(|_| WhPathError::NotValidUtf8)?)
     }
 }
-
-// impl AsRef<Path> for WhPath {
-//     fn as_ref(&self) -> &Path {
-//         self.inner.as_std_path()
-//     }
-// }
-
-// impl AsRef<str> for WhPath {
-//     fn as_ref(&self) -> &str {
-//         self.inner.as_str()
-//     }
-// }
-
-// impl AsRef<OsStr> for WhPath {
-//     fn as_ref(&self) -> &OsStr {
-//         self.inner.as_os_str()
-//     }
-// }
-
-// impl AsRef<Utf8Path> for WhPath {
-//     fn as_ref(&self) -> &Utf8Path {
-//         &self.inner
-//     }
-// }
 
 impl<T> AsRef<T> for WhPath
 where
@@ -285,7 +246,7 @@ impl WhPath {
     }
 }
 
-/*
+/* NOTE - removed as we don't normalize paths here, only check for it. But could still be useful
 
 /// Normalize a path without accessing the filesystem
 ///
@@ -320,40 +281,6 @@ pub fn normalize_path(path: impl AsRef<Path>) -> Result<PathBuf, WhPathError> {
     }
     Ok(ret)
 }
-
-/// Normalize a path without accessing the filesystem
-///
-/// Adapted from:
-///
-/// https://github.com/rust-lang/cargo/blob/fede83ccf973457de319ba6fa0e36ead454d2e20/src/cargo/util/paths.rs#L61
-pub fn normalize_utf8path(path: impl AsRef<Utf8Path>) -> Result<Utf8PathBuf, WhPathError> {
-    let mut components = path.as_ref().components().peekable();
-    let mut ret = if let Some(c @ Utf8Component::Prefix(..)) = components.peek().cloned() {
-        components.next();
-        Utf8PathBuf::from(c.as_str())
-    } else {
-        Utf8PathBuf::new()
-    };
-
-    for component in components {
-        match component {
-            Utf8Component::Prefix(..) => unreachable!(),
-            Utf8Component::RootDir => {
-                ret.push(component.as_str());
-            }
-            Utf8Component::CurDir => {}
-            Utf8Component::ParentDir => {
-                if !ret.pop() {
-                    return Err(WhPathError::NotNormalized);
-                }
-            }
-            Utf8Component::Normal(c) => {
-                ret.push(c);
-            }
-        }
-    }
-    Ok(ret)
-}
 */
 
 pub fn osstring_to_string(osstr: OsString) -> WhResult<String> {
@@ -364,4 +291,21 @@ pub fn osstring_to_string(osstr: OsString) -> WhResult<String> {
 
 pub fn osstr_to_str(osstr: &OsStr) -> WhResult<&str> {
     osstr.to_str().ok_or(WhPathError::NotValidUtf8.into())
+}
+
+/// Checks for:
+/// - Path is NOT absolute
+/// - Path is normalized
+pub fn is_valid_for_whpath<T: AsRef<Path>>(p: T) -> Result<(), WhPathError> {
+    let p = p.as_ref();
+
+    if p.is_absolute() {
+        return Err(WhPathError::NotRelative);
+    }
+    if p.components()
+        .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".")
+    {
+        return Err(WhPathError::NotNormalized);
+    }
+    Ok(())
 }
