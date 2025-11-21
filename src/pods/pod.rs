@@ -157,7 +157,7 @@ custom_error! {pub PodStopError
     PodNotRunning = "No pod with this name was found running.",
     FileNotReadable{file: InodeId, reason: String} = "Could not read file from disk: ({file}) {reason}",
     FileNotSent{file: InodeId} = "No pod was able to receive this file before stopping: ({file})",
-    DiskManagerStopFailed{source: io::Error} = "Unable to stop the disk manager properly. Your files are still on the system folder: ('.'mount_path). {source}",
+    DiskManagerStopFailed{e: io::Error} = "Unable to stop the disk manager properly. Your files are still on the system folder: ('.'mount_path). {e}",
 }
 
 /// Create all the directories present in Arbo. (not the files)
@@ -527,13 +527,13 @@ impl Pod {
         drop(fsp_host);
 
         redundancy_worker_handle.abort();
-        redundancy_worker_handle.await;
+        let _ = redundancy_worker_handle.await.inspect(|e| log::error!("await error: redundancy_worker_handle"));
         network_airport_handle.abort();
-        network_airport_handle.await;
+        let _ = network_airport_handle.await.inspect(|e| log::error!("await error: network_airport_handle"));
         new_peer_handle.abort();
-        new_peer_handle.await;
+        let _ = new_peer_handle.await.inspect(|e| log::error!("await error: new_peer_handle"));
         peer_broadcast_handle.abort();
-        peer_broadcast_handle.await;
+        let _ = peer_broadcast_handle.await.inspect(|e| log::error!("await error: peer_broadcast_handle"));
         *peers.write() = Vec::new(); // dropping PeerIPCs
 
         fs_interface
@@ -541,7 +541,7 @@ impl Pod {
             .write_file(&WhPath::try_from(ARBO_FILE_FNAME).unwrap(), &arbo_bin, 0)
             .map_err(|io| PodStopError::ArboSavingFailed { source: io })?;
 
-        //fs_interface.disk.stop().map_err(|e| PodStopError::DiskManagerStopFailed { source: e })?;
+        fs_interface.disk.stop().map_err(|e| PodStopError::DiskManagerStopFailed { e: e })?;
 
         Ok(())
     }
