@@ -5,6 +5,10 @@ use crate::{
     pods::{
         arbo::{Arbo, FsEntry, Inode},
         filesystem::permissions::has_write_perm,
+        filesystem::{
+            diffs::{Sig, Signature},
+            File,
+        },
     },
 };
 
@@ -44,6 +48,12 @@ impl FsInterface {
 
         let perm = check_permissions(flags, access, inode.meta.perm)?;
 
+        let sig = if matches!(access, AccessMode::Write) {
+            Signature::new(&File::empty()).ok()
+        } else {
+            None
+        };
+
         //TRUNC has no use on a new file so it can be removed
 
         // CREATE FLAG is set can be on but it has no use for us currently
@@ -51,13 +61,13 @@ impl FsInterface {
         //}
 
         let mut file_handles = FileHandleManager::write_lock(&self.file_handles, "create")?;
-        let file_handle = file_handles.insert_new_file_handle(flags, perm, inode.id)?;
-        return Ok((inode, file_handle));
+        let file_handle = file_handles.insert_new_file_handle(flags, perm, inode.id, sig)?;
+        Ok((inode, file_handle))
     }
 
-    #[must_use]
     /// Create a new empty [Inode], define its informations and register both
     /// in the network and in the local filesystem
+    /// Immediately replicated to other peers
     pub fn make_inode(
         &self,
         parent_ino: u64,

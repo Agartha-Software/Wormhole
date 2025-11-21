@@ -81,7 +81,7 @@ async fn initiate_connection(
     receiver_in: &UnboundedSender<FromNetworkMessage>,
     receiver_out: UnboundedReceiver<FromNetworkMessage>,
 ) -> Result<PodPrototype, UnboundedReceiver<FromNetworkMessage>> {
-    if global_config.general.entrypoints.len() >= 1 {
+    if !global_config.general.entrypoints.is_empty() {
         for first_contact in &global_config.general.entrypoints {
             match PeerIPC::connect(first_contact.to_owned(), local_config, receiver_in.clone())
                 .await
@@ -521,14 +521,7 @@ impl Pod {
         self.network_interface
             .to_network_message_tx
             .send(ToNetworkMessage::BroadcastMessage(
-                MessageContent::Disconnect(
-                    self.network_interface
-                        .local_config
-                        .read()
-                        .general
-                        .hostname
-                        .clone(),
-                ),
+                MessageContent::Disconnect,
             ))
             .expect("to_network_message_tx closed.");
 
