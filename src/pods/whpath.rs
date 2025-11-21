@@ -12,7 +12,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::error::WhResult;
+use crate::error::{WhError, WhResult};
 use crate::pods::arbo::Inode;
 
 custom_error! {pub WhPathError
@@ -62,7 +62,7 @@ impl TryFrom<PathBuf> for WhPath {
     type Error = WhPathError;
 
     fn try_from(p: PathBuf) -> Result<Self, Self::Error> {
-        is_valid_for_whpath(p)?;
+        is_valid_for_whpath(&p)?;
 
         Ok(Self {
             inner: Utf8PathBuf::try_from(p)?,
@@ -286,11 +286,11 @@ pub fn normalize_path(path: impl AsRef<Path>) -> Result<PathBuf, WhPathError> {
 pub fn osstring_to_string(osstr: OsString) -> WhResult<String> {
     osstr
         .into_string()
-        .map_err(|_| WhPathError::NotValidUtf8.into())
+        .map_err(|_| WhError::ConversionError)
 }
 
 pub fn osstr_to_str(osstr: &OsStr) -> WhResult<&str> {
-    osstr.to_str().ok_or(WhPathError::NotValidUtf8.into())
+    osstr.to_str().ok_or(WhError::ConversionError)
 }
 
 /// Checks for:
