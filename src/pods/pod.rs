@@ -155,7 +155,9 @@ custom_error! {pub PodStopError
     ArboSavingFailed{source: io::Error} = "Could not write arbo to disk: {source}",
     PodNotRunning = "No pod with this name was found running.",
     FileNotReadable{file: InodeId, reason: String} = "Could not read file from disk: ({file}) {reason}",
-    FileNotSent{file: InodeId} = "No pod was able to receive this file before stopping: ({file})"
+    FileNotSent{file: InodeId} = "No pod was able to receive this file before stopping: ({file})",
+    #[cfg(target_os = "windows")]
+    DiskManagerStopFailed = "Unable to stop the disk manager properly. Your files are still on the system folder: ('.'mount_path)",
 }
 
 /// Create all the directories present in Arbo. (not the files)
@@ -530,8 +532,18 @@ impl Pod {
             .disk
             .write_file(&WhPath::try_from(ARBO_FILE_FNAME).unwrap(), &arbo_bin, 0)
             .map_err(|io| PodStopError::ArboSavingFailed { source: io })?;
+        
+        let FsInterface {
+            network_interface: _,
+            disk: disk_manager,
+            file_handles: _,
+            arbo: _,
+        } = fs_interface.;
 
-        drop(fs_interface);
+        // disk_manager.stop()
+        // #[cfg(target_os = "windows")]
+        // .map_err(|e|)
+
         *peers.write() = Vec::new(); // dropping PeerIPCs
         network_airport_handle.abort();
         new_peer_handle.abort();
