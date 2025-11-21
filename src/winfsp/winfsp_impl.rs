@@ -130,10 +130,12 @@ pub fn mount_fsp(
 
     let path = path.to_string_lossy().to_string().replace("\\", "/");
     log::debug!("mounting host @ {:?} ...", &path);
-    host.mount(&path).map_err(|_| io::Error::new(io::ErrorKind::Other, "WinFSP mount error"))?;
+    host.mount(&path)
+        .map_err(|_| io::Error::new(io::ErrorKind::Other, "WinFSP mount error"))?;
 
     log::debug!("mounted host...");
-    host.start_with_threads(1).map_err(|_| io::Error::new(io::ErrorKind::Other, "WinFSP start_with_threads error"))?;
+    host.start_with_threads(1)
+        .map_err(|_| io::Error::new(io::ErrorKind::Other, "WinFSP start_with_threads error"))?;
     log::debug!("started host...");
     Ok(WinfspHost(host))
 }

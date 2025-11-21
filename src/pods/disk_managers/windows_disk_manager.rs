@@ -5,9 +5,7 @@ use std::{
 
 use tokio::io;
 
-use crate::{
-    pods::whpath::WhPath, winfsp::winfsp_impl::aliased_path,
-};
+use crate::{pods::whpath::WhPath, winfsp::winfsp_impl::aliased_path};
 
 use super::{DiskManager, DiskSizeInfo};
 
