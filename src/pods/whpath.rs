@@ -2,8 +2,6 @@ use camino::{FromPathBufError, Iter, Utf8Path, Utf8PathBuf};
 use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use openat::AsPath;
-use serde::de::Visitor;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 #[cfg(target_os = "linux")]
 use std::ffi::CString;
 use std::fmt::{Debug, Display};
@@ -22,7 +20,6 @@ custom_error! {pub WhPathError
     NotValidUtf8 = "Path is not valid UTF-8",
     NotNormalized = "Path is not normal",
     InvalidOperation = "Operation would compromise WhPath integrity",
-    InvalidName = "Can't create a name from a multi-component path",
 }
 
 impl From<FromPathBufError> for WhPathError {
@@ -47,24 +44,12 @@ impl WhPathError {
                 io::ErrorKind::Other,
                 "Operation would compromise WhPath integrity",
             ),
-            WhPathError::InvalidName => io::Error::new(
-                io::ErrorKind::Other,
-                "Can't create a name from a multi-component path",
-            ),
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
 pub struct WhPath {
     inner: Utf8PathBuf,
-}
-
-impl Into<String> for WhPath {
-    fn into(self) -> String {
-        self.inner.to_string()
-    }
 }
 
 impl PartialEq for WhPath {
@@ -77,8 +62,14 @@ impl TryFrom<PathBuf> for WhPath {
     type Error = WhPathError;
 
     fn try_from(p: PathBuf) -> Result<Self, Self::Error> {
-        is_valid_for_whpath(&p)?;
-
+        if p.is_absolute() {
+            return Err(Self::Error::NotRelative);
+        }
+        if p.components()
+            .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".")
+        {
+            return Err(Self::Error::NotNormalized);
+        }
         Ok(Self {
             inner: Utf8PathBuf::try_from(p)?,
         })
@@ -125,29 +116,35 @@ impl TryFrom<&str> for WhPath {
     }
 }
 
-impl TryFrom<Utf8PathBuf> for WhPath {
-    type Error = WhPathError;
-
-    fn try_from(p: Utf8PathBuf) -> Result<Self, Self::Error> {
-        is_valid_for_whpath(&p)?;
-
-        Ok(Self { inner: p })
+impl From<Utf8PathBuf> for WhPath {
+    fn from(value: Utf8PathBuf) -> Self {
+        Self { inner: value }
     }
 }
 
-impl TryFrom<&Utf8Path> for WhPath {
-    type Error = WhPathError;
-
-    fn try_from(p: &Utf8Path) -> Result<Self, Self::Error> {
-        is_valid_for_whpath(&p)?;
-
-        Ok(Self { inner: p.into() })
+impl From<&Utf8Path> for WhPath {
+    fn from(value: &Utf8Path) -> Self {
+        Self {
+            inner: value.into(),
+        }
     }
 }
 
-impl From<Name> for WhPath {
-    fn from(value: Name) -> Self {
-        value.0
+impl From<&Inode> for WhPath {
+    /// From inode is UNCHECKED as inodes names should already be correct
+    fn from(value: &Inode) -> Self {
+        // REVIEW - Here to gauge if inodes of name ".."/"." are common or just in readdir
+        // Should be removed before merge
+        let p: Utf8PathBuf = value.name.clone().into();
+
+        if p.components()
+            .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".")
+            || p.is_absolute()
+        {
+            log::warn!("WhPath::From<&Inode> -> not normalized or absolute path: {p:?}")
+        }
+
+        Self { inner: p }
     }
 }
 
@@ -207,6 +204,14 @@ impl<'a> AsPath for &'a WhPath {
     type Buffer = CString;
     fn to_path(self) -> Option<CString> {
         CString::new(self.inner.as_str().as_bytes()).ok()
+    }
+}
+
+impl Debug for WhPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WhPath")
+            .field("inner", &self.inner)
+            .finish()
     }
 }
 
@@ -359,83 +364,4 @@ pub fn osstring_to_string(osstr: OsString) -> WhResult<String> {
 
 pub fn osstr_to_str(osstr: &OsStr) -> WhResult<&str> {
     osstr.to_str().ok_or(WhPathError::NotValidUtf8.into())
-}
-
-/// Checks for:
-/// - Path is NOT absolute
-/// - Path is normalized
-pub fn is_valid_for_whpath<T: AsRef<Path>>(p: T) -> Result<(), WhPathError> {
-    let p = p.as_ref();
-
-    if p.is_absolute() {
-        return Err(WhPathError::NotRelative);
-    }
-    if p.components()
-        .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".")
-    {
-        return Err(WhPathError::NotNormalized);
-    }
-    Ok(())
-}
-
-/// Checks that the path is only one component
-/// Does NOT check that the path is a valid `WhPath`. For that use `is_valid_for_whpath`
-pub fn is_valid_for_name<T: AsRef<Path>>(p: T) -> Result<(), WhPathError> {
-    let p = p.as_ref();
-
-    if p.components().count() > 1 {
-        return Err(WhPathError::InvalidName);
-    }
-    Ok(())
-}
-
-// SECTION Name (name of the inodes)
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct Name(WhPath);
-
-impl TryFrom<String> for Name {
-    type Error = WhPathError;
-
-    fn try_from(p: String) -> Result<Self, Self::Error> {
-        is_valid_for_name(&p)?;
-
-        Ok(Self(p.try_into()?))
-    }
-}
-
-impl TryFrom<&str> for Name {
-    type Error = WhPathError;
-
-    fn try_from(p: &str) -> Result<Self, Self::Error> {
-        is_valid_for_name(p)?;
-
-        Ok(Self(p.try_into()?))
-    }
-}
-
-impl TryFrom<&OsStr> for Name {
-    type Error = WhPathError;
-
-    fn try_from(p: &OsStr) -> Result<Self, Self::Error> {
-        is_valid_for_name(&p)?;
-
-        Ok(Self(p.try_into()?))
-    }
-}
-
-impl TryFrom<OsString> for Name {
-    type Error = WhPathError;
-
-    fn try_from(p: OsString) -> Result<Self, Self::Error> {
-        is_valid_for_name(&p)?;
-
-        Ok(Self(p.try_into()?))
-    }
-}
-
-impl AsRef<WhPath> for Name {
-    fn as_ref(&self) -> &WhPath {
-        &self.0
-    }
 }
