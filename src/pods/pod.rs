@@ -17,6 +17,7 @@ use crate::pods::disk_managers::unix_disk_manager::UnixDiskManager;
 #[cfg(target_os = "windows")]
 use crate::pods::disk_managers::windows_disk_manager::WindowsDiskManager;
 use crate::pods::disk_managers::DiskManager;
+use crate::pods::filesystem::fs_interface;
 use crate::pods::network::redundancy::redundancy_worker;
 use crate::pods::whpath::WhPath;
 #[cfg(target_os = "windows")]
@@ -156,8 +157,7 @@ custom_error! {pub PodStopError
     PodNotRunning = "No pod with this name was found running.",
     FileNotReadable{file: InodeId, reason: String} = "Could not read file from disk: ({file}) {reason}",
     FileNotSent{file: InodeId} = "No pod was able to receive this file before stopping: ({file})",
-    #[cfg(target_os = "windows")]
-    DiskManagerStopFailed = "Unable to stop the disk manager properly. Your files are still on the system folder: ('.'mount_path)",
+    DiskManagerStopFailed{source: io::Error} = "Unable to stop the disk manager properly. Your files are still on the system folder: ('.'mount_path). {source}",
 }
 
 /// Create all the directories present in Arbo. (not the files)
@@ -527,27 +527,22 @@ impl Pod {
         drop(fsp_host);
 
         redundancy_worker_handle.abort();
+        redundancy_worker_handle.await;
+        network_airport_handle.abort();
+        network_airport_handle.await;
+        new_peer_handle.abort();
+        new_peer_handle.await;
+        peer_broadcast_handle.abort();
+        peer_broadcast_handle.await;
+        *peers.write() = Vec::new(); // dropping PeerIPCs
 
         fs_interface
             .disk
             .write_file(&WhPath::try_from(ARBO_FILE_FNAME).unwrap(), &arbo_bin, 0)
             .map_err(|io| PodStopError::ArboSavingFailed { source: io })?;
-        
-        let FsInterface {
-            network_interface: _,
-            disk: disk_manager,
-            file_handles: _,
-            arbo: _,
-        } = fs_interface.;
 
-        // disk_manager.stop()
-        // #[cfg(target_os = "windows")]
-        // .map_err(|e|)
+        //fs_interface.disk.stop().map_err(|e| PodStopError::DiskManagerStopFailed { source: e })?;
 
-        *peers.write() = Vec::new(); // dropping PeerIPCs
-        network_airport_handle.abort();
-        new_peer_handle.abort();
-        peer_broadcast_handle.abort();
         Ok(())
     }
 
