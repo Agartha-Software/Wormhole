@@ -530,13 +530,21 @@ impl Pod {
         drop(fsp_host);
 
         redundancy_worker_handle.abort();
-        let _ = redundancy_worker_handle.await.inspect(|e| log::error!("await error: redundancy_worker_handle"));
+        let _ = redundancy_worker_handle
+            .await
+            .inspect(|e| log::error!("await error: redundancy_worker_handle"));
         network_airport_handle.abort();
-        let _ = network_airport_handle.await.inspect(|e| log::error!("await error: network_airport_handle"));
+        let _ = network_airport_handle
+            .await
+            .inspect(|e| log::error!("await error: network_airport_handle"));
         new_peer_handle.abort();
-        let _ = new_peer_handle.await.inspect(|e| log::error!("await error: new_peer_handle"));
+        let _ = new_peer_handle
+            .await
+            .inspect(|e| log::error!("await error: new_peer_handle"));
         peer_broadcast_handle.abort();
-        let _ = peer_broadcast_handle.await.inspect(|e| log::error!("await error: peer_broadcast_handle"));
+        let _ = peer_broadcast_handle
+            .await
+            .inspect(|e| log::error!("await error: peer_broadcast_handle"));
         *peers.write() = Vec::new(); // dropping PeerIPCs
 
         fs_interface
@@ -544,7 +552,10 @@ impl Pod {
             .write_file(&WhPath::try_from(ARBO_FILE_FNAME).unwrap(), &arbo_bin, 0)
             .map_err(|io| PodStopError::ArboSavingFailed { source: io })?;
 
-        fs_interface.disk.stop().map_err(|e| PodStopError::DiskManagerStopFailed { e: e })?;
+        fs_interface
+            .disk
+            .stop()
+            .map_err(|e| PodStopError::DiskManagerStopFailed { e: e })?;
 
         Ok(())
     }
