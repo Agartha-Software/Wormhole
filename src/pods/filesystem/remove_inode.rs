@@ -53,8 +53,10 @@ impl FsInterface {
     pub fn remove_inode_locally(&self, id: InodeId) -> Result<(), RemoveFileError> {
         let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface::remove_inode")?;
         let to_remove_path = arbo.n_get_path_from_inode_id(id)?;
+        let entry = arbo.n_get_inode(id)?.entry.to_owned();
+        drop(arbo);
 
-        match &arbo.n_get_inode(id)?.entry {
+        match entry {
             FsEntry::File(hosts) if hosts.contains(&self.network_interface.hostname()?) => self
                 .disk
                 .remove_file(&to_remove_path)
@@ -68,7 +70,12 @@ impl FsInterface {
                 .disk
                 .remove_dir(&to_remove_path)
                 .map_err(|io| RemoveFileError::LocalDeletionFailed { io })?,
+            #[cfg(target_os = "linux")]
             FsEntry::Directory(_) => return Err(RemoveFileError::NonEmpty),
+            #[cfg(target_os = "windows")]
+            FsEntry::Directory(children) => {
+                children.iter().try_for_each(|c| self.remove_inode(*c))?
+            }
         };
         Ok(())
     }
