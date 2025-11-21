@@ -3,7 +3,6 @@ use std::{fmt, io};
 
 use crate::pods::pod::PodInfoError;
 use crate::pods::pod::PodStopError;
-use crate::pods::whpath::WhPathError;
 use bincode;
 
 custom_error! {pub WhError
@@ -13,7 +12,6 @@ custom_error! {pub WhError
     DeadLock = "A DeadLock occured",
     NetworkDied{called_from: String} = "{called_from}: Unable to update modification on the network",
     WouldBlock{called_from: String} = "{called_from}: Unable to lock arbo",
-    WhPathError{e: WhPathError} = "{e}",
 }
 
 impl WhError {
@@ -25,7 +23,6 @@ impl WhError {
             WhError::DeadLock => libc::EDEADLOCK,
             WhError::NetworkDied { called_from: _ } => libc::ENETDOWN,
             WhError::WouldBlock { called_from: _ } => libc::EWOULDBLOCK,
-            WhError::WhPathError { e: _ } => libc::EILSEQ,
         }
     }
 
@@ -34,15 +31,8 @@ impl WhError {
             WhError::InodeNotFound => io::ErrorKind::NotFound.into(),
             WhError::InodeIsNotADirectory => io::ErrorKind::NotADirectory.into(),
             WhError::InodeIsADirectory => io::ErrorKind::IsADirectory.into(),
-            WhError::WhPathError { e } => e.to_io(),
             other => io::Error::other(other),
         }
-    }
-}
-
-impl From<WhPathError> for WhError {
-    fn from(e: WhPathError) -> WhError {
-        WhError::WhPathError { e }
     }
 }
 
