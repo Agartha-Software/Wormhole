@@ -53,6 +53,10 @@ impl UnixDiskManager {
 
 /// always takes a WhPath and infers the real disk path
 impl DiskManager for UnixDiskManager {
+    fn stop(self) -> io::Result<()> {
+        Ok(())
+    }
+
     fn new_file(&self, path: &WhPath, mode: u16) -> io::Result<()> {
         if self.exist(path) {
             self.handle.remove_file(path)?;

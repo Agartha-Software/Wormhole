@@ -2,6 +2,7 @@ use std::io;
 
 use std::fmt::Debug;
 
+use crate::error::WhResult;
 use crate::pods::whpath::WhPath;
 #[cfg(target_os = "linux")]
 pub mod unix_disk_manager;
@@ -35,4 +36,6 @@ pub trait DiskManager: Send + Sync + Debug {
     fn size_info(&self) -> io::Result<DiskSizeInfo>;
 
     fn file_exists(&self, path: &WhPath) -> bool;
+
+    fn stop(self) -> io::Result<()>;
 }
