@@ -14,7 +14,8 @@ use super::{DiskManager, DiskSizeInfo};
 
 #[derive(Debug)]
 pub struct WindowsDiskManager {
-    mount_point: PathBuf, // mountpoint on linux and mirror mountpoint on windows
+    mount_point: PathBuf, // (aliased origina_location)
+    original_location: PathBuf,
 }
 
 impl WindowsDiskManager {
@@ -30,6 +31,7 @@ impl WindowsDiskManager {
 
         Ok(Self {
             mount_point: system_mount_point,
+            original_location: mount_point.to_owned(),
         })
     }
 }
@@ -37,18 +39,10 @@ impl WindowsDiskManager {
 impl Drop for WindowsDiskManager {
     fn drop(&mut self) {
         log::debug!("Drop of WindowsDiskManager");
-        if let Ok(unaliased) = unaliased_path(&self.mount_point) {
-            log::debug!(
-                "moving from {:?} to {:?} ...",
-                &self.mount_point,
-                &unaliased
-            );
-            let _ = std::fs::rename(&self.mount_point, &unaliased).inspect_err(|e| {
-                log::error!("UNABLE TO RESET WORKING DIR TO IT'S ORIGINAL LOCATION: {e}")
-            });
-        } else {
-            log::error!("UNABLE TO RESET WORKING DIR TO IT'S ORIGINAL LOCATION (could not regenerate original path)")
-        }
+
+        let _ = std::fs::rename(&self.mount_point, &self.original_location).inspect_err(|e| {
+            log::error!("UNABLE TO RESET WORKING DIR TO IT'S ORIGINAL LOCATION: {e}")
+        });
     }
 }
 
