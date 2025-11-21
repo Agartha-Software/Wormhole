@@ -7,7 +7,6 @@ use std::{
     time::SystemTime,
 };
 
-use camino::Utf8PathBuf;
 use custom_error::custom_error;
 use futures::io;
 use nt_time::FileTime;
@@ -23,14 +22,17 @@ use winfsp::{
 };
 use winfsp_sys::{FspCleanupDelete, FILE_ACCESS_RIGHTS};
 
-use crate::{error::WhError, pods::{
-    arbo::{Arbo, InodeId},
-    filesystem::{
-        file_handle::{AccessMode, OpenFlags},
-        fs_interface::{FsInterface, SimpleFileType},
+use crate::{
+    error::WhError,
+    pods::{
+        arbo::{Arbo, InodeId},
+        filesystem::{
+            file_handle::{AccessMode, OpenFlags},
+            fs_interface::{FsInterface, SimpleFileType},
+        },
+        whpath::{osstr_to_str, WhPath, WhPathError},
     },
-    whpath::{WhPath, WhPathError, osstr_to_str},
-}};
+};
 
 #[derive(PartialEq, Debug)]
 pub struct WormholeHandle {
@@ -581,7 +583,12 @@ impl FileSystemContext for FSPController {
         buffer: &mut [u8],
         offset: u64,
     ) -> winfsp::Result<u32> {
-        log::trace!("read({}, len: {}, offset: {})", context.ino, buffer.len(), offset);
+        log::trace!(
+            "read({}, len: {}, offset: {})",
+            context.ino,
+            buffer.len(),
+            offset
+        );
         let size = self
             .fs_interface
             .read_file(context.ino, offset as usize, buffer, context.handle)
@@ -599,7 +606,12 @@ impl FileSystemContext for FSPController {
         constrained_io: bool,
         file_info: &mut winfsp::filesystem::FileInfo,
     ) -> winfsp::Result<u32> {
-        log::trace!("write({}, len: {}, offset: {})", context.ino, buffer.len(), offset);
+        log::trace!(
+            "write({}, len: {}, offset: {})",
+            context.ino,
+            buffer.len(),
+            offset
+        );
         let size = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::write")?
             .get_inode(context.ino)?
             .meta

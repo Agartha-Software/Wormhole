@@ -284,9 +284,7 @@ pub fn normalize_path(path: impl AsRef<Path>) -> Result<PathBuf, WhPathError> {
 */
 
 pub fn osstring_to_string(osstr: OsString) -> WhResult<String> {
-    osstr
-        .into_string()
-        .map_err(|_| WhError::ConversionError)
+    osstr.into_string().map_err(|_| WhError::ConversionError)
 }
 
 pub fn osstr_to_str(osstr: &OsStr) -> WhResult<&str> {
