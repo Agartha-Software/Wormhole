@@ -25,7 +25,6 @@ pub struct FsInterface {
     pub disk: Box<dyn DiskManager>,
     pub file_handles: Arc<RwLock<FileHandleManager>>,
     pub arbo: Arc<RwLock<Arbo>>, // here only to read, as most write are made by network_interface
-                                 // REVIEW - check self.arbo usage to be only reading
 }
 
 #[derive(PartialEq, Debug, Serialize, Deserialize, Clone)]

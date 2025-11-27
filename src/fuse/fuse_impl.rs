@@ -32,7 +32,6 @@ pub struct FuseController {
     pub fs_interface: Arc<FsInterface>,
 }
 
-// REVIEW - should later invest in proper error handling
 impl Filesystem for FuseController {
     // READING
 
@@ -189,12 +188,6 @@ impl Filesystem for FuseController {
                 }
             }
         }
-
-        // TODO - Implement After permission implementation
-        // let attr = self.fs_interface.get_inode_attributes(ino);
-        // if attr.unwrap().perm == valid {
-        //     reply.error(libc::EPERM);
-        // }
 
         match self
             .fs_interface

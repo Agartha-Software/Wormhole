@@ -304,7 +304,7 @@ impl Arbo {
     pub fn add_inode_from_parameters(
         &mut self,
         name: &str,
-        id: InodeId, //REVIEW: Renamed id to be more coherent with the Inode struct
+        id: InodeId,
         parent_ino: InodeId,
         entry: FsEntry,
         perm: u16,
@@ -335,8 +335,7 @@ impl Arbo {
         let parent = self.n_get_inode_mut(parent)?;
 
         let children = match &mut parent.entry {
-            // REVIEW: Can we expect parent to always be a file to not flood wherror with errors that will never happen
-            FsEntry::File(_) => panic!("Parent is a file"),
+            FsEntry::File(_) => return Err(WhError::InodeIsNotADirectory),
             FsEntry::Directory(children) => children,
         };
 
