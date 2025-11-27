@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{ipc::error::IoError, pods::arbo::Hosts};
+use crate::{cli::ConfigType, ipc::error::IoError, pods::arbo::Hosts};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum NewAnswer {
@@ -86,4 +86,36 @@ pub enum TreeAnswer {
     Tree(String),
     PodNotFound,
     PodTreeFailed(IoError),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum GenerateConfigAnswer {
+    Success,
+    SuccessDefault,
+    PodNotFound,
+    NotADirectory,
+    WriteFailed(String, ConfigType),
+    CantOverwrite(ConfigType),
+    ConfigBlock,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum ShowConfigAnswer {
+    SuccessBoth(String, String),
+    SuccessLocal(String),
+    SuccessGlobal(String),
+    PodNotFound,
+    ConfigBlock,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum CheckConfigAnswer {
+    Success,
+    PodNotFound,
+    MissingGlobal,
+    MissingLocal,
+    MissingBoth,
+    InvalidGlobal(String),
+    InvalidLocal(String),
+    InvalidBoth(String, String),
 }

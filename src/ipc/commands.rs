@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::cli::{IdentifyPodArgs, IdentifyPodGroup, Mode};
+use crate::cli::{ConfigType, IdentifyNewPodGroup, IdentifyPodArgs, IdentifyPodGroup, Mode};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum PodId {
@@ -21,11 +21,17 @@ impl From<IdentifyPodGroup> for PodId {
         if let Some(name) = group.name {
             PodId::Name(name)
         } else {
-            if let Some(path) = group.path {
-                PodId::Path(path)
-            } else {
-                panic!("One of path or name should always be defined, if both are missing Clap should block the cmd")
-            }
+            PodId::Path(group.path.expect("One of path or name should always be defined, if both are missing Clap should block the cmd"))
+        }
+    }
+}
+
+impl From<IdentifyNewPodGroup> for PodId {
+    fn from(group: IdentifyNewPodGroup) -> Self {
+        if let Some(name) = group.name {
+            PodId::Name(name)
+        } else {
+            PodId::Path(group.path.expect("One of path or name should always be defined, if both are missing Clap should block the cmd"))
         }
     }
 }
@@ -61,5 +67,8 @@ pub enum Command {
     GetHosts(GetHostsRequest),
     Inspect(PodId),
     Tree(PodId),
+    GenerateConfig(PodId, bool, ConfigType),
+    ShowConfig(PodId, ConfigType),
+    CheckConfig(PodId, ConfigType),
     Status,
 }

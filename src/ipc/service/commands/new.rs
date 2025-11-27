@@ -65,11 +65,11 @@ where
     let answer = match Pod::new(global_config, local_config, &args.mountpoint, server).await {
         Ok(pod) => {
             pods.insert(args.name, pod);
+            println!("New pod created successfully at '{port}'");
             NewAnswer::Success(port)
         }
         Err(err) => NewAnswer::FailedToCreatePod(err.into()),
     };
-    println!("New pod created successfully at '{port}'");
     send_answer(answer, stream).await?;
     Ok(false)
 }
