@@ -8,14 +8,12 @@ use crate::pods::filesystem::attrs::AcknoledgeSetAttrError;
 use crate::pods::filesystem::permissions::has_execute_perm;
 use crate::pods::network::callbacks::Callback;
 use crate::pods::network::network_interface::NetworkInterface;
-use crate::pods::whpath::{osstr_to_str, WhPath};
+use crate::pods::whpath::WhPath;
 
 use futures::io;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::ffi::OsStr;
 use std::io::ErrorKind;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::file_handle::FileHandleManager;

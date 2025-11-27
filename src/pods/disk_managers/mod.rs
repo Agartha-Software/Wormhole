@@ -2,7 +2,6 @@ use std::io;
 
 use std::fmt::Debug;
 
-use crate::error::WhResult;
 use crate::pods::whpath::WhPath;
 #[cfg(target_os = "linux")]
 pub mod unix_disk_manager;

@@ -1,6 +1,5 @@
 use std::{
     ffi::OsString,
-    fs,
     io::ErrorKind,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
@@ -30,7 +29,7 @@ use crate::{
             file_handle::{AccessMode, OpenFlags},
             fs_interface::{FsInterface, SimpleFileType},
         },
-        whpath::{osstr_to_str, WhPath, WhPathError},
+        whpath::{WhPath, WhPathError},
     },
 };
 
@@ -69,16 +68,6 @@ pub(crate) fn aliased_path(path: &Path) -> Result<PathBuf, AliasedPathError> {
     buf.set_file_name(file_name);
 
     Ok(buf)
-}
-
-/// Removes a '.' the last element (dir or file name): /test/.dir => /test/dir
-pub(crate) fn unaliased_path(path: &Path) -> Result<PathBuf, AliasedPathError> {
-    let file_name = osstr_to_str(path.file_name().ok_or(AliasedPathError::NoFolderName)?)?
-        .trim_start_matches('.');
-
-    let mut path = path.to_path_buf();
-    path.set_file_name(file_name);
-    Ok(path)
 }
 
 impl Drop for FSPController {
@@ -146,7 +135,7 @@ impl FileSystemContext for FSPController {
     fn get_security_by_name(
         &self,
         file_name: &winfsp::U16CStr,
-        security_descriptor: Option<&mut [std::ffi::c_void]>,
+        _security_descriptor: Option<&mut [std::ffi::c_void]>,
         reparse_point_resolver: impl FnOnce(
             &winfsp::U16CStr,
         ) -> Option<winfsp::filesystem::FileSecurity>,

@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::{io, sync::Arc};
 
 use crate::config::{GlobalConfig, LocalConfig};
-use crate::data::tree_hosts::{CliHostTree, TreeLine};
+use crate::data::tree_hosts::CliHostTree;
 use crate::error::{WhError, WhResult};
 #[cfg(target_os = "linux")]
 use crate::fuse::fuse_impl::mount_fuse;
@@ -17,7 +17,6 @@ use crate::pods::disk_managers::unix_disk_manager::UnixDiskManager;
 #[cfg(target_os = "windows")]
 use crate::pods::disk_managers::windows_disk_manager::WindowsDiskManager;
 use crate::pods::disk_managers::DiskManager;
-use crate::pods::filesystem::fs_interface;
 use crate::pods::network::redundancy::redundancy_worker;
 use crate::pods::whpath::WhPath;
 #[cfg(target_os = "windows")]
@@ -532,19 +531,19 @@ impl Pod {
         redundancy_worker_handle.abort();
         let _ = redundancy_worker_handle
             .await
-            .inspect(|e| log::error!("await error: redundancy_worker_handle"));
+            .inspect(|_| log::error!("await error: redundancy_worker_handle"));
         network_airport_handle.abort();
         let _ = network_airport_handle
             .await
-            .inspect(|e| log::error!("await error: network_airport_handle"));
+            .inspect(|_| log::error!("await error: network_airport_handle"));
         new_peer_handle.abort();
         let _ = new_peer_handle
             .await
-            .inspect(|e| log::error!("await error: new_peer_handle"));
+            .inspect(|_| log::error!("await error: new_peer_handle"));
         peer_broadcast_handle.abort();
         let _ = peer_broadcast_handle
             .await
-            .inspect(|e| log::error!("await error: peer_broadcast_handle"));
+            .inspect(|_| log::error!("await error: peer_broadcast_handle"));
         *peers.write() = Vec::new(); // dropping PeerIPCs
 
         fs_interface

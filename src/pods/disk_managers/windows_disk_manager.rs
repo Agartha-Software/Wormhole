@@ -102,7 +102,7 @@ impl DiskManager for WindowsDiskManager {
         .inspect_err(|e| log::error!("WDM::size_info Error: {e}"))
     }
 
-    fn set_permisions(&self, path: &WhPath, _permissions: u16) -> io::Result<()> {
+    fn set_permisions(&self, _path: &WhPath, _permissions: u16) -> io::Result<()> {
         log::warn!("permissions not supported on windows");
         Ok(())
     }
