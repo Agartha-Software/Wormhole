@@ -9,7 +9,7 @@ use crate::pods::whpath::WhPath;
 
 pub async fn gethosts<Stream>(
     req: GetHostsRequest,
-    pods: &mut HashMap<String, Pod>,
+    pods: &HashMap<String, Pod>,
     stream: &mut Stream,
 ) -> std::io::Result<bool>
 where
