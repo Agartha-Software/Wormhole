@@ -36,5 +36,5 @@ pub trait DiskManager: Send + Sync + Debug {
 
     fn file_exists(&self, path: &WhPath) -> bool;
 
-    fn stop(&self) -> io::Result<()>;
+    fn stop(&mut self) -> io::Result<()>;
 }

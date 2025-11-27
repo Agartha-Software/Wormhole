@@ -546,10 +546,22 @@ impl Pod {
             .inspect(|_| log::error!("await error: peer_broadcast_handle"));
         *peers.write() = Vec::new(); // dropping PeerIPCs
 
+        let arbo_path = WhPath::try_from(ARBO_FILE_FNAME).unwrap();
+
+        if !fs_interface.disk.file_exists(&arbo_path) {
+            fs_interface
+                .disk
+                .new_file(&arbo_path, 0o600) // REVIEW - permissions value ?
+                .map_err(|io| PodStopError::ArboSavingFailed { source: io })?;
+        }
+
         fs_interface
             .disk
             .write_file(&WhPath::try_from(ARBO_FILE_FNAME).unwrap(), &arbo_bin, 0)
             .map_err(|io| PodStopError::ArboSavingFailed { source: io })?;
+
+        let mut fs_interface =
+            Arc::try_unwrap(fs_interface).expect("fs_interface not released from every thread");
 
         fs_interface
             .disk

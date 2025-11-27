@@ -11,8 +11,9 @@ use super::{DiskManager, DiskSizeInfo};
 
 #[derive(Debug)]
 pub struct WindowsDiskManager {
-    mount_point: PathBuf, // (aliased origina_location)
+    mount_point: PathBuf, // (aliased original location)
     original_location: PathBuf,
+    stopped: bool,
 }
 
 impl WindowsDiskManager {
@@ -29,16 +30,27 @@ impl WindowsDiskManager {
         Ok(Self {
             mount_point: system_mount_point,
             original_location: mount_point.to_owned(),
+            stopped: false,
         })
+    }
+}
+
+impl Drop for WindowsDiskManager {
+    fn drop(&mut self) {
+        if !self.stopped {
+            let _ = std::fs::rename(&self.mount_point, &self.original_location).inspect_err(|e| log::error!("WindowsDiskManager was unable to move the directory to it's initial location (on drop): {e}"));
+        }
     }
 }
 
 /// always takes a WhPath and infers the real disk path
 impl DiskManager for WindowsDiskManager {
-    fn stop(&self) -> io::Result<()> {
+    fn stop(&mut self) -> io::Result<()> {
         log::debug!("Stop of WindowsDiskManager");
 
-        std::fs::rename(&self.mount_point, &self.original_location)
+        std::fs::rename(&self.mount_point, &self.original_location).inspect_err(|e| log::error!("WindowsDiskManager was unable to move the directory to it's initial location (on stop): {e}"))?;
+        self.stopped = true;
+        Ok(())
     }
 
     fn new_file(&self, path: &WhPath, _permissions: u16) -> io::Result<()> {
