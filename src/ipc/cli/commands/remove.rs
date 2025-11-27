@@ -11,7 +11,7 @@ use crate::ipc::{
     commands::{Command, PodId},
 };
 
-pub async fn remove(args: RemoveArgs, mut stream: Stream) -> Result<(), io::Error> {
+pub async fn remove(args: RemoveArgs, mut stream: Stream) -> Result<String, io::Error> {
     let pod = PodId::from(args.group);
 
     send_command(
@@ -23,10 +23,7 @@ pub async fn remove(args: RemoveArgs, mut stream: Stream) -> Result<(), io::Erro
     )
     .await?;
     match recieve_answer::<RemoveAnswer>(&mut stream).await? {
-        RemoveAnswer::Success => {
-            println!("Pod successfully removed.");
-            Ok(())
-        }
+        RemoveAnswer::Success => Ok(String::from("Pod successfully removed.")),
         RemoveAnswer::PodNotFound => Err(io::Error::new(
             io::ErrorKind::NotFound,
             "The given pod couldn't be found.",
