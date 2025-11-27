@@ -87,16 +87,8 @@ impl DiskManager for UnixDiskManager {
     }
 
     fn read_file(&self, path: &WhPath, offset: usize, buf: &mut [u8]) -> io::Result<usize> {
-        let file = self.handle.open_file(path)?;
-        let mut read = file
-            .bytes()
-            .skip(offset)
-            .take(buf.len())
-            .map_while(|b| b.ok())
-            .collect::<Vec<u8>>();
-        let read_len = read.len();
-        buf[0..read_len].swap_with_slice(&mut read);
-        Ok(read_len)
+        let mut file = self.handle.open_file(path)?;
+        file.read(buf)
     }
 
     fn new_dir(&self, path: &WhPath, permissions: u16) -> io::Result<()> {
