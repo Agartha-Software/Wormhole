@@ -193,8 +193,8 @@ impl Arbo {
 
     pub fn get_special(name: &str, parent_ino: u64) -> Option<u64> {
         match (name, parent_ino) {
-            (n, 1) if n == GLOBAL_CONFIG_FNAME => Some(GLOBAL_CONFIG_INO),
-            (n, 1) if n == LOCAL_CONFIG_FNAME => Some(LOCAL_CONFIG_INO),
+            (GLOBAL_CONFIG_FNAME, 1) => Some(GLOBAL_CONFIG_INO),
+            (LOCAL_CONFIG_FNAME, 1) => Some(LOCAL_CONFIG_INO),
             _ => None,
         }
     }
