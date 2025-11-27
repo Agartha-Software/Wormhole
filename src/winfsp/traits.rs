@@ -14,16 +14,16 @@ use crate::{
             write::WriteError,
         },
         network::pull_file::PullError,
-        whpath::WhPath,
+        whpath::WhPathError,
     },
 };
 use nt_time::FileTime;
 use windows::Win32::{
     Foundation::{
-        GENERIC_EXECUTE, GENERIC_READ, GENERIC_WRITE, NTSTATUS, STATUS_ACCESS_DENIED,
+        CRYPT_E_BAD_ENCODE, GENERIC_EXECUTE, GENERIC_READ, GENERIC_WRITE, STATUS_ACCESS_DENIED,
         STATUS_DATA_ERROR, STATUS_DIRECTORY_NOT_EMPTY, STATUS_FILE_IS_A_DIRECTORY,
-        STATUS_INVALID_HANDLE, STATUS_INVALID_PARAMETER, STATUS_NETWORK_UNREACHABLE,
-        STATUS_NOT_A_DIRECTORY, STATUS_OBJECT_NAME_EXISTS, STATUS_OBJECT_NAME_INVALID,
+        STATUS_INVALID_DEVICE_REQUEST, STATUS_INVALID_HANDLE, STATUS_INVALID_PARAMETER,
+        STATUS_NETWORK_UNREACHABLE, STATUS_NOT_A_DIRECTORY, STATUS_OBJECT_NAME_EXISTS,
         STATUS_OBJECT_NAME_NOT_FOUND, STATUS_OBJECT_PATH_NOT_FOUND, STATUS_PENDING,
         STATUS_POSSIBLE_DEADLOCK,
     },
@@ -32,23 +32,6 @@ use windows::Win32::{
     },
 };
 use winfsp::{filesystem::FileInfo, FspError};
-
-impl TryFrom<&winfsp::U16CStr> for WhPath {
-    type Error = NTSTATUS;
-
-    fn try_from(value: &winfsp::U16CStr) -> Result<WhPath, Self::Error> {
-        match value.to_string() {
-            Err(_) => Err(STATUS_OBJECT_NAME_INVALID),
-            Ok(string) => Ok(WhPath::from(&string.replace("\\", "/"))),
-        }
-    }
-}
-
-impl WhPath {
-    pub fn to_winfsp(&self) -> String {
-        self.inner.replace("/", "\\")
-    }
-}
 
 impl From<Metadata> for FileInfo {
     fn from(value: Metadata) -> Self {
@@ -88,6 +71,18 @@ impl From<WhError> for FspError {
             WhError::NetworkDied { called_from: _ } => STATUS_NETWORK_UNREACHABLE.into(),
             WhError::WouldBlock { called_from: _ } => STATUS_PENDING.into(),
             WhError::InodeIsADirectory => STATUS_FILE_IS_A_DIRECTORY.into(),
+            WhError::ConversionError => CRYPT_E_BAD_ENCODE.into(), // REVIEW unsure about this type
+        }
+    }
+}
+
+impl From<WhPathError> for FspError {
+    fn from(e: WhPathError) -> Self {
+        match e {
+            WhPathError::NotRelative => STATUS_INVALID_DEVICE_REQUEST.into(),
+            WhPathError::NotValidUtf8 => CRYPT_E_BAD_ENCODE.into(),
+            WhPathError::NotNormalized => STATUS_INVALID_DEVICE_REQUEST.into(),
+            WhPathError::InvalidOperation => STATUS_INVALID_DEVICE_REQUEST.into(),
         }
     }
 }

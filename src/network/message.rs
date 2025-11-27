@@ -68,7 +68,7 @@ impl fmt::Debug for MessageContent {
                 f,
                 "Inode({{{}, name: {}, parent:{}, {}}})",
                 inode.id,
-                inode.name,
+                &inode.name,
                 inode.parent,
                 match inode.entry {
                     crate::pods::arbo::FsEntry::File(_) => 'f',

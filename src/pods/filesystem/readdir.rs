@@ -31,9 +31,9 @@ impl FsInterface {
         let mut links: Vec<Inode> = Vec::with_capacity(children.len() + 2);
         let mut parent = arbo.n_get_inode(dir.parent)?.clone();
 
-        dir.name = ".".to_string();
+        dir.name = ".".into();
         links.push(dir);
-        parent.name = "..".to_string();
+        parent.name = "..".into();
         links.push(parent.clone());
         links.extend(children);
         Ok(links)

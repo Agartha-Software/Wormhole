@@ -15,7 +15,7 @@ impl fmt::Display for CliHostTree {
         let mut output = String::new();
         for (indent, ino, path, hosts) in &self.lines {
             output.push_str(&format!(
-                "{}[{ino}] {}    ->    ({}) {:?}\n",
+                "{}[{ino}] {:?}    ->    ({}) {:?}\n",
                 generate_indentation(*indent),
                 path,
                 hosts.len(),
