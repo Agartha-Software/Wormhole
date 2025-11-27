@@ -762,6 +762,7 @@ pub fn generate_arbo(path: &Path, host: &String) -> io::Result<Arbo> {
     }
 }
 
+#[cfg(target_os = "windows")]
 const WINDOWS_DEFAULT_PERMS_MODE: u16 = 666;
 
 /* NOTE

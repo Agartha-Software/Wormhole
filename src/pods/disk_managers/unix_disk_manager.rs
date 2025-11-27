@@ -6,7 +6,6 @@ use std::{
         unix::fs::FileExt,
     },
     path::Path,
-    path::PathBuf,
 };
 
 use openat::Dir;
@@ -19,7 +18,6 @@ use super::DiskManager;
 #[derive(Debug)]
 pub struct UnixDiskManager {
     handle: Dir,
-    mount_point: PathBuf,
 }
 
 impl UnixDiskManager {
@@ -40,7 +38,6 @@ impl UnixDiskManager {
 
         Ok(Self {
             handle: Dir::open(mount_point)?,
-            mount_point: mount_point.to_owned(),
         })
     }
 }
