@@ -24,7 +24,11 @@ COPY --from=builder /build/target/release/wormhole /bin/wormhole
 COPY tests/run_xfstests_docker.sh /tests/run_xfstests_docker.sh
 COPY tests/mount.fuse.wormhole /sbin/mount.fuse.wormhole
 
-RUN apt-get update && \
+RUN useradd -m fsgqa && \
+    useradd -m 123456-fsgqa && \
+    usermod -aG fsgqa 123456-fsgqa
+
+    RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     git \
     build-essential \
@@ -49,6 +53,13 @@ RUN apt-get update && \
     dump \
     e2fsprogs \
     quota \
+    sudo \
+    procps \
+    psmisc \
+    iputils-ping \
+    vim \
+    xfsprogs \
+    dbench \
     && apt-get clean
 
 RUN cd /opt && \

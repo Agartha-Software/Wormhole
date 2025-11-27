@@ -9,28 +9,49 @@ WORMHOLE_CLI="/bin/wormhole"
 LOG_FILE="/tmp/mount_helper.log"
 
 echo "--- mount.fuse.wormhole SCRIPT START ---" > $LOG_FILE
-echo "Args: $@" >> $LOG_FILE
+echo "Args: $*" >> $LOG_FILE
 
-# --- 1. Initialiser les valeurs par défaut ---
+# --- 1. Initialize the default values ---
 POD_NAME="default_pod"
 PORT="5000"
-MOUNT_POINT="$2" # Le point de montage est toujours $2
+MOUNT_POINT="" 
 OPTIONS_STRING=""
 
-# --- 2. Parser les options (CORRIGÉ) ---
-# $3 contient les options, ex: -o rw,subtype=wormhole,pod_name=testpod
-if [ -n "$3" ]; then
-    # Enlève le '-o' du début
-    OPTIONS_STRING=$(echo "$3" | sed 's/^-o//')
-fi
+# --- 2. Récupérer le point de montage et les options ---
+# Le point de montage est généralement le dernier argument qui n'est pas une option,
+# mais dans le cas d'un helper fuse, l'appel est souvent : dev dir -o options
+# $1 = device (ignoré ici "non1")
+# $2 = mountpoint
+MOUNT_POINT="$2"
 
-echo "Parsing options: $OPTIONS_STRING" >> $LOG_FILE
+# On décale les arguments pour traiter le reste
+shift 2
 
-# Change le séparateur (IFS) en virgule pour la boucle
+# Boucle pour trouver -o dans les arguments restants
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -o)
+            # Cas où -o est séparé par un espace (ex: -o rw,user)
+            shift
+            OPTIONS_STRING="$1"
+            ;;
+        -o*)
+            # Cas où -o est collé (ex: -orw,user)
+            OPTIONS_STRING="${1#-o}"
+            ;;
+        *)
+            ;;
+    esac
+    shift
+done
+
+echo "Parsing options text: $OPTIONS_STRING" >> $LOG_FILE
+
+# Change the separator (IFS) to comma for the loop
 OLD_IFS=$IFS
 IFS=','
 for opt in $OPTIONS_STRING; do
-    # Sépare la clé et la valeur
+    # Separate the key and the value
     key=$(echo "$opt" | cut -d'=' -f1)
     value=$(echo "$opt" | cut -d'=' -f2)
 
@@ -42,11 +63,11 @@ for opt in $OPTIONS_STRING; do
             PORT=$value
             ;;
         *)
-            # Ignorer les options inconnues (rw, subtype, allow_other, etc.)
+            # Ignore the unknown options (rw, subtype, allow_other, etc.)
             ;;
     esac
 done
-# Restaure l'ancien séparateur
+# Restore the old separator
 IFS=$OLD_IFS
 
 echo "Parsed values:" >> $LOG_FILE
@@ -54,20 +75,21 @@ echo "  POD_NAME: $POD_NAME" >> $LOG_FILE
 echo "  PORT: $PORT" >> $LOG_FILE
 echo "  MOUNT_POINT: $MOUNT_POINT" >> $LOG_FILE
 
-# --- 3. Exécuter la commande de montage ---
+# --- 3. Execute the mount command ---
 echo "Running: $WORMHOLE_CLI new $POD_NAME -p $PORT -m $MOUNT_POINT" >> $LOG_FILE
 
+# On redirige stderr vers stdout pour le capturer dans le log en cas d'erreur
 $WORMHOLE_CLI new "$POD_NAME" -p "$PORT" -m "$MOUNT_POINT" >> $LOG_FILE 2>&1
 
 sleep 2
 
-# --- 4. Vérifier et quitter ---
+# --- 4. Verify and exit ---
 if ! mount | grep -q -- "$MOUNT_POINT"; then
-    echo "ERREUR: Le montage FUSE n'a pas pu être détecté sur $MOUNT_POINT" >> $LOG_FILE
+    echo "ERROR: The FUSE mount has not been detected on $MOUNT_POINT" >> $LOG_FILE
     echo "--- mount.fuse.wormhole SCRIPT FAILED ---" >> $LOG_FILE
     exit 1
 fi
 
-echo "Montage réussi." >> $LOG_FILE
+echo "Mount successful." >> $LOG_FILE
 echo "--- mount.fuse.wormhole SCRIPT SUCCESS ---" >> $LOG_FILE
 exit 0

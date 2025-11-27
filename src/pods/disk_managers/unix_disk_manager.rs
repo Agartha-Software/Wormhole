@@ -4,13 +4,13 @@ use std::{
     os::{
         fd::{AsRawFd, RawFd},
         unix::fs::FileExt,
-    },
+    }, path::Path,
 };
 
 use openat::{AsPath, Dir};
 use tokio::io;
 
-use crate::pods::whpath::{JoinPath, WhPath};
+use crate::pods::{disk_managers::DiskSizeInfo, whpath::{JoinPath, WhPath}};
 
 use super::DiskManager;
 
@@ -145,7 +145,17 @@ impl DiskManager for UnixDiskManager {
     }
 
     fn size_info(&self) -> std::io::Result<super::DiskSizeInfo> {
-        todo!()
+        let path = Path::new(&self.mount_point.inner);
+        let parent = path.parent().unwrap_or(path);
+
+        let free = fs2::free_space(parent)?;
+        let total = fs2::total_space(parent)?;
+
+        Ok(super::DiskSizeInfo {
+            free_size: free as usize,
+            total_size: total as usize,
+        })
+        .inspect_err(|e| log::error!("UnixDiskManager::size_info Error on {:?}: {e}", parent))
     }
 
     fn file_exists(&self, path: &WhPath) -> bool {
