@@ -80,7 +80,7 @@ set +e
 # 2. Execute the command:
 #    2>&1 : redirige stderr vers stdout
 #    | tee : display in the console AND write to the file
-bash -x ./check "$TEST_TO_RUN" 2>&1 | tee "$CHECK_OUTPUT_FILE"
+./check "$TEST_TO_RUN" 2>&1 | tee "$CHECK_OUTPUT_FILE"
 
 # 3. Capture the TRUE exit code of the first command in the pipe (./check)
 EXIT_CODE=${PIPESTATUS[0]}

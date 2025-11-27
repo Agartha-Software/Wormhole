@@ -72,6 +72,18 @@ $WORMHOLE_CLI remove --name "$POD_NAME" >> $LOG_FILE 2>&1 || true
 # On attend un court instant pour être sûr que le port est libéré
 sleep 0.5
 
+cat << EOF > "$MOUNT_POINT/.global_config.toml"
+[general]
+name = "$POD_NAME"
+entrypoints = []
+hosts = []
+
+[redundancy]
+number = 0
+EOF
+echo "Created config with redundancy=1" >> $LOG_FILE
+# --------------------------------------------------------------------
+
 # --- 4. Execute the mount command ---
 echo "Running: $WORMHOLE_CLI new $POD_NAME -p $PORT -m $MOUNT_POINT" >> $LOG_FILE
 
