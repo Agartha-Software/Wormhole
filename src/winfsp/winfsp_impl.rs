@@ -46,6 +46,7 @@ pub struct FSPController {
     // pub provider: Arc<RwLock<Provider<WindowsFolderHandle>>>,
 }
 
+#[allow(dead_code)] // NOTE - the value is used for the lifetime of winfsp, but rust emmit a dead_code warning for it
 pub struct WinfspHost(FileSystemHost<FSPController>);
 
 impl std::fmt::Debug for WinfspHost {
