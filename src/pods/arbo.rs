@@ -27,7 +27,6 @@ use super::filesystem::{make_inode::MakeInodeError, remove_inode::RemoveInodeErr
     other inodes can start wherever we want
 */
 pub const ROOT: InodeId = 1;
-pub const ROOT_PATH: &str = "./";
 pub const LOCK_TIMEOUT: Duration = Duration::new(5, 0);
 
 // !SECTION
@@ -149,7 +148,7 @@ impl Arbo {
             Inode {
                 parent: ROOT,
                 id: ROOT,
-                name: ROOT_PATH.into(),
+                name: WhPath::root().into(),
                 entry: FsEntry::Directory(vec![]),
                 meta: Metadata {
                     ino: ROOT,

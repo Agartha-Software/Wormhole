@@ -142,6 +142,12 @@ impl TryFrom<&winfsp::U16CStr> for WhPath {
     }
 }
 
+impl Into<String> for WhPath {
+    fn into(self) -> String {
+        self.inner.into_string()
+    }
+}
+
 impl<T> AsRef<T> for WhPath
 where
     T: ?Sized,
