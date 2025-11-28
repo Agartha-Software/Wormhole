@@ -187,19 +187,19 @@ impl NetworkInterface {
         parent: InodeId,
         new_parent: InodeId,
         name: &str,
-        new_name: &str,
+        new_name: String,
         overwrite: bool,
     ) -> Result<(), RenameError> {
         let mut arbo = Arbo::n_write_lock(&self.arbo, "arbo_rename_file")?;
 
-        arbo.mv_inode(parent, new_parent, name, new_name)?;
+        arbo.mv_inode(parent, new_parent, name, new_name.clone())?;
 
         self.to_network_message_tx
             .send(ToNetworkMessage::BroadcastMessage(MessageContent::Rename(
                 parent,
                 new_parent,
                 name.to_owned(),
-                new_name.to_owned(),
+                new_name,
                 overwrite,
             )))
             .expect("broadcast_rename_file: unable to update modification on the network thread");
@@ -210,12 +210,12 @@ impl NetworkInterface {
         &self,
         parent: InodeId,
         new_parent: InodeId,
-        name: &str,
-        new_name: &str,
+        name: String,
+        new_name: String,
     ) -> Result<(), RenameError> {
         let mut arbo = Arbo::n_write_lock(&self.arbo, "arbo_rename_file")?;
 
-        arbo.mv_inode(parent, new_parent, name, new_name)
+        arbo.mv_inode(parent, new_parent, &name, new_name)
             .map_err(|err| match err {
                 WhError::InodeNotFound => RenameError::DestinationParentNotFound,
                 WhError::InodeIsNotADirectory => RenameError::DestinationParentNotFolder,
@@ -576,7 +576,7 @@ impl NetworkInterface {
                 MessageContent::RequestFs => fs_interface.send_filesystem(origin),
                 MessageContent::Rename(parent, new_parent, name, new_name, overwrite) =>
                     fs_interface
-                    .recept_rename(parent, new_parent, &name, &new_name, overwrite)
+                    .recept_rename(parent, new_parent, name, new_name, overwrite)
                     .map_err(|err| {
                         std::io::Error::new(
                             std::io::ErrorKind::Other,

@@ -101,7 +101,7 @@ impl FsEntry {
 }
 
 impl Inode {
-    pub fn new(name: &str, parent_ino: InodeId, id: InodeId, entry: FsEntry, perm: u16) -> Self {
+    pub fn new(name: String, parent_ino: InodeId, id: InodeId, entry: FsEntry, perm: u16) -> Self {
         let meta = Metadata {
             ino: id,
             size: 0,
@@ -125,7 +125,7 @@ impl Inode {
         Self {
             parent: parent_ino,
             id: id,
-            name: name.into(),
+            name: name,
             entry: entry,
             meta,
             xattrs,
@@ -303,7 +303,7 @@ impl Arbo {
     /// Create a new [Inode] from the given parameters and insert it inside the local arbo
     pub fn add_inode_from_parameters(
         &mut self,
-        name: &str,
+        name: String,
         id: InodeId,
         parent_ino: InodeId,
         entry: FsEntry,
@@ -421,7 +421,7 @@ impl Arbo {
         parent: InodeId,
         new_parent: InodeId,
         name: &str,
-        new_name: &str,
+        new_name: String,
     ) -> WhResult<()> {
         let parent_inode = self.entries.get(&parent).ok_or(WhError::InodeNotFound)?;
         let item_id = self.n_get_inode_child_by_name(parent_inode, name)?.id;
@@ -429,7 +429,7 @@ impl Arbo {
         self.n_remove_child(parent, item_id)?;
 
         let item = self.n_get_inode_mut(item_id)?;
-        item.name = new_name.into();
+        item.name = new_name;
         item.parent = new_parent;
 
         self.n_add_child(new_parent, item_id)
@@ -727,7 +727,7 @@ fn index_folder_recursive(
         let perm_mode = WINDOWS_DEFAULT_PERMS_MODE;
 
         arbo.add_inode(Inode::new(
-            &fname,
+            fname.clone(),
             parent,
             used_ino,
             if ftype.is_file() {

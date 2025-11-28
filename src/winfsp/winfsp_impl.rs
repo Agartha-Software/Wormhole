@@ -258,7 +258,7 @@ impl FileSystemContext for FSPController {
         let path = WhPath::from_fake_absolute(file_name)?;
         let name = (*path).file_name().ok_or(STATUS_OBJECT_NAME_NOT_FOUND)?;
 
-        let arbo = Arbo::write_lock(&self.fs_interface.arbo, "winfsp::create")?;
+        let arbo = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::create")?;
 
         if let Ok(_) = arbo.get_inode_from_path(&path) {
             return Err(winfsp::FspError::WIN32(ERROR_ALREADY_EXISTS));
@@ -274,7 +274,7 @@ impl FileSystemContext for FSPController {
             .fs_interface
             .create(
                 parent,
-                name,
+                name.into(),
                 kind,
                 OpenFlags::from_win_u32(granted_access),
                 AccessMode::from_win_u32(granted_access),
@@ -454,7 +454,7 @@ impl FileSystemContext for FSPController {
                 path.file_name().ok_or(STATUS_OBJECT_NAME_NOT_FOUND)?,
                 (*new_path)
                     .file_name()
-                    .ok_or(STATUS_OBJECT_NAME_NOT_FOUND)?,
+                    .ok_or(STATUS_OBJECT_NAME_NOT_FOUND)?.into(),
                 replace_if_exists,
             )
             .inspect_err(|e| log::error!("rename: {e};"))?;

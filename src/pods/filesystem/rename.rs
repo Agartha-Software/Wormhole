@@ -81,7 +81,7 @@ impl FsInterface {
     fn rename_special(
         &self,
         new_parent: InodeId,
-        new_name: &str,
+        new_name: String,
         source_ino: u64,
         dest_ino: Option<u64>,
     ) -> Result<(), RenameError> {
@@ -161,7 +161,7 @@ impl FsInterface {
         parent: InodeId,
         new_parent: InodeId,
         name: &str,
-        new_name: &str,
+        new_name: String,
         overwrite: bool,
     ) -> Result<(), RenameError> {
         if parent == new_parent && name == new_name {
@@ -185,7 +185,7 @@ impl FsInterface {
                 source => RenameError::WhError { source },
             })?
             .id; // assert source file exists
-        let dest_ino = match arbo.n_get_inode_child_by_name(arbo.n_get_inode(new_parent)?, new_name)
+        let dest_ino = match arbo.n_get_inode_child_by_name(arbo.n_get_inode(new_parent)?, &new_name)
         {
             Ok(inode) => Some(inode.id),
             Err(WhError::InodeNotFound) => None,
@@ -198,7 +198,7 @@ impl FsInterface {
             return Err(RenameError::DestinationExists);
         }
         if Arbo::get_special(name, parent).is_some()
-            || Arbo::get_special(new_name, new_parent).is_some()
+            || Arbo::get_special(&new_name, new_parent).is_some()
         {
             return self.rename_special(new_parent, new_name, src_ino, dest_ino);
         }
@@ -215,7 +215,7 @@ impl FsInterface {
             })?;
         }
 
-        self.rename_locally(parent, new_parent, name, new_name)?;
+        self.rename_locally(parent, new_parent, name, &new_name)?;
         self.network_interface
             .n_rename(parent, new_parent, name, new_name, overwrite)?;
         Ok(())
@@ -225,12 +225,12 @@ impl FsInterface {
         &self,
         parent: InodeId,
         new_parent: InodeId,
-        name: &str,
-        new_name: &str,
+        name: String,
+        new_name: String,
         overwrite: bool,
     ) -> Result<(), RenameError> {
         let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface::remove_inode")?;
-        let dest_ino = match arbo.n_get_inode_child_by_name(arbo.n_get_inode(new_parent)?, new_name)
+        let dest_ino = match arbo.n_get_inode_child_by_name(arbo.n_get_inode(new_parent)?, &new_name)
         {
             Ok(inode) => Some(inode.id),
             Err(WhError::InodeNotFound) => None,
@@ -253,7 +253,7 @@ impl FsInterface {
                 return Err(RenameError::DestinationExists);
             }
         }
-        self.rename_locally(parent, new_parent, name, new_name)
+        self.rename_locally(parent, new_parent, &name, &new_name)
             .or_else(|e| match e {
                 RenameError::LocalRenamingFailed { io } if io.kind() == io::ErrorKind::NotFound => {
                     Ok(())

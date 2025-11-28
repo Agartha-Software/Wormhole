@@ -354,7 +354,7 @@ impl Filesystem for FuseController {
 
         match self
             .fs_interface
-            .make_inode(parent, name, permissions, kind)
+            .make_inode(parent, name.to_owned(), permissions, kind)
         {
             Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
             Err(MakeInodeError::LocalCreationFailed { io }) => {
@@ -387,7 +387,7 @@ impl Filesystem for FuseController {
 
         match self
             .fs_interface
-            .make_inode(parent, name, mode as u16, SimpleFileType::Directory)
+            .make_inode(parent, name.to_owned(), mode as u16, SimpleFileType::Directory)
             .inspect_err(|e| log::error!("mkdir({parent}, {}): {e}", name))
         {
             Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
@@ -468,7 +468,7 @@ impl Filesystem for FuseController {
                 parent,
                 new_parent,
                 name,
-                newname,
+                newname.into(),
                 flags & libc::RENAME_NOREPLACE == 0,
             )
             .inspect_err(|err| log::error!("rename: {err}"))
