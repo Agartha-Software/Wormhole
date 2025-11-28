@@ -46,7 +46,7 @@ impl Drop for WindowsDiskManager {
 /// always takes a WhPath and infers the real disk path
 impl DiskManager for WindowsDiskManager {
     fn stop(&mut self) -> io::Result<()> {
-        log::debug!("Stop of WindowsDiskManager");
+        log::trace!("Stop of WindowsDiskManager");
 
         self.stopped = true;
         std::fs::rename(&self.mount_point, &self.original_location).inspect_err(|e| log::error!("WindowsDiskManager was unable to move the directory to its initial location (on stop): {e}"))?;

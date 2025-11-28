@@ -73,7 +73,7 @@ pub(crate) fn aliased_path(path: &Path) -> Result<PathBuf, AliasedPathError> {
 
 impl Drop for FSPController {
     fn drop(&mut self) {
-        log::debug!("Drop of FSPController");
+        log::trace!("Drop of FSPController");
     }
 }
 
@@ -107,26 +107,21 @@ pub fn mount_fsp(
 ) -> Result<WinfspHost, std::io::Error> {
     let volume_params = VolumeParams::default();
 
-    log::debug!("created volume params...");
     let wormhole_context = FSPController {
         volume_label: Arc::new(RwLock::new("wormhole_fs".into())),
         fs_interface,
         mount_point: path.to_owned(),
     };
-    log::debug!("creating host...");
     let mut host = FileSystemHost::<FSPController>::new(volume_params, wormhole_context)
         .map_err(|_| std::io::Error::new(ErrorKind::Other, "WinFSP FileSystemHost::new error"))?;
-    log::debug!("created host...");
 
     let path = path.to_string_lossy().to_string().replace("\\", "/");
-    log::debug!("mounting host @ {:?} ...", &path);
+    log::info!("WinFSP mounting host @ {:?} ...", &path);
     host.mount(&path)
         .map_err(|_| io::Error::new(io::ErrorKind::Other, "WinFSP mount error"))?;
 
-    log::debug!("mounted host...");
     host.start_with_threads(1)
         .map_err(|_| io::Error::new(io::ErrorKind::Other, "WinFSP start_with_threads error"))?;
-    log::debug!("started host...");
     Ok(WinfspHost(host))
 }
 
