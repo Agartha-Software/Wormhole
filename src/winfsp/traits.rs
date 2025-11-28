@@ -14,7 +14,7 @@ use crate::{
             write::WriteError,
         },
         network::pull_file::PullError,
-        whpath::WhPathError,
+        whpath::{InodeNameError, WhPathError},
     },
 };
 use nt_time::FileTime;
@@ -71,8 +71,14 @@ impl From<WhError> for FspError {
             WhError::NetworkDied { called_from: _ } => STATUS_NETWORK_UNREACHABLE.into(),
             WhError::WouldBlock { called_from: _ } => STATUS_PENDING.into(),
             WhError::InodeIsADirectory => STATUS_FILE_IS_A_DIRECTORY.into(),
-            WhError::ConversionError => STATUS_ILLEGAL_CHARACTER.into(), // REVIEW unsure about this type
+            WhError::ConversionError => STATUS_ILLEGAL_CHARACTER.into(),
         }
+    }
+}
+
+impl From<InodeNameError> for FspError {
+    fn from(_: InodeNameError) -> Self {
+        STATUS_ILLEGAL_CHARACTER.into()
     }
 }
 
