@@ -252,43 +252,6 @@ impl WhPath {
     }
 }
 
-/* NOTE - removed as we don't normalize paths here, only check for it. But could still be useful
-
-/// Normalize a path without accessing the filesystem
-///
-/// Adapted from:
-///
-/// https://github.com/rust-lang/cargo/blob/fede83ccf973457de319ba6fa0e36ead454d2e20/src/cargo/util/paths.rs#L61
-pub fn normalize_path(path: impl AsRef<Path>) -> Result<PathBuf, WhPathError> {
-    let mut components = path.as_ref().components().peekable();
-    let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().cloned() {
-        components.next();
-        PathBuf::from(c.as_os_str())
-    } else {
-        PathBuf::new()
-    };
-
-    for component in components {
-        match component {
-            Component::Prefix(..) => unreachable!(),
-            Component::RootDir => {
-                ret.push(component.as_os_str());
-            }
-            Component::CurDir => {}
-            Component::ParentDir => {
-                if !ret.pop() {
-                    return Err(WhPathError::NotNormalized);
-                }
-            }
-            Component::Normal(c) => {
-                ret.push(c);
-            }
-        }
-    }
-    Ok(ret)
-}
-*/
-
 pub fn osstring_to_string(osstr: OsString) -> WhResult<String> {
     osstr.into_string().map_err(|_| WhError::ConversionError)
 }

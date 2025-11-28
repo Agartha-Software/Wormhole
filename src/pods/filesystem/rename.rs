@@ -185,12 +185,12 @@ impl FsInterface {
                 source => RenameError::WhError { source },
             })?
             .id; // assert source file exists
-        let dest_ino = match arbo.n_get_inode_child_by_name(arbo.n_get_inode(new_parent)?, &new_name)
-        {
-            Ok(inode) => Some(inode.id),
-            Err(WhError::InodeNotFound) => None,
-            Err(source) => return Err(source.into()),
-        };
+        let dest_ino =
+            match arbo.n_get_inode_child_by_name(arbo.n_get_inode(new_parent)?, &new_name) {
+                Ok(inode) => Some(inode.id),
+                Err(WhError::InodeNotFound) => None,
+                Err(source) => return Err(source.into()),
+            };
         drop(arbo);
 
         if dest_ino.is_some() && !overwrite {
@@ -230,12 +230,12 @@ impl FsInterface {
         overwrite: bool,
     ) -> Result<(), RenameError> {
         let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface::remove_inode")?;
-        let dest_ino = match arbo.n_get_inode_child_by_name(arbo.n_get_inode(new_parent)?, &new_name)
-        {
-            Ok(inode) => Some(inode.id),
-            Err(WhError::InodeNotFound) => None,
-            Err(source) => return Err(source.into()),
-        };
+        let dest_ino =
+            match arbo.n_get_inode_child_by_name(arbo.n_get_inode(new_parent)?, &new_name) {
+                Ok(inode) => Some(inode.id),
+                Err(WhError::InodeNotFound) => None,
+                Err(source) => return Err(source.into()),
+            };
         drop(arbo);
         if let Some(dest_ino) = dest_ino {
             if overwrite {

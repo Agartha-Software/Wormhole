@@ -449,7 +449,8 @@ impl FileSystemContext for FSPController {
                 path.file_name().ok_or(STATUS_OBJECT_NAME_NOT_FOUND)?,
                 (*new_path)
                     .file_name()
-                    .ok_or(STATUS_OBJECT_NAME_NOT_FOUND)?.into(),
+                    .ok_or(STATUS_OBJECT_NAME_NOT_FOUND)?
+                    .into(),
                 replace_if_exists,
             )
             .inspect_err(|e| log::error!("rename: {e};"))?;

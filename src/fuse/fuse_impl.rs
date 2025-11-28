@@ -387,7 +387,12 @@ impl Filesystem for FuseController {
 
         match self
             .fs_interface
-            .make_inode(parent, name.to_owned(), mode as u16, SimpleFileType::Directory)
+            .make_inode(
+                parent,
+                name.to_owned(),
+                mode as u16,
+                SimpleFileType::Directory,
+            )
             .inspect_err(|e| log::error!("mkdir({parent}, {}): {e}", name))
         {
             Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
