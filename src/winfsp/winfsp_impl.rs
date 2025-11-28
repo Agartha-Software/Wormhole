@@ -29,7 +29,7 @@ use crate::{
             file_handle::{AccessMode, OpenFlags},
             fs_interface::{FsInterface, SimpleFileType},
         },
-        whpath::{WhPath, WhPathError},
+        whpath::{InodeName, WhPath, WhPathError},
     },
 };
 
@@ -251,7 +251,7 @@ impl FileSystemContext for FSPController {
         log::info!("create({}, type: {:?})", file_name.display(), kind);
 
         let path = WhPath::from_fake_absolute(file_name)?;
-        let name = (*path).file_name().ok_or(STATUS_OBJECT_NAME_NOT_FOUND)?;
+        let name: InodeName = (&path).into();
 
         let arbo = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::create")?;
 
@@ -395,7 +395,7 @@ impl FileSystemContext for FSPController {
 
         let mut cursor = 0;
 
-        entries.sort_by(|a, b| a.name.cmp(&b.name));
+        entries.sort_by(|a, b| a.name.as_str().cmp(b.name.as_str()));
         let marker = match marker.inner_as_cstr() {
             Some(inner) => Some(inner.to_string().map_err(|_| WhPathError::NotValidUtf8)?),
             None => None,
@@ -403,7 +403,7 @@ impl FileSystemContext for FSPController {
 
         for entry in entries
             .into_iter()
-            .skip_while(|s| marker.as_ref().map(|m| s.name <= *m).unwrap_or(false))
+            .skip_while(|s| marker.as_ref().map(|m| *s.name.as_str() <= **m).unwrap_or(false))
         {
             let mut dirinfo = DirInfo::<255>::default(); // !todo
                                                          // let mut info = dirinfo.file_info_mut();
@@ -446,11 +446,8 @@ impl FileSystemContext for FSPController {
             .rename(
                 parent,
                 new_parent,
-                path.file_name().ok_or(STATUS_OBJECT_NAME_NOT_FOUND)?,
-                (*new_path)
-                    .file_name()
-                    .ok_or(STATUS_OBJECT_NAME_NOT_FOUND)?
-                    .into(),
+                (&path).into(),
+                (&new_path).into(),
                 replace_if_exists,
             )
             .inspect_err(|e| log::error!("rename: {e};"))?;

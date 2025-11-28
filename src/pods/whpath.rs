@@ -354,3 +354,9 @@ where
         other == self.0.as_ref()
     }
 }
+
+impl From<&WhPath> for InodeName {
+    fn from(value: &WhPath) -> Self {
+        Self((*value).file_name().unwrap().to_owned()) // NOTE - unwrap allowed as only fails if path end on "..", which can't be the case on a WhPath
+    }
+}
