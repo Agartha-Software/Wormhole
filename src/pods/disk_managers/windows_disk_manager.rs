@@ -38,7 +38,7 @@ impl WindowsDiskManager {
 impl Drop for WindowsDiskManager {
     fn drop(&mut self) {
         if !self.stopped {
-            let _ = std::fs::rename(&self.mount_point, &self.original_location).inspect_err(|e| log::error!("WindowsDiskManager was unable to move the directory to it's initial location (on drop): {e}"));
+            let _ = std::fs::rename(&self.mount_point, &self.original_location).inspect_err(|e| log::error!("WindowsDiskManager was unable to move the directory to its initial location (on drop): {e}"));
         }
     }
 }
@@ -49,7 +49,7 @@ impl DiskManager for WindowsDiskManager {
         log::debug!("Stop of WindowsDiskManager");
 
         self.stopped = true;
-        std::fs::rename(&self.mount_point, &self.original_location).inspect_err(|e| log::error!("WindowsDiskManager was unable to move the directory to it's initial location (on stop): {e}"))?;
+        std::fs::rename(&self.mount_point, &self.original_location).inspect_err(|e| log::error!("WindowsDiskManager was unable to move the directory to its initial location (on stop): {e}"))?;
         Ok(())
     }
 
