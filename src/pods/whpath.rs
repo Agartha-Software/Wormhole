@@ -20,6 +20,7 @@ custom_error! {pub WhPathError
     NotValidUtf8 = "Path is not valid UTF-8",
     NotNormalized = "Path is not normal",
     InvalidOperation = "Operation would compromise WhPath integrity",
+    InvalidName = "Name contains forbidden character(s)",
 }
 
 impl From<FromPathBufError> for WhPathError {
@@ -32,17 +33,20 @@ impl WhPathError {
     pub fn to_io(&self) -> io::Error {
         match self {
             WhPathError::NotRelative => {
-                io::Error::new(io::ErrorKind::Other, "WhPath: path is not relative")
+                io::Error::new(io::ErrorKind::Other, self.to_string())
             }
             WhPathError::NotValidUtf8 => {
-                io::Error::new(io::ErrorKind::InvalidData, "WhPath: not UTF-8")
+                io::Error::new(io::ErrorKind::InvalidData, self.to_string())
             }
             WhPathError::NotNormalized => {
-                io::Error::new(io::ErrorKind::InvalidFilename, "WhPath: not normalized")
+                io::Error::new(io::ErrorKind::InvalidFilename, self.to_string())
+            }
+            WhPathError::InvalidName => {
+                io::Error::new(io::ErrorKind::InvalidFilename, self.to_string())
             }
             WhPathError::InvalidOperation => io::Error::new(
                 io::ErrorKind::Other,
-                "Operation would compromise WhPath integrity",
+                self.to_string(),
             ),
         }
     }
@@ -124,10 +128,10 @@ impl From<&Utf8Path> for WhPath {
     }
 }
 
-impl From<&Inode> for WhPath {
-    /// From Inode is UNCHECKED as inodes names should already be correct
-    fn from(value: &Inode) -> Self {
-        let p: Utf8PathBuf = value.name.clone().into();
+impl From<&InodeName> for WhPath {
+    /// From InodeName is UNCHECKED as InodeNames names should already be correct
+    fn from(value: &InodeName) -> Self {
+        let p = Utf8PathBuf::from(value);
 
         Self { inner: p }
     }
@@ -275,4 +279,63 @@ pub fn is_valid_for_whpath<T: AsRef<Path>>(p: T) -> Result<(), WhPathError> {
         return Err(WhPathError::NotNormalized);
     }
     Ok(())
+}
+
+
+
+// SECTION Name
+
+pub struct InodeName(String);
+
+
+impl InodeName {
+    fn check(name: &str) -> Result<(), WhPathError> {
+        let patterns = ["\\", "/"];
+        match patterns.into_iter().any(|pat| name.contains(pat)) {
+            true => Err(WhPathError::InvalidName),
+            false => Ok(())
+        }
+    }
+}
+
+impl TryFrom<String> for InodeName {
+    type Error = WhPathError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        InodeName::check(&value)?;
+        Ok(Self(value))
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl TryFrom<&winfsp::U16CStr> for InodeName {
+    type Error = WhPathError;
+
+    fn try_from(value: &winfsp::U16CStr) -> Result<Self, Self::Error> {
+        Self::try_from(value.to_string().map_err(|_| WhPathError::NotValidUtf8)?)
+    }
+}
+
+impl TryFrom<OsString> for InodeName {
+    type Error = WhPathError;
+
+    fn try_from(p: OsString) -> Result<Self, Self::Error> {
+        Self::try_from(osstring_to_string(p).map_err(|_| WhPathError::NotValidUtf8)?)
+    }
+}
+
+impl Into<String> for InodeName {
+    fn into(self) -> String {
+        self.0
+    }
+}
+
+impl<T> AsRef<T> for InodeName
+where
+    T: ?Sized,
+    String: AsRef<T>,
+{
+    fn as_ref(&self) -> &T {
+        self.0.as_ref()
+    }
 }
