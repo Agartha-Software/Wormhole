@@ -2,6 +2,7 @@ use camino::{FromPathBufError, Iter, Utf8Path, Utf8PathBuf};
 use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use openat::AsPath;
+use serde::{Deserialize, Serialize};
 #[cfg(target_os = "linux")]
 use std::ffi::CString;
 use std::fmt::{Debug, Display};
@@ -13,7 +14,6 @@ use std::{
 };
 
 use crate::error::{WhError, WhResult};
-use crate::pods::arbo::Inode;
 
 custom_error! {pub WhPathError
     NotRelative = "Path is not relative",
@@ -285,8 +285,8 @@ pub fn is_valid_for_whpath<T: AsRef<Path>>(p: T) -> Result<(), WhPathError> {
 
 // SECTION Name
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct InodeName(String);
-
 
 impl InodeName {
     fn check(name: &str) -> Result<(), WhPathError> {
@@ -337,5 +337,16 @@ where
 {
     fn as_ref(&self) -> &T {
         self.0.as_ref()
+    }
+}
+
+
+impl<T> PartialEq<T> for InodeName
+where
+    T: ?Sized + std::cmp::PartialEq,
+    String: AsRef<T>,
+{
+    fn eq(&self, other: &T) -> bool {
+        other == self.0.as_ref()
     }
 }
