@@ -1,5 +1,8 @@
 use crate::{
-    data::tree_hosts::TreeLine, error::WhResult, network::message::Address, pods::whpath::{InodeName, WhPath},
+    data::tree_hosts::TreeLine,
+    error::WhResult,
+    network::message::Address,
+    pods::whpath::{InodeName, InodeNameError, WhPath},
 };
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Serialize};
@@ -100,7 +103,13 @@ impl FsEntry {
 }
 
 impl Inode {
-    pub fn new(name: InodeName, parent_ino: InodeId, id: InodeId, entry: FsEntry, perm: u16) -> Self {
+    pub fn new(
+        name: InodeName,
+        parent_ino: InodeId,
+        id: InodeId,
+        entry: FsEntry,
+        perm: u16,
+    ) -> Self {
         let meta = Metadata {
             ino: id,
             size: 0,
@@ -701,7 +710,10 @@ fn index_folder_recursive(
     for entry in fs::read_dir(path)? {
         let entry = entry.expect("error in filesystem indexion (1)");
         let ftype = entry.file_type().expect("error in filesystem indexion (2)");
-        let fname: InodeName = entry.file_name().try_into().map_err(|e: super::whpath::WhPathError| e.to_io())?;
+        let fname: InodeName = entry
+            .file_name()
+            .try_into()
+            .map_err(|e: InodeNameError| e.to_io())?;
         let meta = entry.metadata()?;
 
         let special_ino = Arbo::get_special(fname.as_ref(), parent);

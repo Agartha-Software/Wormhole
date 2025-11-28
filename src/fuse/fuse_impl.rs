@@ -13,7 +13,7 @@ use crate::pods::filesystem::rename::RenameError;
 use crate::pods::filesystem::write::WriteError;
 use crate::pods::filesystem::xattrs::GetXAttrError;
 use crate::pods::network::pull_file::PullError;
-use crate::pods::whpath::osstr_to_str;
+use crate::pods::whpath::{osstr_to_str, InodeName};
 use fuser::{
     BackgroundSession, Filesystem, MountOption, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty,
     ReplyEntry, ReplyXattr, Request,
@@ -36,12 +36,12 @@ impl Filesystem for FuseController {
     // READING
 
     fn lookup(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
-        let name = match osstr_to_str(name) {
+        let name: InodeName = match name.to_owned().try_into() {
             Ok(name) => name,
             Err(e) => return reply.error(e.to_libc()),
         };
 
-        match self.fs_interface.get_entry_from_name(parent, name) {
+        match self.fs_interface.get_entry_from_name(parent, name.as_ref()) {
             Ok(Some(inode)) => {
                 reply.entry(&TTL, &inode.meta.with_ids(req.uid(), req.gid()), 0);
             }
@@ -337,7 +337,7 @@ impl Filesystem for FuseController {
         _rdev: u32,
         reply: ReplyEntry,
     ) {
-        let name = match osstr_to_str(name) {
+        let name: InodeName = match name.to_owned().try_into() {
             Ok(name) => name,
             Err(e) => return reply.error(e.to_libc()),
         };
@@ -354,7 +354,7 @@ impl Filesystem for FuseController {
 
         match self
             .fs_interface
-            .make_inode(parent, name.to_owned(), permissions, kind)
+            .make_inode(parent, name, permissions, kind)
         {
             Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
             Err(MakeInodeError::LocalCreationFailed { io }) => {
@@ -380,20 +380,15 @@ impl Filesystem for FuseController {
         _umask: u32,
         reply: ReplyEntry,
     ) {
-        let name = match osstr_to_str(name) {
+        let name: InodeName = match name.to_owned().try_into() {
             Ok(name) => name,
             Err(e) => return reply.error(e.to_libc()),
         };
 
         match self
             .fs_interface
-            .make_inode(
-                parent,
-                name.to_owned(),
-                mode as u16,
-                SimpleFileType::Directory,
-            )
-            .inspect_err(|e| log::error!("mkdir({parent}, {}): {e}", name))
+            .make_inode(parent, name, mode as u16, SimpleFileType::Directory)
+            .inspect_err(|e| log::error!("mkdir: {e}"))
         {
             Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
             Err(MakeInodeError::LocalCreationFailed { io }) => {
@@ -411,7 +406,7 @@ impl Filesystem for FuseController {
     }
 
     fn unlink(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
-        let name = match osstr_to_str(name) {
+        let name: InodeName = match name.to_owned().try_into() {
             Ok(name) => name,
             Err(e) => return reply.error(e.to_libc()),
         };
@@ -430,7 +425,7 @@ impl Filesystem for FuseController {
     }
 
     fn rmdir(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
-        let name = match osstr_to_str(name) {
+        let name: InodeName = match name.to_owned().try_into() {
             Ok(name) => name,
             Err(e) => return reply.error(e.to_libc()),
         };
@@ -458,11 +453,11 @@ impl Filesystem for FuseController {
         flags: u32,
         reply: fuser::ReplyEmpty,
     ) {
-        let name = match osstr_to_str(name) {
+        let name: InodeName = match name.to_owned().try_into() {
             Ok(name) => name,
             Err(e) => return reply.error(e.to_libc()),
         };
-        let newname = match osstr_to_str(newname) {
+        let newname: InodeName = match newname.to_owned().try_into() {
             Ok(newname) => newname,
             Err(e) => return reply.error(e.to_libc()),
         };

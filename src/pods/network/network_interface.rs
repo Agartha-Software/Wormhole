@@ -16,7 +16,7 @@ use crate::{
         peer_ipc::PeerIPC,
         server::Server,
     },
-    pods::{arbo::Ino, filesystem::make_inode::MakeInodeError},
+    pods::{arbo::Ino, filesystem::make_inode::MakeInodeError, whpath::InodeName},
 };
 use parking_lot::RwLock;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -186,21 +186,17 @@ impl NetworkInterface {
         &self,
         parent: InodeId,
         new_parent: InodeId,
-        name: &str,
-        new_name: String,
+        name: InodeName,
+        new_name: InodeName,
         overwrite: bool,
     ) -> Result<(), RenameError> {
         let mut arbo = Arbo::n_write_lock(&self.arbo, "arbo_rename_file")?;
 
-        arbo.mv_inode(parent, new_parent, name, new_name.clone())?;
+        arbo.mv_inode(parent, new_parent, name.as_ref(), new_name.clone())?;
 
         self.to_network_message_tx
             .send(ToNetworkMessage::BroadcastMessage(MessageContent::Rename(
-                parent,
-                new_parent,
-                name.to_owned(),
-                new_name,
-                overwrite,
+                parent, new_parent, name, new_name, overwrite,
             )))
             .expect("broadcast_rename_file: unable to update modification on the network thread");
         Ok(())
@@ -210,12 +206,12 @@ impl NetworkInterface {
         &self,
         parent: InodeId,
         new_parent: InodeId,
-        name: String,
-        new_name: String,
+        name: InodeName,
+        new_name: InodeName,
     ) -> Result<(), RenameError> {
         let mut arbo = Arbo::n_write_lock(&self.arbo, "arbo_rename_file")?;
 
-        arbo.mv_inode(parent, new_parent, &name, new_name)
+        arbo.mv_inode(parent, new_parent, name.as_ref(), new_name)
             .map_err(|err| match err {
                 WhError::InodeNotFound => RenameError::DestinationParentNotFound,
                 WhError::InodeIsNotADirectory => RenameError::DestinationParentNotFolder,
