@@ -166,8 +166,8 @@ impl Filesystem for FuseController {
             Err(e) => return reply.error(e.to_libc()),
         };
 
-        // As we follow linux implementation in spirit, data size limit at 64kb
-        if data.len() > 64000 {
+        // NOTE - 65536 = limits.h: XATTR_SIZE_MAX = 65536
+        if data.len() > 65536 {
             return reply.error(libc::ENOSPC);
         }
 
