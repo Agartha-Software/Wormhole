@@ -20,7 +20,18 @@ custom_error! {pub WhPathError
     NotValidUtf8 = "Path is not valid UTF-8",
     NotNormalized = "Path is not normal",
     InvalidOperation = "Operation would compromise WhPath integrity",
-    InvalidName = "Name contains forbidden character(s)",
+}
+
+custom_error! { pub InodeNameError{} = "Name contains forbidden character(s)" }
+
+impl InodeNameError {
+    pub fn to_io(self) -> io::Error {
+        io::Error::new(io::ErrorKind::InvalidFilename, self.to_string())
+    }
+
+    pub fn to_libc(self) -> i32 {
+        libc::EACCES
+    }
 }
 
 impl From<FromPathBufError> for WhPathError {
@@ -32,22 +43,14 @@ impl From<FromPathBufError> for WhPathError {
 impl WhPathError {
     pub fn to_io(&self) -> io::Error {
         match self {
-            WhPathError::NotRelative => {
-                io::Error::new(io::ErrorKind::Other, self.to_string())
-            }
+            WhPathError::NotRelative => io::Error::new(io::ErrorKind::Other, self.to_string()),
             WhPathError::NotValidUtf8 => {
                 io::Error::new(io::ErrorKind::InvalidData, self.to_string())
             }
             WhPathError::NotNormalized => {
                 io::Error::new(io::ErrorKind::InvalidFilename, self.to_string())
             }
-            WhPathError::InvalidName => {
-                io::Error::new(io::ErrorKind::InvalidFilename, self.to_string())
-            }
-            WhPathError::InvalidOperation => io::Error::new(
-                io::ErrorKind::Other,
-                self.to_string(),
-            ),
+            WhPathError::InvalidOperation => io::Error::new(io::ErrorKind::Other, self.to_string()),
         }
     }
 }
@@ -281,25 +284,27 @@ pub fn is_valid_for_whpath<T: AsRef<Path>>(p: T) -> Result<(), WhPathError> {
     Ok(())
 }
 
-
-
 // SECTION Name
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct InodeName(String);
 
 impl InodeName {
-    fn check(name: &str) -> Result<(), WhPathError> {
+    pub fn check(name: &str) -> Result<(), InodeNameError> {
         let patterns = ["\\", "/"];
         match patterns.into_iter().any(|pat| name.contains(pat)) {
-            true => Err(WhPathError::InvalidName),
-            false => Ok(())
+            true => Err(InodeNameError {}),
+            false => Ok(()),
         }
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
     }
 }
 
 impl TryFrom<String> for InodeName {
-    type Error = WhPathError;
+    type Error = InodeNameError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         InodeName::check(&value)?;
@@ -309,18 +314,18 @@ impl TryFrom<String> for InodeName {
 
 #[cfg(target_os = "windows")]
 impl TryFrom<&winfsp::U16CStr> for InodeName {
-    type Error = WhPathError;
+    type Error = InodeNameError;
 
     fn try_from(value: &winfsp::U16CStr) -> Result<Self, Self::Error> {
-        Self::try_from(value.to_string().map_err(|_| WhPathError::NotValidUtf8)?)
+        Self::try_from(value.to_string().map_err(|_| InodeNameError {})?)
     }
 }
 
 impl TryFrom<OsString> for InodeName {
-    type Error = WhPathError;
+    type Error = InodeNameError;
 
     fn try_from(p: OsString) -> Result<Self, Self::Error> {
-        Self::try_from(osstring_to_string(p).map_err(|_| WhPathError::NotValidUtf8)?)
+        Self::try_from(osstring_to_string(p).map_err(|_| InodeNameError {})?)
     }
 }
 
@@ -339,7 +344,6 @@ where
         self.0.as_ref()
     }
 }
-
 
 impl<T> PartialEq<T> for InodeName
 where
