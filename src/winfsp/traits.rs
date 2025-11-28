@@ -20,7 +20,7 @@ use crate::{
 use nt_time::FileTime;
 use windows::Win32::{
     Foundation::{
-        CRYPT_E_BAD_ENCODE, GENERIC_EXECUTE, GENERIC_READ, GENERIC_WRITE, STATUS_ACCESS_DENIED,
+        STATUS_ILLEGAL_CHARACTER, GENERIC_EXECUTE, GENERIC_READ, GENERIC_WRITE, STATUS_ACCESS_DENIED,
         STATUS_DATA_ERROR, STATUS_DIRECTORY_NOT_EMPTY, STATUS_FILE_IS_A_DIRECTORY,
         STATUS_INVALID_DEVICE_REQUEST, STATUS_INVALID_HANDLE, STATUS_INVALID_PARAMETER,
         STATUS_NETWORK_UNREACHABLE, STATUS_NOT_A_DIRECTORY, STATUS_OBJECT_NAME_EXISTS,
@@ -71,7 +71,7 @@ impl From<WhError> for FspError {
             WhError::NetworkDied { called_from: _ } => STATUS_NETWORK_UNREACHABLE.into(),
             WhError::WouldBlock { called_from: _ } => STATUS_PENDING.into(),
             WhError::InodeIsADirectory => STATUS_FILE_IS_A_DIRECTORY.into(),
-            WhError::ConversionError => CRYPT_E_BAD_ENCODE.into(), // REVIEW unsure about this type
+            WhError::ConversionError => STATUS_ILLEGAL_CHARACTER.into(), // REVIEW unsure about this type
         }
     }
 }
@@ -80,7 +80,7 @@ impl From<WhPathError> for FspError {
     fn from(e: WhPathError) -> Self {
         match e {
             WhPathError::NotRelative => STATUS_INVALID_DEVICE_REQUEST.into(),
-            WhPathError::NotValidUtf8 => CRYPT_E_BAD_ENCODE.into(),
+            WhPathError::NotValidUtf8 => STATUS_ILLEGAL_CHARACTER.into(),
             WhPathError::NotNormalized => STATUS_INVALID_DEVICE_REQUEST.into(),
             WhPathError::InvalidOperation => STATUS_INVALID_DEVICE_REQUEST.into(),
         }
