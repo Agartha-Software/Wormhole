@@ -683,7 +683,7 @@ pub fn mount_fuse(
     let options = vec![
         MountOption::RW,
         MountOption::DefaultPermissions,
-        MountOption::AllowOther,
+        MountOption::AllowOther,            //NOTE - Necessary for xfstests
         MountOption::FSName(format!("wormhole@{}", mount_point.get_end())),
     ];
     let ctrl = FuseController { fs_interface };

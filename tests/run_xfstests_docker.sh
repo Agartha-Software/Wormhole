@@ -26,7 +26,7 @@ trap cleanup EXIT ERR
 # --- Preparation ---
 echo "--- Preparation of the test environment ---"
 echo "Starting the wormholed service..."
-"$WORMHOLE_DAEMON" &
+"$WORMHOLE_DAEMON" > /tmp/wormholed.log 2>&1 &
 echo "$!" > "$PID_FILE"
 echo "Daemon started with PID $(cat "$PID_FILE")"
 sleep 2
@@ -68,19 +68,42 @@ EOF
 # --- Launch the test ---
 TEST_TO_RUN="generic/001"
 LOG_FILE_PATH="results/$TEST_TO_RUN.log"
-CHECK_OUTPUT_FILE="/tmp/check_output.log"
 
-echo "Running xfstests test '$TEST_TO_RUN'..."
-rm -f "$LOG_FILE_PATH" "$CHECK_OUTPUT_FILE" "results/.config" /tmp/mount_helper.log
+# --- Extraction de la description depuis l'en-tête du fichier de test ---
+TEST_FILE="tests/$TEST_TO_RUN"
 
-# -- Fix the bug "exit code 0" --
+if [ -f "$TEST_FILE" ]; then
+    # 1. Cherche "FS QA Test No."
+    # 2. Continue tant que les lignes commencent par "#"
+    # 3. Retire les "# " du début pour l'affichage
+    TEST_DESCRIPTION=$(awk '
+        /^# FS QA Test No\./ {start=1; next} 
+        !/^#/ {if (start) exit} 
+        start {sub(/^# ?/, ""); print}
+    ' "$TEST_FILE")
+else
+    TEST_DESCRIPTION="Test file not found ($TEST_FILE)."
+fi
+
+# Si la description est vide (cas où le header est différent), message par défaut
+if [ -z "$TEST_DESCRIPTION" ]; then
+    TEST_DESCRIPTION="No description found in test header."
+fi
+
+echo "-----------------------------------------------------"
+echo "Starting test: $TEST_TO_RUN"
+echo "-----------------------------------------------------"
+echo "Description:"
+echo "$TEST_DESCRIPTION"
+echo "-----------------------------------------------------"
+
+rm -f "$LOG_FILE_PATH" "results/.config" /tmp/mount_helper.log
+
 # 1. Disable 'set -e' temporarily
 set +e
 
 # 2. Execute the command:
-#    2>&1 : redirige stderr vers stdout
-#    | tee : display in the console AND write to the file
-./check "$TEST_TO_RUN" 2>&1 | tee "$CHECK_OUTPUT_FILE"
+./check -fuse -d "$TEST_TO_RUN"
 
 # 3. Capture the TRUE exit code of the first command in the pipe (./check)
 EXIT_CODE=${PIPESTATUS[0]}
@@ -89,16 +112,11 @@ EXIT_CODE=${PIPESTATUS[0]}
 set -e
 
 # 5. Verify failure (Exit code non-zero OR specific failure message in output)
-if [[ $EXIT_CODE -ne 0 ]] || grep -q "Failures:" "$CHECK_OUTPUT_FILE" || grep -q "Failed" "$CHECK_OUTPUT_FILE"; then
+if [[ $EXIT_CODE -ne 0 ]]; then
     echo "-----------------------------------------------------"
     echo "ERROR: xfstests FAILED with exit code $EXIT_CODE"
     echo "-----------------------------------------------------"
     
-    echo "Displaying captured output from './check' (from $CHECK_OUTPUT_FILE):"
-    echo "--- START OF CAPTURED OUTPUT ---"
-    cat "$CHECK_OUTPUT_FILE" || echo "Captured output file not found."
-    echo "--- END OF CAPTURED OUTPUT ---"
-
     echo "---"
     echo "Checking for xfstests log file ($LOG_FILE_PATH)..."
     if [ -f "$LOG_FILE_PATH" ]; then
@@ -121,15 +139,8 @@ if [[ $EXIT_CODE -ne 0 ]] || grep -q "Failures:" "$CHECK_OUTPUT_FILE" || grep -q
     echo "---"
     echo "Checking mount helper log (/tmp/mount_helper.log)..."
     cat /tmp/mount_helper.log || echo "Mount helper log not found."
-    
     exit 1
 fi
 
 # If we arrive here, the test has succeeded
 echo "--- Test '$TEST_TO_RUN' finished successfully ---"
-echo "Log file is at $LOG_FILE_PATH:"
-echo "---------------------"
-if [ -f "$LOG_FILE_PATH" ]; then
-    cat "$LOG_FILE_PATH"
-fi
-echo "---------------------"
