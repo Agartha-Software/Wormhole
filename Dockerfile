@@ -68,6 +68,8 @@ RUN cd /opt && \
     make && \
     make install
 
+COPY tests/xfstests_exclude.txt /opt/xfstests-dev/exclude_tests
+
 RUN mkdir -p /mnt/test /mnt/scratch
 
 RUN chmod +x /tests/run_xfstests_docker.sh /sbin/mount.fuse.wormhole
