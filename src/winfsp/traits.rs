@@ -71,7 +71,6 @@ impl From<WhError> for FspError {
             WhError::NetworkDied { called_from: _ } => STATUS_NETWORK_UNREACHABLE.into(),
             WhError::WouldBlock { called_from: _ } => STATUS_PENDING.into(),
             WhError::InodeIsADirectory => STATUS_FILE_IS_A_DIRECTORY.into(),
-            WhError::ConversionError => STATUS_ILLEGAL_CHARACTER.into(),
         }
     }
 }

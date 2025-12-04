@@ -13,16 +13,25 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::error::{WhError, WhResult};
-
 custom_error! {pub WhPathError
     NotRelative = "Path is not relative",
-    NotValidUtf8 = "Path is not valid UTF-8",
+    ConversionError{source: ConversionError} = "{source}",
     NotNormalized = "Path is not normal",
     InvalidOperation = "Operation would compromise WhPath integrity",
 }
 
 custom_error! { pub InodeNameError{} = "Name contains forbidden character(s)" }
+custom_error! { pub ConversionError{} = "Could not be converted to valid UTF-8" }
+
+impl ConversionError {
+    pub fn to_libc(&self) -> i32 {
+        libc::EILSEQ
+    }
+
+    pub fn into_io(self) -> io::Error {
+        io::ErrorKind::InvalidData.into()
+    }
+}
 
 impl InodeNameError {
     pub fn to_io(self) -> io::Error {
@@ -36,7 +45,9 @@ impl InodeNameError {
 
 impl From<FromPathBufError> for WhPathError {
     fn from(_: FromPathBufError) -> Self {
-        Self::NotValidUtf8
+        Self::ConversionError {
+            source: ConversionError {},
+        }
     }
 }
 
@@ -44,8 +55,8 @@ impl WhPathError {
     pub fn to_io(&self) -> io::Error {
         match self {
             WhPathError::NotRelative => io::Error::new(io::ErrorKind::Other, self.to_string()),
-            WhPathError::NotValidUtf8 => {
-                io::Error::new(io::ErrorKind::InvalidData, self.to_string())
+            WhPathError::ConversionError { source } => {
+                io::Error::new(io::ErrorKind::InvalidData, source.to_string())
             }
             WhPathError::NotNormalized => {
                 io::Error::new(io::ErrorKind::InvalidFilename, self.to_string())
@@ -259,12 +270,12 @@ impl WhPath {
     }
 }
 
-pub fn osstring_to_string(osstr: OsString) -> WhResult<String> {
-    osstr.into_string().map_err(|_| WhError::ConversionError)
+pub fn osstring_to_string(osstr: OsString) -> Result<String, ConversionError> {
+    osstr.into_string().map_err(|_| ConversionError {})
 }
 
-pub fn osstr_to_str(osstr: &OsStr) -> WhResult<&str> {
-    osstr.to_str().ok_or(WhError::ConversionError)
+pub fn osstr_to_str(osstr: &OsStr) -> Result<&str, ConversionError> {
+    osstr.to_str().ok_or(ConversionError {})
 }
 
 /// Checks for:
