@@ -395,21 +395,21 @@ impl FileSystemContext for FSPController {
 
         let mut cursor = 0;
 
-        entries.sort_by(|a, b| a.name.as_str().cmp(b.name.as_str()));
+        entries.sort_by(|(_, a_name, _), (_, b_name, _)| a_name.cmp(b_name));
         let marker = match marker.inner_as_cstr() {
             Some(inner) => Some(inner.to_string().map_err(|_| WhPathError::NotValidUtf8)?),
             None => None,
         };
 
-        for entry in entries
+        for (id, name, meta) in entries
             .into_iter()
-            .skip_while(|s| marker.as_ref().map(|m| *s.name.as_str() <= **m).unwrap_or(false))
+            .skip_while(|(id, name, meta)| marker.as_ref().map(|m| *name <= *m).unwrap_or(false))
         {
             let mut dirinfo = DirInfo::<255>::default(); // !todo
                                                          // let mut info = dirinfo.file_info_mut();
-            dirinfo.set_name(&entry.name)?;
-            *dirinfo.file_info_mut() = (&entry.meta).into();
-            log::trace!("dirinfo:{:?}:{:?}", &entry.name, dirinfo.file_info_mut());
+            dirinfo.set_name(&name)?;
+            *dirinfo.file_info_mut() = (&meta).into();
+            log::trace!("dirinfo:{:?}:{:?}", &name, dirinfo.file_info_mut());
             if !dirinfo.append_to_buffer(buffer, &mut cursor) {
                 break;
             }
