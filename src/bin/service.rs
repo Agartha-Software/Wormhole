@@ -2,6 +2,7 @@
 // In code we trust
 // AgarthaSoftware - 2024
 
+use clap::Parser;
 use std::collections::HashMap;
 /**DOC
  * Important variables to know :
@@ -20,9 +21,8 @@ use std::collections::HashMap;
  */
 use std::io::IsTerminal;
 use std::process::ExitCode;
-
-use clap::Parser;
 use tokio::sync::mpsc::{self, UnboundedSender};
+use wormhole::startup::startup;
 
 use wormhole::ipc::service::start_commands_listeners;
 use wormhole::pods::pod::Pod;
@@ -59,6 +59,11 @@ async fn main() -> ExitCode {
             eprintln!("WindowsFSP failed to start, verify your installation: {err}");
             return ExitCode::FAILURE;
         }
+    }
+
+    if let Err(err) = startup() {
+        eprintln!("Failed to startup: {:?}", err);
+        return ExitCode::FAILURE;
     }
 
     let terminal_handle = if std::io::stdout().is_terminal() || args.nodeamon {
