@@ -156,7 +156,7 @@ impl TryFrom<&winfsp::U16CStr> for WhPath {
     type Error = WhPathError;
 
     fn try_from(value: &winfsp::U16CStr) -> Result<Self, Self::Error> {
-        Self::try_from(value.to_string().map_err(|_| WhPathError::NotValidUtf8)?)
+        Self::try_from(value.to_string().map_err(|_| ConversionError{})?)
     }
 }
 
@@ -243,7 +243,7 @@ impl WhPath {
     /// Should be used with winfsp that gives paths starting with "\\"
     pub fn from_fake_absolute(path: &winfsp::U16CStr) -> Result<Self, WhPathError> {
         path.to_string()
-            .map_err(|_| WhPathError::NotValidUtf8)?
+            .map_err(|_| ConversionError{})?
             .trim_start_matches("\\")
             .try_into()
     }
