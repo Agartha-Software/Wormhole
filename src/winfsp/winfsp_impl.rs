@@ -29,7 +29,7 @@ use crate::{
             file_handle::{AccessMode, OpenFlags},
             fs_interface::{FsInterface, SimpleFileType},
         },
-        whpath::{InodeName, WhPath, WhPathError},
+        whpath::{ConversionError, InodeName, WhPath, WhPathError},
     },
 };
 
@@ -397,13 +397,13 @@ impl FileSystemContext for FSPController {
 
         entries.sort_by(|(_, a_name, _), (_, b_name, _)| a_name.cmp(b_name));
         let marker = match marker.inner_as_cstr() {
-            Some(inner) => Some(inner.to_string().map_err(|_| WhPathError::NotValidUtf8)?),
+            Some(inner) => Some(inner.to_string().map_err(|_| WhPathError::ConversionError { source: ConversionError{}})?),
             None => None,
         };
 
-        for (id, name, meta) in entries
+        for (_, name, meta) in entries
             .into_iter()
-            .skip_while(|(id, name, meta)| marker.as_ref().map(|m| *name <= *m).unwrap_or(false))
+            .skip_while(|(_, name, _)| marker.as_ref().map(|m| *name <= *m).unwrap_or(false))
         {
             let mut dirinfo = DirInfo::<255>::default(); // !todo
                                                          // let mut info = dirinfo.file_info_mut();

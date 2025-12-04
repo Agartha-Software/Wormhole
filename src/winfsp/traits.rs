@@ -85,7 +85,7 @@ impl From<WhPathError> for FspError {
     fn from(e: WhPathError) -> Self {
         match e {
             WhPathError::NotRelative => STATUS_INVALID_DEVICE_REQUEST.into(),
-            WhPathError::NotValidUtf8 => STATUS_ILLEGAL_CHARACTER.into(),
+            WhPathError::ConversionError { source: _ } => STATUS_ILLEGAL_CHARACTER.into(),
             WhPathError::NotNormalized => STATUS_INVALID_DEVICE_REQUEST.into(),
             WhPathError::InvalidOperation => STATUS_INVALID_DEVICE_REQUEST.into(),
         }
