@@ -148,9 +148,13 @@ async fn apply_to(
     if Arbo::is_local_only(ino) {
         return Ok(0);
     }
-    let file_binary = Arc::new(fs_interface.read_local_file(ino)?);
-
     let redundancy = nw_interface.global_config.read().redundancy.number;
+
+    if redundancy == 0 {
+        return Ok(0);
+    }
+
+    let file_binary = Arc::new(fs_interface.read_local_file(ino)?);
 
     let missing_hosts_count: usize;
     let available_hosts = peers.len() + 1; // + myself
