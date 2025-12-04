@@ -54,7 +54,7 @@ impl FsInterface {
                     }
                 }
                 FsEntry::File(hosts) => {
-                    if hosts.contains(&self.network_interface.hostname()?) {
+                    if hosts.contains(&self.network_interface.hostname) {
                         if meta.size != inode.meta.size {
                             self.disk
                                 .set_file_size(&path, meta.size as usize)

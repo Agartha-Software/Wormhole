@@ -53,7 +53,7 @@ pub struct NetworkInterface {
     pub to_redundancy_tx: UnboundedSender<RedundancyMessage>,
     pub callbacks: Callbacks,
     pub peers: Arc<RwLock<Vec<PeerIPC>>>,
-    pub local_config: Arc<RwLock<LocalConfig>>,
+    pub hostname: String,
     pub global_config: Arc<RwLock<GlobalConfig>>,
 }
 
@@ -64,7 +64,7 @@ impl NetworkInterface {
         to_network_message_tx: UnboundedSender<ToNetworkMessage>,
         to_redundancy_tx: UnboundedSender<RedundancyMessage>,
         peers: Arc<RwLock<Vec<PeerIPC>>>,
-        local_config: Arc<RwLock<LocalConfig>>,
+        hostname: String,
         global_config: Arc<RwLock<GlobalConfig>>,
     ) -> Self {
         Self {
@@ -76,20 +76,20 @@ impl NetworkInterface {
                 callbacks: HashMap::new().into(),
             },
             peers,
-            local_config,
+            hostname,
             global_config,
         }
     }
 
-    pub fn hostname(&self) -> WhResult<String> {
-        Ok(self
-            .local_config
-            .try_read()
-            .ok_or(WhError::DeadLock)?
-            .general
-            .hostname
-            .clone())
-    }
+    // pub fn hostname(&self) -> WhResult<String> {
+    //     Ok(self
+    //         .local_config
+    //         .try_read()
+    //         .ok_or(WhError::DeadLock)?
+    //         .general
+    //         .hostname
+    //         .clone())
+    // }
 
     #[deprecated(note = "bad to preallocate inodes like this")]
     pub fn get_next_inode(&self) -> io::Result<Ino> {
@@ -276,7 +276,7 @@ impl NetworkInterface {
         inode.meta.mtime = SystemTime::now();
 
         inode.entry = match &inode.entry {
-            FsEntry::File(_) => FsEntry::File(vec![self.hostname()?]),
+            FsEntry::File(_) => FsEntry::File(vec![self.hostname.clone()]),
             _ => panic!("Can't edit hosts on folder"),
         };
         Ok(inode.meta.clone())
@@ -284,15 +284,15 @@ impl NetworkInterface {
 
     pub fn write_file(&self, id: InodeId, new_size: usize) -> WhResult<()> {
         let meta = self.affect_write_locally(id, new_size)?;
-        let self_hostname = LocalConfig::read_lock(&self.local_config, "affect_write_locally")?
-            .general
-            .hostname
-            .clone();
+        // let self_hostname = LocalConfig::read_lock(&self.local_config, "affect_write_locally")?
+        //     .general
+        //     .hostname
+        //     .clone();
 
         if !Arbo::is_local_only(id) {
             self.to_network_message_tx
                 .send(ToNetworkMessage::BroadcastMessage(
-                    MessageContent::RevokeFile(id, self_hostname, meta),
+                    MessageContent::RevokeFile(id, self.hostname.clone(), meta),
                 ))
                 .expect("revoke_remote_hosts: unable to update modification on the network thread");
             // self.apply_redundancy(id);
@@ -301,7 +301,7 @@ impl NetworkInterface {
     }
 
     pub fn revoke_remote_hosts(&self, id: InodeId) -> WhResult<()> {
-        self.update_hosts(id, vec![self.hostname()?])?;
+        self.update_hosts(id, vec![self.hostname.clone()])?;
         // self.apply_redundancy(id);
         Ok(())
     }

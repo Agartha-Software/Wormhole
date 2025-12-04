@@ -33,9 +33,7 @@ impl NetworkInterface {
             return Err(PullError::NoHostAvailable);
         }
 
-        let hostname = self.hostname()?;
-
-        if hosts.contains(&hostname) {
+        if hosts.contains(&self.hostname) {
             // if the asked file is already on disk
             Ok(None)
         } else {
@@ -48,7 +46,7 @@ impl NetworkInterface {
                 self.to_network_message_tx
                     .send(ToNetworkMessage::SpecificMessage(
                         (
-                            MessageContent::RequestFile(file, hostname.clone()),
+                            MessageContent::RequestFile(file, self.hostname.clone()),
                             Some(status_tx.clone()),
                         ),
                         vec![host.clone()], // NOTE - naive choice for now

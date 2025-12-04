@@ -55,7 +55,7 @@ pub struct Pod {
     new_peer_handle: JoinHandle<()>,
     redundancy_worker_handle: JoinHandle<()>,
     pub global_config: Arc<RwLock<GlobalConfig>>,
-    pub local_config: Arc<RwLock<LocalConfig>>,
+    pub local_config: LocalConfig,
 }
 
 struct PodPrototype {
@@ -298,9 +298,9 @@ impl Pod {
         }
 
         let url = proto.local_config.general.url.clone();
+        let hostname = proto.local_config.general.hostname.clone();
 
         let arbo: Arc<RwLock<Arbo>> = Arc::new(RwLock::new(proto.arbo));
-        let local = Arc::new(RwLock::new(proto.local_config));
         let global = Arc::new(RwLock::new(proto.global_config));
 
         let network_interface = Arc::new(NetworkInterface::new(
@@ -309,7 +309,7 @@ impl Pod {
             senders_in.clone(),
             redundancy_tx.clone(),
             Arc::new(RwLock::new(proto.peers)),
-            local.clone(),
+            hostname,
             global.clone(),
         ));
 
@@ -360,7 +360,7 @@ impl Pod {
             network_airport_handle,
             peer_broadcast_handle,
             new_peer_handle,
-            local_config: local.clone(),
+            local_config: proto.local_config,
             global_config: global.clone(),
             redundancy_worker_handle,
         })
@@ -442,26 +442,18 @@ impl Pod {
     /// Gets every file hosted by this pod only and sends them to other pods
     async fn send_files_when_stopping(&self, arbo: &Arbo, peers: Vec<Address>) {
         futures_util::future::join_all(
-            arbo.files_hosted_only_by(
-                &self
-                    .network_interface
-                    .local_config
-                    .read()
-                    .general
-                    .hostname
-                    .clone(),
-            )
-            .filter_map(|inode| {
-                if inode.id == GLOBAL_CONFIG_INO
-                    || inode.id == LOCAL_CONFIG_INO
-                    || inode.id == ARBO_FILE_INO
-                {
-                    None
-                } else {
-                    Some(inode.id)
-                }
-            })
-            .map(|id| self.send_file_to_possible_hosts(&peers, id)),
+            arbo.files_hosted_only_by(&self.network_interface.hostname.clone())
+                .filter_map(|inode| {
+                    if inode.id == GLOBAL_CONFIG_INO
+                        || inode.id == LOCAL_CONFIG_INO
+                        || inode.id == ARBO_FILE_INO
+                    {
+                        None
+                    } else {
+                        Some(inode.id)
+                    }
+                })
+                .map(|id| self.send_file_to_possible_hosts(&peers, id)),
         )
         .await
         .iter()
@@ -495,14 +487,7 @@ impl Pod {
         self.network_interface
             .to_network_message_tx
             .send(ToNetworkMessage::BroadcastMessage(
-                MessageContent::Disconnect(
-                    self.network_interface
-                        .local_config
-                        .read()
-                        .general
-                        .hostname
-                        .clone(),
-                ),
+                MessageContent::Disconnect(self.local_config.general.hostname.clone()),
             ))
             .expect("to_network_message_tx closed.");
 
@@ -593,10 +578,7 @@ impl Pod {
 
         InspectInfo {
             url: self.network_interface.url.clone(),
-            hostname: self
-                .network_interface
-                .hostname()
-                .expect("Can't lock network"),
+            hostname: self.network_interface.hostname.clone(),
             name: "".to_string(), //TODO to delete
             connected_peers: peers_data,
             mount: self.mountpoint.clone(),
