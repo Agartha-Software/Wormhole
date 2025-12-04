@@ -90,8 +90,7 @@ impl DiskManager for WindowsDiskManager {
     }
 
     fn read_file(&self, path: &WhPath, offset: usize, buf: &mut [u8]) -> io::Result<usize> {
-        std::fs::File::open(&self.mount_point.join(path))?
-            .seek_read(buf, offset as u64)
+        std::fs::File::open(&self.mount_point.join(path))?.seek_read(buf, offset as u64)
     }
 
     fn new_dir(&self, path: &WhPath, _permissions: u16) -> io::Result<()> {
