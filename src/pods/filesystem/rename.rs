@@ -35,11 +35,11 @@ custom_error! {
 }
 
 impl FsInterface {
-    fn construct_file_path(&self, parent: InodeId, name: &str) -> WhResult<WhPath> {
+    fn construct_file_path(&self, parent: InodeId, name: &InodeName) -> WhResult<WhPath> {
         let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface.rename.construct_file_path")?;
         let mut parent_path = arbo.n_get_path_from_inode_id(parent)?;
 
-        parent_path.push(name.try_into().map_err(|_| WhError::ConversionError)?);
+        parent_path.push(name.into());
         return Ok(parent_path);
     }
 
@@ -47,8 +47,8 @@ impl FsInterface {
         &self,
         parent: InodeId,
         new_parent: InodeId,
-        name: &str,
-        new_name: &str,
+        name: &InodeName,
+        new_name: &InodeName,
     ) -> Result<(), RenameError> {
         let parent_path = self.construct_file_path(parent, name)?;
         let new_parent_path = self.construct_file_path(new_parent, new_name)?;
@@ -216,7 +216,7 @@ impl FsInterface {
             })?;
         }
 
-        self.rename_locally(parent, new_parent, name.as_ref(), new_name.as_ref())?;
+        self.rename_locally(parent, new_parent, &name, &new_name)?;
         self.network_interface
             .n_rename(parent, new_parent, name, new_name, overwrite)?;
         Ok(())
@@ -255,7 +255,7 @@ impl FsInterface {
                 return Err(RenameError::DestinationExists);
             }
         }
-        self.rename_locally(parent, new_parent, name.as_ref(), new_name.as_ref())
+        self.rename_locally(parent, new_parent, &name, &new_name)
             .or_else(|e| match e {
                 RenameError::LocalRenamingFailed { io } if io.kind() == io::ErrorKind::NotFound => {
                     Ok(())
