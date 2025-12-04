@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::io;
 
 use crate::ipc::error::IoError;
 use crate::ipc::{
@@ -16,7 +17,10 @@ where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
 {
     let answer = match pods.iter().find(|(_, pod)| pod.contains(&req.path)) {
-        Some((_, pod)) => match pod.get_file_hosts(WhPath::from(&req.path.display().to_string())) {
+        Some((_, pod)) => match pod.get_file_hosts(
+            &WhPath::make_relative(&req.path, pod.get_mountpoint())
+                .map_err(|_| io::ErrorKind::InvalidFilename)?,
+        ) {
             Ok(hosts) => GetHostsAnswer::Hosts(hosts),
             Err(PodInfoError::FileNotFound) => GetHostsAnswer::FileNotFound,
             Err(PodInfoError::WrongFileType { detail }) => GetHostsAnswer::WrongFileType(detail),

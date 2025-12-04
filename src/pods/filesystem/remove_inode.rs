@@ -1,12 +1,11 @@
-use custom_error::custom_error;
+#[cfg(target_os = "linux")]
+use crate::pods::{filesystem::permissions::has_write_perm, whpath::InodeName};
 
 use crate::{
     error::WhError,
-    pods::{
-        arbo::{Arbo, FsEntry, InodeId},
-        filesystem::permissions::has_write_perm,
-    },
+    pods::arbo::{Arbo, FsEntry, InodeId},
 };
+use custom_error::custom_error;
 
 use super::fs_interface::FsInterface;
 
@@ -37,10 +36,11 @@ impl From<RemoveInodeError> for RemoveFileError {
 
 impl FsInterface {
     // NOTE - system specific (fuse/winfsp) code that need access to arbo or other classes
+    #[cfg(target_os = "linux")]
     pub fn fuse_remove_inode(
         &self,
         parent: InodeId,
-        name: &std::ffi::OsStr,
+        name: InodeName,
     ) -> Result<(), RemoveFileError> {
         let target = {
             let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface::fuse_remove_inode")?;
@@ -48,8 +48,7 @@ impl FsInterface {
             if !has_write_perm(parent.meta.perm) {
                 return Err(RemoveFileError::PermissionDenied);
             }
-            arbo.n_get_inode_child_by_name(parent, &name.to_string_lossy().to_string())?
-                .id
+            arbo.n_get_inode_child_by_name(parent, name.as_ref())?.id
         };
 
         self.remove_inode(target)
@@ -58,8 +57,10 @@ impl FsInterface {
     pub fn remove_inode_locally(&self, id: InodeId) -> Result<(), RemoveFileError> {
         let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface::remove_inode")?;
         let to_remove_path = arbo.n_get_path_from_inode_id(id)?;
+        let entry = arbo.n_get_inode(id)?.entry.to_owned();
+        drop(arbo);
 
-        match &arbo.n_get_inode(id)?.entry {
+        match entry {
             FsEntry::File(hosts) if hosts.contains(&self.network_interface.hostname()?) => self
                 .disk
                 .remove_file(&to_remove_path)
@@ -73,7 +74,12 @@ impl FsInterface {
                 .disk
                 .remove_dir(&to_remove_path)
                 .map_err(|io| RemoveFileError::LocalDeletionFailed { io })?,
+            #[cfg(target_os = "linux")]
             FsEntry::Directory(_) => return Err(RemoveFileError::NonEmpty),
+            #[cfg(target_os = "windows")]
+            FsEntry::Directory(children) => {
+                children.iter().try_for_each(|c| self.remove_inode(*c))?
+            }
         };
         Ok(())
     }

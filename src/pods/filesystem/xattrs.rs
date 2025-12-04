@@ -9,7 +9,7 @@ custom_error! {pub GetXAttrError
 }
 
 impl FsInterface {
-    pub fn get_inode_xattr(&self, ino: InodeId, key: &String) -> Result<Vec<u8>, GetXAttrError> {
+    pub fn get_inode_xattr(&self, ino: InodeId, key: &str) -> Result<Vec<u8>, GetXAttrError> {
         let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface::get_inode_xattr")?;
         let inode = arbo.n_get_inode(ino)?;
 
@@ -19,7 +19,7 @@ impl FsInterface {
         }
     }
 
-    pub fn xattr_exists(&self, ino: InodeId, key: &String) -> WhResult<bool> {
+    pub fn xattr_exists(&self, ino: InodeId, key: &str) -> WhResult<bool> {
         let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface::xattr_exists")?;
         let inode = arbo.n_get_inode(ino)?;
 
@@ -30,6 +30,6 @@ impl FsInterface {
         let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface::get_inode_xattr")?;
         let inode = arbo.n_get_inode(ino)?;
 
-        Ok(inode.xattrs.keys().map(|key| key.clone()).collect())
+        Ok(inode.xattrs.keys().cloned().collect())
     }
 }

@@ -7,7 +7,7 @@ use crate::{
     pods::{
         arbo::{Arbo, InodeId, Metadata},
         filesystem::permissions::has_write_perm,
-        whpath::WhPath,
+        whpath::{InodeName, WhPath},
     },
 };
 
@@ -35,19 +35,20 @@ custom_error! {
 }
 
 impl FsInterface {
-    fn construct_file_path(&self, parent: InodeId, name: &String) -> WhResult<WhPath> {
-        let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface.get_begin_path_end_path")?;
-        let parent_path = arbo.n_get_path_from_inode_id(parent)?;
+    fn construct_file_path(&self, parent: InodeId, name: &InodeName) -> WhResult<WhPath> {
+        let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface.rename.construct_file_path")?;
+        let mut parent_path = arbo.n_get_path_from_inode_id(parent)?;
 
-        return Ok(parent_path.join(name));
+        parent_path.push(name.into());
+        return Ok(parent_path);
     }
 
     fn rename_locally(
         &self,
         parent: InodeId,
         new_parent: InodeId,
-        name: &String,
-        new_name: &String,
+        name: &InodeName,
+        new_name: &InodeName,
     ) -> Result<(), RenameError> {
         let parent_path = self.construct_file_path(parent, name)?;
         let new_parent_path = self.construct_file_path(new_parent, new_name)?;
@@ -80,7 +81,7 @@ impl FsInterface {
     fn rename_special(
         &self,
         new_parent: InodeId,
-        new_name: &String,
+        new_name: InodeName,
         source_ino: u64,
         dest_ino: Option<u64>,
     ) -> Result<(), RenameError> {
@@ -105,7 +106,7 @@ impl FsInterface {
             self.set_meta_size(source_ino, meta)?;
             dest_ino
         } else {
-            self.make_inode(new_parent, new_name.clone(), meta.perm, meta.kind)
+            self.make_inode(new_parent, new_name, meta.perm, meta.kind)
                 .map_err(|err| match err {
                     MakeInodeError::WhError { source } => RenameError::WhError { source },
                     MakeInodeError::AlreadyExist => RenameError::DestinationExists,
@@ -159,11 +160,11 @@ impl FsInterface {
         &self,
         parent: InodeId,
         new_parent: InodeId,
-        name: &String,
-        new_name: &String,
+        name: InodeName,
+        new_name: InodeName,
         overwrite: bool,
     ) -> Result<(), RenameError> {
-        if parent == new_parent && name == new_name {
+        if parent == new_parent && new_name == name {
             return Ok(());
         }
 
@@ -177,27 +178,28 @@ impl FsInterface {
             return Err(RenameError::PermissionDenied);
         }
         let src_ino = arbo
-            .n_get_inode_child_by_name(p_inode, &name)
+            .n_get_inode_child_by_name(p_inode, name.as_ref())
             .map_err(|err| match err {
                 WhError::InodeNotFound => RenameError::SourceParentNotFound,
                 WhError::InodeIsNotADirectory => RenameError::SourceParentNotFolder,
                 source => RenameError::WhError { source },
             })?
             .id; // assert source file exists
-        let dest_ino =
-            match arbo.n_get_inode_child_by_name(arbo.n_get_inode(new_parent)?, &new_name) {
-                Ok(inode) => Some(inode.id),
-                Err(WhError::InodeNotFound) => None,
-                Err(source) => return Err(source.into()),
-            };
+        let dest_ino = match arbo
+            .n_get_inode_child_by_name(arbo.n_get_inode(new_parent)?, new_name.as_ref())
+        {
+            Ok(inode) => Some(inode.id),
+            Err(WhError::InodeNotFound) => None,
+            Err(source) => return Err(source.into()),
+        };
         drop(arbo);
 
         if dest_ino.is_some() && !overwrite {
             log::debug!("not overwriting!!");
             return Err(RenameError::DestinationExists);
         }
-        if Arbo::get_special(name, parent).is_some()
-            || Arbo::get_special(new_name, new_parent).is_some()
+        if Arbo::get_special(name.as_ref(), parent).is_some()
+            || Arbo::get_special(new_name.as_ref(), new_parent).is_some()
         {
             return self.rename_special(new_parent, new_name, src_ino, dest_ino);
         }
@@ -214,7 +216,7 @@ impl FsInterface {
             })?;
         }
 
-        self.rename_locally(parent, new_parent, name, new_name)?;
+        self.rename_locally(parent, new_parent, &name, &new_name)?;
         self.network_interface
             .n_rename(parent, new_parent, name, new_name, overwrite)?;
         Ok(())
@@ -224,17 +226,18 @@ impl FsInterface {
         &self,
         parent: InodeId,
         new_parent: InodeId,
-        name: &String,
-        new_name: &String,
+        name: InodeName,
+        new_name: InodeName,
         overwrite: bool,
     ) -> Result<(), RenameError> {
         let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface::remove_inode")?;
-        let dest_ino =
-            match arbo.n_get_inode_child_by_name(arbo.n_get_inode(new_parent)?, &new_name) {
-                Ok(inode) => Some(inode.id),
-                Err(WhError::InodeNotFound) => None,
-                Err(source) => return Err(source.into()),
-            };
+        let dest_ino = match arbo
+            .n_get_inode_child_by_name(arbo.n_get_inode(new_parent)?, new_name.as_ref())
+        {
+            Ok(inode) => Some(inode.id),
+            Err(WhError::InodeNotFound) => None,
+            Err(source) => return Err(source.into()),
+        };
         drop(arbo);
         if let Some(dest_ino) = dest_ino {
             if overwrite {
@@ -252,7 +255,7 @@ impl FsInterface {
                 return Err(RenameError::DestinationExists);
             }
         }
-        self.rename_locally(parent, new_parent, name, new_name)
+        self.rename_locally(parent, new_parent, &name, &new_name)
             .or_else(|e| match e {
                 RenameError::LocalRenamingFailed { io } if io.kind() == io::ErrorKind::NotFound => {
                     Ok(())

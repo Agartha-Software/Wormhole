@@ -8,7 +8,10 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     error::WhResult,
-    pods::arbo::{ArboIndex, Inode, InodeId, Metadata},
+    pods::{
+        arbo::{ArboIndex, Inode, InodeId, Metadata},
+        whpath::InodeName,
+    },
 };
 
 /// Message Content
@@ -22,7 +25,7 @@ pub enum MessageContent {
     PullAnswer(InodeId, Vec<u8>),
     RedundancyFile(InodeId, Arc<Vec<u8>>),
     /// Parent, New Parent, Name, New Name, overwrite
-    Rename(InodeId, InodeId, String, String, bool),
+    Rename(InodeId, InodeId, InodeName, InodeName, bool),
     EditHosts(InodeId, Vec<Address>),
     RevokeFile(InodeId, Address, Metadata),
     AddHosts(InodeId, Vec<Address>),
@@ -68,7 +71,7 @@ impl fmt::Debug for MessageContent {
                 f,
                 "Inode({{{}, name: {}, parent:{}, {}}})",
                 inode.id,
-                inode.name,
+                inode.name.as_str(),
                 inode.parent,
                 match inode.entry {
                     crate::pods::arbo::FsEntry::File(_) => 'f',
@@ -83,7 +86,11 @@ impl fmt::Debug for MessageContent {
             MessageContent::Rename(parent, new_parent, name, new_name, overwrite) => write!(
                 f,
                 "Rename(parent: {}, new_parent: {}, name: {}, new_name: {}, overwrite: {})",
-                parent, new_parent, name, new_name, overwrite
+                parent,
+                new_parent,
+                name.as_str(),
+                new_name.as_str(),
+                overwrite
             ),
             MessageContent::EditHosts(id, hosts) => write!(f, "EditHosts({id}, {hosts:?})"),
             MessageContent::RevokeFile(id, address, _) => {
