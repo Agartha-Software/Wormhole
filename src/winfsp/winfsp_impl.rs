@@ -397,7 +397,13 @@ impl FileSystemContext for FSPController {
 
         entries.sort_by(|(_, a_name, _), (_, b_name, _)| a_name.cmp(b_name));
         let marker = match marker.inner_as_cstr() {
-            Some(inner) => Some(inner.to_string().map_err(|_| WhPathError::ConversionError { source: ConversionError{}})?),
+            Some(inner) => Some(
+                inner
+                    .to_string()
+                    .map_err(|_| WhPathError::ConversionError {
+                        source: ConversionError {},
+                    })?,
+            ),
             None => None,
         };
 
