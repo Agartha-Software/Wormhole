@@ -656,16 +656,16 @@ impl Filesystem for FuseController {
                 let bsize = 4096; // Block size standard
                 let blocks = (info.total_size as u64) / bsize;
                 let bfree = (info.free_size as u64) / bsize;
-                
+
                 reply.statfs(
-                    blocks, 
-                    bfree, 
-                    bfree, 
+                    blocks,
+                    bfree,
+                    bfree,
                     1_000_000, // files (inodes total) - arbitrary high value
                     1_000_000, // ffree (inodes free)
-                    bsize as u32, 
-                    255,       // namelen - maximum length of a file name
-                    bsize as u32
+                    bsize as u32,
+                    255, // namelen - maximum length of a file name
+                    bsize as u32,
                 );
             }
             Err(e) => {
@@ -683,7 +683,7 @@ pub fn mount_fuse(
     let options = vec![
         MountOption::RW,
         MountOption::DefaultPermissions,
-        MountOption::AllowOther,            //NOTE - Necessary for xfstests
+        MountOption::AllowOther, //NOTE - Necessary for xfstests
         MountOption::FSName(format!("wormhole@{}", mount_point.get_end())),
     ];
     let ctrl = FuseController { fs_interface };
