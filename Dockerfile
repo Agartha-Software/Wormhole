@@ -21,8 +21,8 @@ WORKDIR /test
 COPY --from=builder /build/target/release/wormholed /bin/wormholed
 COPY --from=builder /build/target/release/wormhole /bin/wormhole
 
-COPY tests/run_xfstests_docker.sh /tests/run_xfstests_docker.sh
-COPY tests/mount.fuse.wormhole /sbin/mount.fuse.wormhole
+COPY tests/xfstests/run_xfstests_docker.sh /tests/run_xfstests_docker.sh
+COPY tests/xfstests/mount.fuse.wormhole /sbin/mount.fuse.wormhole
 
 RUN useradd -m fsgqa && \
     useradd -m 123456-fsgqa && \
@@ -68,7 +68,7 @@ RUN cd /opt && \
     make && \
     make install
 
-COPY tests/xfstests_exclude.txt /opt/xfstests-dev/exclude_tests
+COPY tests/xfstests/xfstests_exclude.txt /opt/xfstests-dev/exclude_tests
 
 RUN mkdir -p /mnt/test /mnt/scratch
 
