@@ -20,7 +20,6 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
 use crate::error::WhError;
 use crate::pods::filesystem::fs_interface::SimpleFileType;
-use crate::pods::whpath::osstring_to_string;
 
 use super::filesystem::{make_inode::MakeInodeError, remove_inode::RemoveInodeError};
 
