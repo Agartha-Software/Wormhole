@@ -86,7 +86,7 @@ impl DiskManager for UnixDiskManager {
         self.handle.local_rename(path, new_path)
     }
 
-    fn read_file(&self, path: &WhPath, offset: usize, buf: &mut [u8]) -> io::Result<usize> {
+    fn read_file(&self, path: &WhPath, _offset: usize, buf: &mut [u8]) -> io::Result<usize> {
         let mut file = self.handle.open_file(path)?;
         file.read(buf)
     }
