@@ -13,7 +13,7 @@ use tokio_tungstenite::{
 };
 
 use crate::{
-    config::{GlobalConfig, LocalConfig},
+    config::GlobalConfig,
     error::WhError,
     pods::{arbo::Arbo, network::network_interface::NetworkInterface},
 };
@@ -119,7 +119,7 @@ pub struct Accept {
     pub hosts: Vec<String>,
 
     /// urls of all avaialble peers, in the same order
-    pub urls: Vec<Option<String>>,
+    pub urls: Vec<String>,
 
     /// global config of the network
     pub config: GlobalConfig,
@@ -137,7 +137,7 @@ pub struct Connect {
     pub hostname: String,
 
     /// url by which this peer may be accessed, if available
-    pub url: Option<String>,
+    pub url: String,
     // /// simple unencrypted passkey
     // pub authentification: String,
 
@@ -151,7 +151,7 @@ pub struct Wave {
     pub hostname: String,
 
     /// url by which the waving peer may be reached, if available
-    pub url: Option<String>,
+    pub url: String,
 
     /// hostname of the third party peer that acted as an entrypoint
     pub blame: String,
@@ -197,8 +197,8 @@ pub async fn accept(
     let result = match handshake {
         Ok(Handshake::Connect(mut connect)) => {
             (async || {
+                log::error!("ABBA3 {connect:?}");
                 // closures to capture ? process
-                let url = network.url.clone();
                 let url_pairs = network
                     .peers
                     .read()
@@ -206,7 +206,7 @@ pub async fn accept(
                     .map(|peer| (peer.hostname.clone(), peer.url.clone()))
                     .collect::<Vec<_>>();
 
-                let (hosts, urls) = [(network.hostname.clone(), url)]
+                let (hosts, urls) = [(network.hostname.clone(), network.url.clone())]
                     .into_iter()
                     .chain(url_pairs.into_iter())
                     .inspect(|(h, u)| log::trace!("accept:h{h}, u{u:?}"))
@@ -237,7 +237,7 @@ pub async fn accept(
                 // closures to capture ? process
                 let wave_back = Wave {
                     hostname: network.hostname.clone(),
-                    url: None,
+                    url: network.url.clone(),
                     blame: wave.hostname.clone(),
                 };
                 let data = bincode::serialize(&Handshake::Wave(wave_back))?;
@@ -269,6 +269,7 @@ pub async fn wave<T>(
     stream: &mut SplitStream<WebSocketStream<T>>,
     sink: &mut SplitSink<WebSocketStream<T>, Message>,
     hostname: String,
+    url: String,
     blame: String,
 ) -> Result<Wave, HandshakeError>
 where
@@ -277,7 +278,7 @@ where
 {
     let wave = Wave {
         hostname,
-        url: None,
+        url,
         blame,
     };
 
@@ -304,12 +305,14 @@ where
 pub async fn connect(
     stream: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     sink: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
-    local_config: &LocalConfig,
+    hostname: String,
+    own_url: String,
 ) -> Result<Accept, HandshakeError> {
+    log::error!("ABBA4 {:?}", own_url);
     let connect = Connect {
-        hostname: local_config.general.hostname.clone(),
+        hostname,
         magic_version: GIT_HASH.into(),
-        url: local_config.general.url.clone(),
+        url: own_url,
     };
 
     let serialized = bincode::serialize(&Handshake::Connect(connect))?;

@@ -11,7 +11,6 @@ use tokio_tungstenite::tungstenite::{protocol::WebSocketConfig, Message};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use crate::{
-    config::LocalConfig,
     network::{
         forward::{forward_peer_to_receiver, forward_sender_to_peer},
         handshake::{self, Accept, HandshakeError, Wave},
@@ -23,7 +22,7 @@ use super::message::{Address, FromNetworkMessage, MessageAndStatus};
 
 #[derive(Debug)]
 pub struct PeerIPC {
-    pub url: Option<String>,
+    pub url: String,
     pub hostname: String,
     pub thread: tokio::task::JoinHandle<()>,
     pub sender: mpsc::UnboundedSender<MessageAndStatus>,
@@ -71,7 +70,7 @@ impl PeerIPC {
                 Either::Left(connect) => (connect.hostname, connect.url),
                 Either::Right(wave) => (wave.hostname, wave.url),
             };
-
+        log::error!("ABBA2 {:?}", url);
         Ok(Self {
             thread: tokio::spawn(Self::work_from_incomming(
                 sink,
@@ -88,7 +87,8 @@ impl PeerIPC {
 
     pub async fn connect(
         url: String,
-        config: &LocalConfig,
+        hostname: String,
+        own_url: String,
         receiver_in: UnboundedSender<FromNetworkMessage>,
     ) -> Result<(Self, Accept), HandshakeError> {
         let (sender_in, sender_out) = mpsc::unbounded_channel();
@@ -107,7 +107,7 @@ impl PeerIPC {
         {
             Ok((stream, _)) => {
                 let (mut sink, mut stream) = stream.split();
-                let accept = handshake::connect(&mut stream, &mut sink, &config).await?;
+                let accept = handshake::connect(&mut stream, &mut sink, hostname, own_url).await?;
                 (
                     accept,
                     tokio::spawn(Self::work(
@@ -127,7 +127,7 @@ impl PeerIPC {
         Ok((
             Self {
                 thread,
-                url: Some(url),
+                url,
                 hostname: accept.hostname.clone(),
                 sender: sender_in,
             },
@@ -157,7 +157,8 @@ impl PeerIPC {
         {
             Ok((stream, _)) => {
                 let (mut sink, mut stream) = stream.split();
-                let wave = handshake::wave(&mut stream, &mut sink, hostname, blame).await?;
+                let wave =
+                    handshake::wave(&mut stream, &mut sink, hostname, url.clone(), blame).await?;
                 (
                     wave,
                     tokio::spawn(Self::work(
@@ -177,7 +178,7 @@ impl PeerIPC {
         Ok((
             Self {
                 thread,
-                url: Some(url),
+                url,
                 hostname: wave.hostname.clone(),
                 sender: sender_in,
             },

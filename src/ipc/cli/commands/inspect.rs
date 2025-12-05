@@ -40,11 +40,13 @@ pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String
             \x20  Mount:\t\t{:#?}\n\
             \x20  Hostname:\t\t{}\n\
             \x20  Url:\t\t\t{}\n\
+            \x20  Port:\t\t{}\n\
             \x20  Connected peers:\t{}",
             info.name,
             info.mount,
             info.hostname,
-            info.url.unwrap_or(String::from("Undefined")),
+            info.url,
+            info.port,
             display_peers(info.connected_peers)
         )),
         InspectAnswer::PodNotFound => Err(io::Error::new(

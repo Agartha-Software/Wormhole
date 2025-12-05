@@ -2,8 +2,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::cli::ConfigType;
+use crate::config::local_file::LocalConfigFile;
 use crate::config::types::Config;
-use crate::config::{GlobalConfig, LocalConfig};
+use crate::config::GlobalConfig;
 use crate::ipc::service::commands::find_pod;
 use crate::ipc::{
     answers::GenerateConfigAnswer, commands::PodId, service::connection::send_answer,
@@ -22,7 +23,7 @@ fn write_defaults(
         if !overwrite && local_path.exists() {
             return Err(GenerateConfigAnswer::CantOverwrite(ConfigType::Local));
         }
-        LocalConfig::default()
+        LocalConfigFile::default()
             .write(local_path)
             .map_err(|err| GenerateConfigAnswer::WriteFailed(err.to_string(), ConfigType::Local))?;
     }
@@ -62,7 +63,7 @@ where
         return Ok(false);
     }
 
-    if let Err(err) = pod.local_config.write(local_path) {
+    if let Err(err) = pod.generate_local_config().write(local_path) {
         send_answer(
             GenerateConfigAnswer::WriteFailed(err.to_string(), ConfigType::Local),
             stream,

@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    config::{types::Config, GlobalConfig, LocalConfig},
+    config::GlobalConfig,
     error::{WhError, WhResult},
     network::{
         message::{
@@ -48,35 +48,38 @@ pub fn get_all_peers_address(peers: &Arc<RwLock<Vec<PeerIPC>>>) -> WhResult<Vec<
 #[derive(Debug)]
 pub struct NetworkInterface {
     pub arbo: Arc<RwLock<Arbo>>,
-    pub url: Option<String>,
+    pub url: String,
+    pub hostname: String,
+    pub port: u16,
     pub to_network_message_tx: UnboundedSender<ToNetworkMessage>,
     pub to_redundancy_tx: UnboundedSender<RedundancyMessage>,
     pub callbacks: Callbacks,
     pub peers: Arc<RwLock<Vec<PeerIPC>>>,
-    pub hostname: String,
     pub global_config: Arc<RwLock<GlobalConfig>>,
 }
 
 impl NetworkInterface {
     pub fn new(
         arbo: Arc<RwLock<Arbo>>,
-        url: Option<String>,
+        url: String,
+        hostname: String,
+        port: u16,
         to_network_message_tx: UnboundedSender<ToNetworkMessage>,
         to_redundancy_tx: UnboundedSender<RedundancyMessage>,
         peers: Arc<RwLock<Vec<PeerIPC>>>,
-        hostname: String,
         global_config: Arc<RwLock<GlobalConfig>>,
     ) -> Self {
         Self {
             arbo,
             url,
+            hostname,
+            port,
             to_network_message_tx,
             to_redundancy_tx,
             callbacks: Callbacks {
                 callbacks: HashMap::new().into(),
             },
             peers,
-            hostname,
             global_config,
         }
     }

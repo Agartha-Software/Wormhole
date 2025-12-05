@@ -29,11 +29,9 @@ where
     ))
 }
 
-fn config_to_string<Conf>(config: &Conf) -> String
-where
-    Conf: Serialize + Clone,
-{
-    toml::to_string(&config.clone()).expect("Serialization shouldn't be able to fail")
+fn generate_local_config_file(pod: &Pod) -> String {
+    let config = pod.generate_local_config();
+    toml::to_string(&config).expect("Serialization shouldn't be able to fail")
 }
 
 pub async fn show<Stream>(
@@ -50,7 +48,7 @@ where
             match config_type {
                 ConfigType::Local => {
                     send_answer(
-                        ShowConfigAnswer::SuccessLocal(config_to_string(&pod.local_config)),
+                        ShowConfigAnswer::SuccessLocal(generate_local_config_file(pod)),
                         stream,
                     )
                     .await?
@@ -64,10 +62,7 @@ where
                 ConfigType::Both => match locked_config_to_string(&pod.global_config).await? {
                     Some(global) => {
                         send_answer(
-                            ShowConfigAnswer::SuccessBoth(
-                                config_to_string(&pod.local_config),
-                                global,
-                            ),
+                            ShowConfigAnswer::SuccessBoth(generate_local_config_file(pod), global),
                             stream,
                         )
                         .await?

@@ -49,26 +49,19 @@ pub enum StatusAnswer {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PeerInfo {
     pub hostname: String,
-    pub url: Option<String>,
+    pub url: String,
 }
 
 impl std::fmt::Display for PeerInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Hostname: \"{}\", Url: {}",
-            self.hostname,
-            self.url
-                .as_ref()
-                .map(|url| url.as_str())
-                .unwrap_or("Undefined")
-        )
+        write!(f, "Hostname: \"{}\", Url: {}", self.hostname, self.url)
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InspectInfo {
-    pub url: Option<String>,
+    pub url: String,
+    pub port: u16,
     pub hostname: String,
     pub name: String,
     pub connected_peers: Vec<PeerInfo>,

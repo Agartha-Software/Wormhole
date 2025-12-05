@@ -4,7 +4,7 @@ use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{
-    error::{CliError, WhError, WhResult},
+    error::{WhError, WhResult},
     pods::arbo::LOCK_TIMEOUT,
 };
 
@@ -52,31 +52,6 @@ pub trait Config: Serialize + DeserializeOwned {
 }
 
 impl<T: Serialize + DeserializeOwned> Config for T {}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct LocalConfig {
-    pub general: GeneralLocalConfig,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct GeneralLocalConfig {
-    // pub name: String,
-    pub hostname: String,
-    pub url: Option<String>,
-}
-
-impl LocalConfig {
-    pub fn constructor(&mut self, local: Self) -> Result<(), CliError> {
-        // self.general.name = local.general.name;
-        if local.general.hostname != self.general.hostname {
-            log::warn!("Local Config: Impossible to modify an ip address");
-            return Err(CliError::Unimplemented {
-                arg: "Local Config: Impossible to modify an ip address".to_owned(),
-            });
-        }
-        Ok(())
-    }
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct GlobalConfig {
