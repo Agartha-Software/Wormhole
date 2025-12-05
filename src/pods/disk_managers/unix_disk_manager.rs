@@ -148,6 +148,7 @@ impl DiskManager for UnixDiskManager {
 }
 
 mod test {
+    #[allow(unused_imports)] // clippy not properly detecting this is needed and used
     use crate::pods::disk_managers::unix_disk_manager::UnixDiskManager;
 
     #[test]
