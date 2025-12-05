@@ -84,16 +84,6 @@ impl NetworkInterface {
         }
     }
 
-    // pub fn hostname(&self) -> WhResult<String> {
-    //     Ok(self
-    //         .local_config
-    //         .try_read()
-    //         .ok_or(WhError::DeadLock)?
-    //         .general
-    //         .hostname
-    //         .clone())
-    // }
-
     #[deprecated(note = "bad to preallocate inodes like this")]
     pub fn get_next_inode(&self) -> io::Result<Ino> {
         self.arbo

@@ -70,7 +70,6 @@ impl PeerIPC {
                 Either::Left(connect) => (connect.hostname, connect.url),
                 Either::Right(wave) => (wave.hostname, wave.url),
             };
-        log::error!("ABBA2 {:?}", url);
         Ok(Self {
             thread: tokio::spawn(Self::work_from_incomming(
                 sink,

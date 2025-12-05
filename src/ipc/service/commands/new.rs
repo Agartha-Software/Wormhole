@@ -80,8 +80,6 @@ where
         (Some(_), Some(_)) => todo!("error conflict"),
     };
 
-    log::error!("ABBA{:?} {:?}", global_config, listen_url);
-
     let answer = match Pod::new(
         global_config,
         args.name.clone(),

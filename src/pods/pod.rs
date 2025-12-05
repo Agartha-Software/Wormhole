@@ -23,7 +23,6 @@ use crate::winfsp::winfsp_impl::{mount_fsp, WinfspHost};
 use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use fuser;
-use log::info;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
@@ -89,8 +88,6 @@ async fn initiate_connection_or_empty(
 ) -> Result<PodPrototype, io::Error> {
     if global_config.general.entrypoints.len() >= 1 {
         for first_contact in &global_config.general.entrypoints {
-            log::error!("ABBA4.5 {:?} {:?} {:?}", url, port, name);
-
             match PeerIPC::connect(
                 first_contact.to_owned(),
                 hostname.clone(),
@@ -114,7 +111,6 @@ async fn initiate_connection_or_empty(
                     {
                         Ok(mut other_ipc) => {
                             other_ipc.insert(0, ipc);
-                            log::error!("ABBA5 {:?} {:?} {:?}", url, port, name);
                             return Ok(PodPrototype {
                                 arbo: accept.arbo,
                                 peers: other_ipc,

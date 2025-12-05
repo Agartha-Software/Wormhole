@@ -197,7 +197,6 @@ pub async fn accept(
     let result = match handshake {
         Ok(Handshake::Connect(mut connect)) => {
             (async || {
-                log::error!("ABBA3 {connect:?}");
                 // closures to capture ? process
                 let url_pairs = network
                     .peers
@@ -308,7 +307,6 @@ pub async fn connect(
     hostname: String,
     own_url: String,
 ) -> Result<Accept, HandshakeError> {
-    log::error!("ABBA4 {:?}", own_url);
     let connect = Connect {
         hostname,
         magic_version: GIT_HASH.into(),
