@@ -1,6 +1,6 @@
 use std::{
     ffi::CString,
-    io::Read,
+    io::{Read, Seek, SeekFrom},
     os::{
         fd::{AsRawFd, RawFd},
         unix::fs::FileExt,
@@ -53,7 +53,7 @@ impl UnixDiskManager {
 
 impl UnixDiskManager {
     fn exist(&self, path: &WhPath) -> bool {
-        self.handle.metadata(path.clone().set_relative()).is_ok()
+        path.is_empty() || self.handle.metadata(path.clone().set_relative()).is_ok()
     }
 }
 
@@ -91,14 +91,14 @@ impl DiskManager for UnixDiskManager {
     fn write_file(&self, path: &WhPath, binary: &[u8], offset: usize) -> io::Result<usize> {
         let file = self
             .handle
-            .append_file(path.clone().set_relative(), 0o600)?; //  [openat::update_file]?
+            .update_file(path.clone().set_relative(), 0o600)?; //  [openat::update_file]?
         Ok(file.write_at(&binary, offset as u64)?) // NOTE - used "as" because into() is not supported
     }
 
     fn set_file_size(&self, path: &WhPath, size: usize) -> io::Result<()> {
         let file = self
             .handle
-            .append_file(path.clone().set_relative(), 0o600)?;
+            .update_file(path.clone().set_relative(), 0o600)?;
         file.set_len(size as u64)
     }
 
@@ -111,8 +111,10 @@ impl DiskManager for UnixDiskManager {
 
     fn read_file(&self, path: &WhPath, offset: usize, buf: &mut [u8]) -> io::Result<usize> {
         let mut file = self.handle.open_file(path.clone().set_relative())?;
+        file.seek(SeekFrom::Start(offset as u64))?;
         file.read(buf)
     }
+
     fn new_dir(&self, path: &WhPath, permissions: u16) -> io::Result<()> {
         self.handle
             .create_dir(path.clone().set_relative(), permissions.into()) // TODO look more in c mode_t value
@@ -143,4 +145,17 @@ impl DiskManager for UnixDiskManager {
     fn file_exists(&self, path: &WhPath) -> bool {
         self.handle.open_file(path.clone().set_relative()).is_ok()
     }
+}
+
+mod test {
+    use crate::pods::disk_managers::unix_disk_manager::UnixDiskManager;
+
+    #[test]
+    pub fn test_priv_unix_disk() {
+        let temp_dir = assert_fs::TempDir::new().expect("can't create temp dir");
+        let disk = UnixDiskManager::new(&temp_dir.path().into()).expect("creating disk manager");
+
+        assert!(disk.exist(&"".into()));
+    }
+
 }
