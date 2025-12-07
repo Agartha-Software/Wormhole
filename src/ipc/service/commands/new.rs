@@ -41,7 +41,10 @@ where
         (None, None) => None,
         (None, Some(port)) => Some(port),
         (Some(port), None) => Some(port),
-        (Some(_), Some(_)) => todo!("error conflict"),
+        (Some(_), Some(_)) => {
+            send_answer(NewAnswer::ConflictWithConfig("Port".to_string()), stream).await?;
+            return Ok(false);
+        }
     };
 
     let (server, port) = match Server::setup("0.0.0.0", port).await {
@@ -56,7 +59,10 @@ where
         (None, None) => format!("0.0.0.0:{port}"),
         (None, Some(url)) => url,
         (Some(url), None) => url,
-        (Some(_), Some(_)) => todo!("error conflict"),
+        (Some(_), Some(_)) => {
+            send_answer(NewAnswer::ConflictWithConfig("Url".to_string()), stream).await?;
+            return Ok(false);
+        }
     };
 
     if let Some(url) = args.url {
@@ -77,7 +83,14 @@ where
             .unwrap_or("wormhole-default-hostname".into()),
         (None, Some(hostname)) => hostname,
         (Some(hostname), None) => hostname,
-        (Some(_), Some(_)) => todo!("error conflict"),
+        (Some(_), Some(_)) => {
+            send_answer(
+                NewAnswer::ConflictWithConfig("Hostname".to_string()),
+                stream,
+            )
+            .await?;
+            return Ok(false);
+        }
     };
 
     let answer = match Pod::new(

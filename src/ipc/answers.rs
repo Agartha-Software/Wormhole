@@ -11,6 +11,7 @@ pub enum NewAnswer {
     AlreadyMounted,
     InvalidIp,
     InvalidUrlIp,
+    ConflictWithConfig(String),
     BindImpossible(IoError),
     FailedToCreatePod(IoError),
 }

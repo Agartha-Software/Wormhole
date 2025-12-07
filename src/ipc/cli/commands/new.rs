@@ -66,5 +66,9 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<String> {
             io::ErrorKind::InvalidInput,
             "The given Url to connect to is invalid.",
         )),
+        NewAnswer::ConflictWithConfig(field) => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("The field '{field}' have a conflicting value between args and configuration files."),
+        )),
     }
 }
