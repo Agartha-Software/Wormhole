@@ -54,7 +54,7 @@ where
         let mut local_path = pod.get_mountpoint().clone();
         local_path.push(".local_config.toml");
 
-        if !overwrite && PathBuf::from(local_path.to_string()).exists() {
+        if !overwrite && local_path.exists() {
             send_answer(
                 GenerateConfigAnswer::CantOverwrite(ConfigType::Local),
                 stream,
@@ -91,7 +91,7 @@ where
         let mut global_path = pod.get_mountpoint().clone();
         global_path.push(".global_config.toml");
 
-        if !overwrite && PathBuf::from(global_path.to_string()).exists() {
+        if !overwrite && global_path.exists() {
             send_answer(
                 GenerateConfigAnswer::CantOverwrite(ConfigType::Global),
                 stream,

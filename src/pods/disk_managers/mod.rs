@@ -1,10 +1,12 @@
 use std::io;
 
-use super::whpath::WhPath;
 use std::fmt::Debug;
-pub mod dummy_disk_manager;
+
+use crate::pods::whpath::WhPath;
 #[cfg(target_os = "linux")]
 pub mod unix_disk_manager;
+#[cfg(target_os = "windows")]
+pub mod windows_disk_manager;
 
 pub struct DiskSizeInfo {
     pub free_size: usize,
@@ -12,8 +14,6 @@ pub struct DiskSizeInfo {
 }
 
 pub trait DiskManager: Send + Sync + Debug {
-    fn log_arbo(&self, path: &WhPath) -> io::Result<()>;
-
     fn new_file(&self, path: &WhPath, permissions: u16) -> io::Result<()>;
 
     fn set_permisions(&self, path: &WhPath, permissions: u16) -> io::Result<()>;
@@ -35,4 +35,6 @@ pub trait DiskManager: Send + Sync + Debug {
     fn size_info(&self) -> io::Result<DiskSizeInfo>;
 
     fn file_exists(&self, path: &WhPath) -> bool;
+
+    fn stop(&mut self) -> io::Result<()>;
 }
