@@ -86,10 +86,10 @@ echo "Created config with redundancy=1" >> $LOG_FILE
 # --------------------------------------------------------------------
 
 # --- 4. Execute the mount command ---
-echo "Running: $WORMHOLE_CLI new $POD_NAME -p $PORT -m $MOUNT_POINT" >> $LOG_FILE
+echo "Running: $WORMHOLE_CLI new $POD_NAME -p $PORT -m $MOUNT_POINT --allow-other-users" >> $LOG_FILE
 
 # Redirect stderr to stdout so it is captured in the log
-if $WORMHOLE_CLI new "$POD_NAME" -p "$PORT" -m "$MOUNT_POINT" >> $LOG_FILE 2>&1; then
+if $WORMHOLE_CLI new "$POD_NAME" -p "$PORT" -m "$MOUNT_POINT" --allow-other-users >> $LOG_FILE 2>&1; then
     echo "Mount successful." >> $LOG_FILE
     echo "--- mount.fuse.wormhole SCRIPT SUCCESS ---" >> $LOG_FILE
     exit 0

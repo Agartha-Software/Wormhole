@@ -45,6 +45,7 @@ pub struct NewRequest {
     pub hostname: Option<String>,
     pub listen_url: Option<String>,
     pub additional_hosts: Vec<String>,
+    pub allow_other_users: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

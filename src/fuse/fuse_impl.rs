@@ -701,12 +701,12 @@ impl Filesystem for FuseController {
 
 pub fn mount_fuse(
     mount_point: &Path,
+    allow_other_users: bool,
     fs_interface: Arc<FsInterface>,
 ) -> io::Result<BackgroundSession> {
     let options = vec![
         MountOption::RW,
         MountOption::DefaultPermissions,
-        MountOption::AllowOther, //NOTE - Necessary for xfstests
         MountOption::FSName(format!(
             "wormhole@{}",
             mount_point
@@ -715,6 +715,13 @@ pub fn mount_fuse(
                 .to_string_lossy()
         )),
     ];
+    let options = if allow_other_users {
+        let mut opts = options;
+        opts.push(MountOption::AllowOther); //NOTE - Necessary for xfstests
+        opts
+    } else {
+        options
+    };
     let ctrl = FuseController { fs_interface };
 
     fuser::spawn_mount2(ctrl, mount_point, &options)

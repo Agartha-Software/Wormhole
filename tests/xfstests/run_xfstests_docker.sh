@@ -4,10 +4,21 @@ set -e
 # --- Configuration ---
 WORMHOLE_DAEMON="/bin/wormholed"
 PID_FILE="/test/fuse.pid"
+MOUNT_HELPER_LOG="/tmp/mount_helper.log"
 
 # --- Cleanup function ---
 cleanup() {
-    echo "--- Cleanup ---"
+    EXIT_CODE=$?
+    echo "--- Cleanup (Exit Code: $EXIT_CODE) ---"
+    
+    # Si échec, on dump le log de montage pour comprendre pourquoi wormhole a refusé de monter
+    if [ $EXIT_CODE -ne 0 ] && [ -f "$MOUNT_HELPER_LOG" ]; then
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        echo "DUMPING MOUNT HELPER LOG (Why did mount fail?):"
+        cat "$MOUNT_HELPER_LOG"
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+    fi
+
     if [ -f "$PID_FILE" ]; then
         echo "Stopping the wormholed service (PID $(cat "$PID_FILE"))..."
         kill "$(cat "$PID_FILE")" || echo "Daemon already stopped."
@@ -25,6 +36,15 @@ trap cleanup EXIT ERR
 
 # --- Preparation ---
 echo "--- Preparation of the test environment ---"
+
+mkdir -p /opt/xfstests-dev/results
+
+chmod 777 /mnt/test /mnt/scratch
+chmod -R 777 /opt/xfstests-dev/results
+
+rm -f "$MOUNT_HELPER_LOG"
+
+
 echo "Starting the wormholed service..."
 "$WORMHOLE_DAEMON" > /tmp/wormholed.log 2>&1 &
 echo "$!" > "$PID_FILE"
@@ -57,7 +77,7 @@ export RESULT_BASE="\$PWD/results"
 EOF
 
 # --- Launch the test ---
-# The 'exclude_tests' file was copied here by the Dockerfile
+# Le fichier 'exclude_tests' a été copié ici par le Dockerfile
 TEST_CMD="./check -fuse -E exclude_tests -g quick"
 
 echo "-----------------------------------------------------"

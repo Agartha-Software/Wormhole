@@ -148,6 +148,9 @@ pub struct NewArgs {
     /// Additional hosts to try to join from as a backup
     #[arg(raw = true)]
     pub additional_hosts: Vec<String>,
+    /// Allow other users to access the mounted pod
+    #[arg(short, long, default_value_t = false)]
+    pub allow_other_users: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ValueEnum)]
