@@ -1,5 +1,5 @@
 #[cfg(target_os = "linux")]
-use crate::pods::filesystem::permissions::has_write_perm;
+use crate::pods::{filesystem::permissions::has_write_perm, whpath::InodeName};
 
 use crate::{
     error::WhError,
@@ -37,14 +37,18 @@ impl From<RemoveInodeError> for RemoveFileError {
 impl FsInterface {
     // NOTE - system specific (fuse/winfsp) code that need access to arbo or other classes
     #[cfg(target_os = "linux")]
-    pub fn fuse_remove_inode(&self, parent: InodeId, name: &str) -> Result<(), RemoveFileError> {
+    pub fn fuse_remove_inode(
+        &self,
+        parent: InodeId,
+        name: InodeName,
+    ) -> Result<(), RemoveFileError> {
         let target = {
             let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface::fuse_remove_inode")?;
             let parent = arbo.n_get_inode(parent)?;
             if !has_write_perm(parent.meta.perm) {
                 return Err(RemoveFileError::PermissionDenied);
             }
-            arbo.n_get_inode_child_by_name(parent, name)?.id
+            arbo.n_get_inode_child_by_name(parent, name.as_ref())?.id
         };
 
         self.remove_inode(target)

@@ -60,8 +60,6 @@ impl FsInterface {
         let path = arbo.n_get_path_from_inode_id(id)?;
         drop(arbo);
 
-        log::debug!("write path is {}", path);
-
         let new_size = offset + data.len();
         let written = self
             .disk

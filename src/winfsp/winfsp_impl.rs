@@ -29,7 +29,7 @@ use crate::{
             file_handle::{AccessMode, OpenFlags},
             fs_interface::{FsInterface, SimpleFileType},
         },
-        whpath::{WhPath, WhPathError},
+        whpath::{ConversionError, InodeName, WhPath, WhPathError},
     },
 };
 
@@ -73,7 +73,7 @@ pub(crate) fn aliased_path(path: &Path) -> Result<PathBuf, AliasedPathError> {
 
 impl Drop for FSPController {
     fn drop(&mut self) {
-        log::debug!("Drop of FSPController");
+        log::trace!("Drop of FSPController");
     }
 }
 
@@ -107,26 +107,21 @@ pub fn mount_fsp(
 ) -> Result<WinfspHost, std::io::Error> {
     let volume_params = VolumeParams::default();
 
-    log::debug!("created volume params...");
     let wormhole_context = FSPController {
         volume_label: Arc::new(RwLock::new("wormhole_fs".into())),
         fs_interface,
         mount_point: path.to_owned(),
     };
-    log::debug!("creating host...");
     let mut host = FileSystemHost::<FSPController>::new(volume_params, wormhole_context)
         .map_err(|_| std::io::Error::new(ErrorKind::Other, "WinFSP FileSystemHost::new error"))?;
-    log::debug!("created host...");
 
     let path = path.to_string_lossy().to_string().replace("\\", "/");
-    log::debug!("mounting host @ {:?} ...", &path);
+    log::info!("WinFSP mounting host @ {:?} ...", &path);
     host.mount(&path)
         .map_err(|_| io::Error::new(io::ErrorKind::Other, "WinFSP mount error"))?;
 
-    log::debug!("mounted host...");
     host.start_with_threads(1)
         .map_err(|_| io::Error::new(io::ErrorKind::Other, "WinFSP start_with_threads error"))?;
-    log::debug!("started host...");
     Ok(WinfspHost(host))
 }
 
@@ -256,9 +251,9 @@ impl FileSystemContext for FSPController {
         log::info!("create({}, type: {:?})", file_name.display(), kind);
 
         let path = WhPath::from_fake_absolute(file_name)?;
-        let name = (*path).file_name().ok_or(STATUS_OBJECT_NAME_NOT_FOUND)?;
+        let name: InodeName = (&path).into();
 
-        let arbo = Arbo::write_lock(&self.fs_interface.arbo, "winfsp::create")?;
+        let arbo = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::create")?;
 
         if let Ok(_) = arbo.get_inode_from_path(&path) {
             return Err(winfsp::FspError::WIN32(ERROR_ALREADY_EXISTS));
@@ -274,7 +269,7 @@ impl FileSystemContext for FSPController {
             .fs_interface
             .create(
                 parent,
-                name,
+                name.into(),
                 kind,
                 OpenFlags::from_win_u32(granted_access),
                 AccessMode::from_win_u32(granted_access),
@@ -400,21 +395,27 @@ impl FileSystemContext for FSPController {
 
         let mut cursor = 0;
 
-        entries.sort_by(|a, b| a.name.cmp(&b.name));
+        entries.sort_by(|(_, a_name, _), (_, b_name, _)| a_name.cmp(b_name));
         let marker = match marker.inner_as_cstr() {
-            Some(inner) => Some(inner.to_string().map_err(|_| WhPathError::NotValidUtf8)?),
+            Some(inner) => Some(
+                inner
+                    .to_string()
+                    .map_err(|_| WhPathError::ConversionError {
+                        source: ConversionError {},
+                    })?,
+            ),
             None => None,
         };
 
-        for entry in entries
+        for (_, name, meta) in entries
             .into_iter()
-            .skip_while(|s| marker.as_ref().map(|m| s.name <= *m).unwrap_or(false))
+            .skip_while(|(_, name, _)| marker.as_ref().map(|m| *name <= *m).unwrap_or(false))
         {
             let mut dirinfo = DirInfo::<255>::default(); // !todo
                                                          // let mut info = dirinfo.file_info_mut();
-            dirinfo.set_name(&entry.name)?;
-            *dirinfo.file_info_mut() = (&entry.meta).into();
-            log::trace!("dirinfo:{:?}:{:?}", &entry.name, dirinfo.file_info_mut());
+            dirinfo.set_name(&name)?;
+            *dirinfo.file_info_mut() = (&meta).into();
+            log::trace!("dirinfo:{:?}:{:?}", &name, dirinfo.file_info_mut());
             if !dirinfo.append_to_buffer(buffer, &mut cursor) {
                 break;
             }
@@ -451,10 +452,8 @@ impl FileSystemContext for FSPController {
             .rename(
                 parent,
                 new_parent,
-                path.file_name().ok_or(STATUS_OBJECT_NAME_NOT_FOUND)?,
-                (*new_path)
-                    .file_name()
-                    .ok_or(STATUS_OBJECT_NAME_NOT_FOUND)?,
+                (&path).into(),
+                (&new_path).into(),
                 replace_if_exists,
             )
             .inspect_err(|e| log::error!("rename: {e};"))?;

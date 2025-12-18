@@ -5,6 +5,7 @@ use crate::{
     pods::{
         arbo::{Arbo, FsEntry, Inode},
         filesystem::permissions::has_write_perm,
+        whpath::InodeName,
     },
 };
 
@@ -34,7 +35,7 @@ impl FsInterface {
     pub fn create(
         &self,
         parent_ino: u64,
-        name: &str,
+        name: InodeName,
         kind: SimpleFileType,
         flags: OpenFlags,
         access: AccessMode,
@@ -61,7 +62,7 @@ impl FsInterface {
     pub fn make_inode(
         &self,
         parent_ino: u64,
-        name: &str,
+        name: InodeName,
         permissions: u16,
         kind: SimpleFileType,
     ) -> Result<Inode, MakeInodeError> {
@@ -70,7 +71,7 @@ impl FsInterface {
             SimpleFileType::Directory => FsEntry::Directory(Vec::new()),
         };
 
-        let special_ino = Arbo::get_special(name, parent_ino);
+        let special_ino = Arbo::get_special(name.as_ref(), parent_ino);
         if special_ino.is_some() && kind != SimpleFileType::File {
             return Err(MakeInodeError::ProtectedNameIsFolder);
         }
@@ -89,13 +90,13 @@ impl FsInterface {
                 return Err(MakeInodeError::PermissionDenied);
             }
             //check if already exist
-            match arbo.n_get_inode_child_by_name(&parent, &name) {
+            match arbo.n_get_inode_child_by_name(&parent, new_inode.name.as_ref()) {
                 Ok(_) => return Err(MakeInodeError::AlreadyExist),
                 Err(WhError::InodeNotFound) => {}
                 Err(err) => return Err(MakeInodeError::WhError { source: err }),
             }
             let mut new_path = arbo.n_get_path_from_inode_id(parent_ino)?;
-            new_path.push((&new_inode).into());
+            new_path.push((&new_inode.name).into());
             new_path
         };
 

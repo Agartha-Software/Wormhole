@@ -13,7 +13,7 @@ use crate::pods::filesystem::rename::RenameError;
 use crate::pods::filesystem::write::WriteError;
 use crate::pods::filesystem::xattrs::GetXAttrError;
 use crate::pods::network::pull_file::PullError;
-use crate::pods::whpath::osstr_to_str;
+use crate::pods::whpath::{osstr_to_str, InodeName};
 use fuser::{
     BackgroundSession, Filesystem, MountOption, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty,
     ReplyEntry, ReplyXattr, Request,
@@ -36,12 +36,12 @@ impl Filesystem for FuseController {
     // READING
 
     fn lookup(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
-        let name = match osstr_to_str(name) {
+        let name: InodeName = match name.to_owned().try_into() {
             Ok(name) => name,
             Err(e) => return reply.error(e.to_libc()),
         };
 
-        match self.fs_interface.get_entry_from_name(parent, name) {
+        match self.fs_interface.get_entry_from_name(parent, name.as_ref()) {
             Ok(Some(inode)) => {
                 reply.entry(&TTL, &inode.meta.with_ids(req.uid(), req.gid()), 0);
             }
@@ -166,8 +166,8 @@ impl Filesystem for FuseController {
             Err(e) => return reply.error(e.to_libc()),
         };
 
-        // As we follow linux implementation in spirit, data size limit at 64kb
-        if data.len() > 64000 {
+        // NOTE - 65536 = limits.h: XATTR_SIZE_MAX = 65536
+        if data.len() > 65536 {
             return reply.error(libc::ENOSPC);
         }
 
@@ -309,13 +309,13 @@ impl Filesystem for FuseController {
             }
         };
 
-        for (i, entry) in entries.into_iter().enumerate().skip(offset as usize) {
+        for (i, (id, name, meta)) in entries.into_iter().enumerate().skip(offset as usize) {
             if reply.add(
-                entry.id,
+                id,
                 // i + 1 means offset of the next entry
                 i as i64 + 1, // NOTE - in case of error, try i + 1
-                entry.entry.get_filetype().into(),
-                entry.name,
+                meta.kind.into(),
+                name,
             ) {
                 break;
             }
@@ -337,7 +337,7 @@ impl Filesystem for FuseController {
         _rdev: u32,
         reply: ReplyEntry,
     ) {
-        let name = match osstr_to_str(name) {
+        let name: InodeName = match name.to_owned().try_into() {
             Ok(name) => name,
             Err(e) => return reply.error(e.to_libc()),
         };
@@ -380,7 +380,7 @@ impl Filesystem for FuseController {
         _umask: u32,
         reply: ReplyEntry,
     ) {
-        let name = match osstr_to_str(name) {
+        let name: InodeName = match name.to_owned().try_into() {
             Ok(name) => name,
             Err(e) => return reply.error(e.to_libc()),
         };
@@ -388,7 +388,7 @@ impl Filesystem for FuseController {
         match self
             .fs_interface
             .make_inode(parent, name, mode as u16, SimpleFileType::Directory)
-            .inspect_err(|e| log::error!("mkdir({parent}, {}): {e}", name))
+            .inspect_err(|e| log::error!("mkdir: {e}"))
         {
             Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
             Err(MakeInodeError::LocalCreationFailed { io }) => {
@@ -406,7 +406,7 @@ impl Filesystem for FuseController {
     }
 
     fn unlink(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
-        let name = match osstr_to_str(name) {
+        let name: InodeName = match name.to_owned().try_into() {
             Ok(name) => name,
             Err(e) => return reply.error(e.to_libc()),
         };
@@ -425,7 +425,7 @@ impl Filesystem for FuseController {
     }
 
     fn rmdir(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
-        let name = match osstr_to_str(name) {
+        let name: InodeName = match name.to_owned().try_into() {
             Ok(name) => name,
             Err(e) => return reply.error(e.to_libc()),
         };
@@ -453,11 +453,11 @@ impl Filesystem for FuseController {
         flags: u32,
         reply: fuser::ReplyEmpty,
     ) {
-        let name = match osstr_to_str(name) {
+        let name: InodeName = match name.to_owned().try_into() {
             Ok(name) => name,
             Err(e) => return reply.error(e.to_libc()),
         };
-        let newname = match osstr_to_str(newname) {
+        let newname: InodeName = match newname.to_owned().try_into() {
             Ok(newname) => newname,
             Err(e) => return reply.error(e.to_libc()),
         };
@@ -468,7 +468,7 @@ impl Filesystem for FuseController {
                 parent,
                 new_parent,
                 name,
-                newname,
+                newname.into(),
                 flags & libc::RENAME_NOREPLACE == 0,
             )
             .inspect_err(|err| log::error!("rename: {err}"))

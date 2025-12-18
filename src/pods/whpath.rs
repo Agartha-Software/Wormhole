@@ -2,6 +2,7 @@ use camino::{FromPathBufError, Iter, Utf8Path, Utf8PathBuf};
 use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use openat::AsPath;
+use serde::{Deserialize, Serialize};
 #[cfg(target_os = "linux")]
 use std::ffi::CString;
 use std::fmt::{Debug, Display};
@@ -12,38 +13,55 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::error::{WhError, WhResult};
-use crate::pods::arbo::Inode;
-
 custom_error! {pub WhPathError
     NotRelative = "Path is not relative",
-    NotValidUtf8 = "Path is not valid UTF-8",
+    ConversionError{source: ConversionError} = "{source}",
     NotNormalized = "Path is not normal",
     InvalidOperation = "Operation would compromise WhPath integrity",
 }
 
+custom_error! { pub InodeNameError{} = "Name contains forbidden character(s)" }
+custom_error! { pub ConversionError{} = "Could not be converted to valid UTF-8" }
+
+impl ConversionError {
+    pub fn to_libc(&self) -> i32 {
+        libc::EILSEQ
+    }
+
+    pub fn into_io(self) -> io::Error {
+        io::ErrorKind::InvalidData.into()
+    }
+}
+
+impl InodeNameError {
+    pub fn to_io(self) -> io::Error {
+        io::Error::new(io::ErrorKind::InvalidFilename, self.to_string())
+    }
+
+    pub fn to_libc(self) -> i32 {
+        libc::EACCES
+    }
+}
+
 impl From<FromPathBufError> for WhPathError {
     fn from(_: FromPathBufError) -> Self {
-        Self::NotValidUtf8
+        Self::ConversionError {
+            source: ConversionError {},
+        }
     }
 }
 
 impl WhPathError {
     pub fn to_io(&self) -> io::Error {
         match self {
-            WhPathError::NotRelative => {
-                io::Error::new(io::ErrorKind::Other, "WhPath: path is not relative")
-            }
-            WhPathError::NotValidUtf8 => {
-                io::Error::new(io::ErrorKind::InvalidData, "WhPath: not UTF-8")
+            WhPathError::NotRelative => io::Error::new(io::ErrorKind::Other, self.to_string()),
+            WhPathError::ConversionError { source } => {
+                io::Error::new(io::ErrorKind::InvalidData, source.to_string())
             }
             WhPathError::NotNormalized => {
-                io::Error::new(io::ErrorKind::InvalidFilename, "WhPath: not normalized")
+                io::Error::new(io::ErrorKind::InvalidFilename, self.to_string())
             }
-            WhPathError::InvalidOperation => io::Error::new(
-                io::ErrorKind::Other,
-                "Operation would compromise WhPath integrity",
-            ),
+            WhPathError::InvalidOperation => io::Error::new(io::ErrorKind::Other, self.to_string()),
         }
     }
 }
@@ -124,10 +142,10 @@ impl From<&Utf8Path> for WhPath {
     }
 }
 
-impl From<&Inode> for WhPath {
-    /// From Inode is UNCHECKED as inodes names should already be correct
-    fn from(value: &Inode) -> Self {
-        let p: Utf8PathBuf = value.name.clone().into();
+impl From<&InodeName> for WhPath {
+    /// From InodeName is UNCHECKED as InodeNames names should already be correct
+    fn from(value: &InodeName) -> Self {
+        let p = Utf8PathBuf::from(value);
 
         Self { inner: p }
     }
@@ -138,7 +156,13 @@ impl TryFrom<&winfsp::U16CStr> for WhPath {
     type Error = WhPathError;
 
     fn try_from(value: &winfsp::U16CStr) -> Result<Self, Self::Error> {
-        Self::try_from(value.to_string().map_err(|_| WhPathError::NotValidUtf8)?)
+        Self::try_from(value.to_string().map_err(|_| ConversionError {})?)
+    }
+}
+
+impl Into<String> for WhPath {
+    fn into(self) -> String {
+        self.inner.into_string()
     }
 }
 
@@ -219,7 +243,7 @@ impl WhPath {
     /// Should be used with winfsp that gives paths starting with "\\"
     pub fn from_fake_absolute(path: &winfsp::U16CStr) -> Result<Self, WhPathError> {
         path.to_string()
-            .map_err(|_| WhPathError::NotValidUtf8)?
+            .map_err(|_| ConversionError {})?
             .trim_start_matches("\\")
             .try_into()
     }
@@ -246,49 +270,12 @@ impl WhPath {
     }
 }
 
-/* NOTE - removed as we don't normalize paths here, only check for it. But could still be useful
-
-/// Normalize a path without accessing the filesystem
-///
-/// Adapted from:
-///
-/// https://github.com/rust-lang/cargo/blob/fede83ccf973457de319ba6fa0e36ead454d2e20/src/cargo/util/paths.rs#L61
-pub fn normalize_path(path: impl AsRef<Path>) -> Result<PathBuf, WhPathError> {
-    let mut components = path.as_ref().components().peekable();
-    let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().cloned() {
-        components.next();
-        PathBuf::from(c.as_os_str())
-    } else {
-        PathBuf::new()
-    };
-
-    for component in components {
-        match component {
-            Component::Prefix(..) => unreachable!(),
-            Component::RootDir => {
-                ret.push(component.as_os_str());
-            }
-            Component::CurDir => {}
-            Component::ParentDir => {
-                if !ret.pop() {
-                    return Err(WhPathError::NotNormalized);
-                }
-            }
-            Component::Normal(c) => {
-                ret.push(c);
-            }
-        }
-    }
-    Ok(ret)
-}
-*/
-
-pub fn osstring_to_string(osstr: OsString) -> WhResult<String> {
-    osstr.into_string().map_err(|_| WhError::ConversionError)
+pub fn osstring_to_string(osstr: OsString) -> Result<String, ConversionError> {
+    osstr.into_string().map_err(|_| ConversionError {})
 }
 
-pub fn osstr_to_str(osstr: &OsStr) -> WhResult<&str> {
-    osstr.to_str().ok_or(WhError::ConversionError)
+pub fn osstr_to_str(osstr: &OsStr) -> Result<&str, ConversionError> {
+    osstr.to_str().ok_or(ConversionError {})
 }
 
 /// Checks for:
@@ -306,4 +293,81 @@ pub fn is_valid_for_whpath<T: AsRef<Path>>(p: T) -> Result<(), WhPathError> {
         return Err(WhPathError::NotNormalized);
     }
     Ok(())
+}
+
+// SECTION Name
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct InodeName(String);
+
+impl InodeName {
+    pub fn check(name: &str) -> Result<(), InodeNameError> {
+        let patterns = ["\\", "/"];
+        match patterns.into_iter().any(|pat| name.contains(pat)) {
+            true => Err(InodeNameError {}),
+            false => Ok(()),
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl TryFrom<String> for InodeName {
+    type Error = InodeNameError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        InodeName::check(&value)?;
+        Ok(Self(value))
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl TryFrom<&winfsp::U16CStr> for InodeName {
+    type Error = InodeNameError;
+
+    fn try_from(value: &winfsp::U16CStr) -> Result<Self, Self::Error> {
+        Self::try_from(value.to_string().map_err(|_| InodeNameError {})?)
+    }
+}
+
+impl TryFrom<OsString> for InodeName {
+    type Error = InodeNameError;
+
+    fn try_from(p: OsString) -> Result<Self, Self::Error> {
+        Self::try_from(osstring_to_string(p).map_err(|_| InodeNameError {})?)
+    }
+}
+
+impl Into<String> for InodeName {
+    fn into(self) -> String {
+        self.0
+    }
+}
+
+impl<T> AsRef<T> for InodeName
+where
+    T: ?Sized,
+    String: AsRef<T>,
+{
+    fn as_ref(&self) -> &T {
+        self.0.as_ref()
+    }
+}
+
+impl<T> PartialEq<T> for InodeName
+where
+    T: ?Sized + std::cmp::PartialEq,
+    String: AsRef<T>,
+{
+    fn eq(&self, other: &T) -> bool {
+        other == self.0.as_ref()
+    }
+}
+
+impl From<&WhPath> for InodeName {
+    fn from(value: &WhPath) -> Self {
+        Self((*value).file_name().unwrap().to_owned()) // NOTE - unwrap allowed as only fails if path end on "..", which can't be the case on a WhPath
+    }
 }
