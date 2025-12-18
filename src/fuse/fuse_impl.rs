@@ -13,7 +13,7 @@ use crate::pods::filesystem::rename::RenameError;
 use crate::pods::filesystem::write::WriteError;
 use crate::pods::filesystem::xattrs::GetXAttrError;
 use crate::pods::network::pull_file::PullError;
-use crate::pods::whpath::WhPath;
+use crate::pods::whpath::{osstr_to_str, InodeName};
 use fuser::{
     BackgroundSession, Filesystem, MountOption, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty,
     ReplyEntry, ReplyXattr, Request,
@@ -21,6 +21,7 @@ use fuser::{
 use libc::{XATTR_CREATE, XATTR_REPLACE};
 use std::ffi::OsStr;
 use std::io;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -31,15 +32,16 @@ pub struct FuseController {
     pub fs_interface: Arc<FsInterface>,
 }
 
-// REVIEW - should later invest in proper error handling
 impl Filesystem for FuseController {
     // READING
 
     fn lookup(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
-        match self
-            .fs_interface
-            .get_entry_from_name(parent, name.to_string_lossy().to_string())
-        {
+        let name: InodeName = match name.to_owned().try_into() {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
+        match self.fs_interface.get_entry_from_name(parent, name.as_ref()) {
             Ok(Some(inode)) => {
                 reply.entry(&TTL, &inode.meta.with_ids(req.uid(), req.gid()), 0);
             }
@@ -47,9 +49,9 @@ impl Filesystem for FuseController {
                 reply.error(libc::EACCES);
             }
             Err(e) => {
-                reply.error(libc::ENOENT);
+                reply.error(e.to_libc());
             }
-        };
+        }
     }
 
     fn getattr(&mut self, req: &Request, ino: u64, _fh: Option<u64>, reply: ReplyAttr) {
@@ -123,9 +125,12 @@ impl Filesystem for FuseController {
         size: u32,
         reply: ReplyXattr,
     ) {
-        let attr = self
-            .fs_interface
-            .get_inode_xattr(ino, &name.to_string_lossy().to_string());
+        let name = match osstr_to_str(name) {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
+        let attr = self.fs_interface.get_inode_xattr(ino, name);
 
         let data = match attr {
             Ok(data) => data,
@@ -156,15 +161,18 @@ impl Filesystem for FuseController {
         _position: u32, // Postion undocumented
         reply: ReplyEmpty,
     ) {
-        // As we follow linux implementation in spirit, data size limit at 64kb
-        if data.len() > 64000 {
+        let name = match osstr_to_str(name) {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
+        // NOTE - 65536 = limits.h: XATTR_SIZE_MAX = 65536
+        if data.len() > 65536 {
             return reply.error(libc::ENOSPC);
         }
 
-        let key = name.to_string_lossy().to_string();
-
         if flags == XATTR_CREATE || flags == XATTR_REPLACE {
-            match self.fs_interface.xattr_exists(ino, &key) {
+            match self.fs_interface.xattr_exists(ino, name) {
                 Ok(true) => {
                     if flags == XATTR_CREATE {
                         return reply.error(libc::EEXIST);
@@ -181,16 +189,10 @@ impl Filesystem for FuseController {
             }
         }
 
-        // TODO - Implement After permission implementation
-        // let attr = self.fs_interface.get_inode_attributes(ino);
-        // if attr.unwrap().perm == valid {
-        //     reply.error(libc::EPERM);
-        // }
-
         match self
             .fs_interface
             .network_interface
-            .set_inode_xattr(ino, key, data.to_vec())
+            .set_inode_xattr(ino, name, data.to_vec())
         {
             Ok(_) => reply.ok(),
             Err(err) => reply.error(err.to_libc()),
@@ -204,10 +206,15 @@ impl Filesystem for FuseController {
         name: &OsStr,
         reply: ReplyEmpty,
     ) {
+        let name = match osstr_to_str(name) {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
         match self
             .fs_interface
             .network_interface
-            .remove_inode_xattr(ino, name.to_string_lossy().to_string())
+            .remove_inode_xattr(ino, name)
         {
             Ok(_) => reply.ok(),
             Err(err) => reply.error(err.to_libc()),
@@ -220,7 +227,7 @@ impl Filesystem for FuseController {
                 let mut bytes = vec![];
 
                 for key in keys {
-                    bytes.extend(key.bytes());
+                    bytes.extend_from_slice(key.as_bytes());
                     bytes.push(0);
                 }
                 if size == 0 {
@@ -302,13 +309,13 @@ impl Filesystem for FuseController {
             }
         };
 
-        for (i, entry) in entries.into_iter().enumerate().skip(offset as usize) {
+        for (i, (id, name, meta)) in entries.into_iter().enumerate().skip(offset as usize) {
             if reply.add(
-                entry.id,
+                id,
                 // i + 1 means offset of the next entry
                 i as i64 + 1, // NOTE - in case of error, try i + 1
-                entry.entry.get_filetype().into(),
-                entry.name,
+                meta.kind.into(),
+                name,
             ) {
                 break;
             }
@@ -330,6 +337,11 @@ impl Filesystem for FuseController {
         _rdev: u32,
         reply: ReplyEntry,
     ) {
+        let name: InodeName = match name.to_owned().try_into() {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
         let permissions = mode as u16;
         let kind = match filetype_from_mode(mode) {
             Some(kind) => kind,
@@ -340,12 +352,10 @@ impl Filesystem for FuseController {
             }
         };
 
-        match self.fs_interface.make_inode(
-            parent,
-            name.to_string_lossy().to_string(),
-            permissions,
-            kind,
-        ) {
+        match self
+            .fs_interface
+            .make_inode(parent, name, permissions, kind)
+        {
             Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
             Err(MakeInodeError::LocalCreationFailed { io }) => {
                 reply.error(io.raw_os_error().expect(
@@ -370,15 +380,15 @@ impl Filesystem for FuseController {
         _umask: u32,
         reply: ReplyEntry,
     ) {
+        let name: InodeName = match name.to_owned().try_into() {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
         match self
             .fs_interface
-            .make_inode(
-                parent,
-                name.to_string_lossy().to_string(),
-                mode as u16,
-                SimpleFileType::Directory,
-            )
-            .inspect_err(|e| log::error!("mkdir({parent}, {}): {e}", name.display()))
+            .make_inode(parent, name, mode as u16, SimpleFileType::Directory)
+            .inspect_err(|e| log::error!("mkdir: {e}"))
         {
             Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
             Err(MakeInodeError::LocalCreationFailed { io }) => {
@@ -396,6 +406,11 @@ impl Filesystem for FuseController {
     }
 
     fn unlink(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
+        let name: InodeName = match name.to_owned().try_into() {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
         match self.fs_interface.fuse_remove_inode(parent, name) {
             Ok(()) => reply.ok(),
             Err(RemoveFileError::WhError { source }) => reply.error(source.to_libc()),
@@ -410,6 +425,11 @@ impl Filesystem for FuseController {
     }
 
     fn rmdir(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
+        let name: InodeName = match name.to_owned().try_into() {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
         match self.fs_interface.fuse_remove_inode(parent, name) {
             Ok(()) => reply.ok(),
             Err(RemoveFileError::WhError { source }) => reply.error(source.to_libc()),
@@ -433,19 +453,22 @@ impl Filesystem for FuseController {
         flags: u32,
         reply: fuser::ReplyEmpty,
     ) {
+        let name: InodeName = match name.to_owned().try_into() {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+        let newname: InodeName = match newname.to_owned().try_into() {
+            Ok(newname) => newname,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
         match self
             .fs_interface
             .rename(
                 parent,
                 new_parent,
-                &name //TODO move instead of ref because of the clone down the line
-                    .to_owned()
-                    .into_string()
-                    .expect("Don't support non unicode yet"), //TODO support OsString smartly
-                &newname
-                    .to_owned()
-                    .into_string()
-                    .expect("Don't support non unicode yet"),
+                name,
+                newname.into(),
                 flags & libc::RENAME_NOREPLACE == 0,
             )
             .inspect_err(|err| log::error!("rename: {err}"))
@@ -677,16 +700,22 @@ impl Filesystem for FuseController {
 }
 
 pub fn mount_fuse(
-    mount_point: &WhPath,
+    mount_point: &Path,
     fs_interface: Arc<FsInterface>,
 ) -> io::Result<BackgroundSession> {
     let options = vec![
         MountOption::RW,
         MountOption::DefaultPermissions,
         MountOption::AllowOther, //NOTE - Necessary for xfstests
-        MountOption::FSName(format!("wormhole@{}", mount_point.get_end())),
+        MountOption::FSName(format!(
+            "wormhole@{}",
+            mount_point
+                .file_name()
+                .ok_or(io::ErrorKind::InvalidFilename)?
+                .to_string_lossy()
+        )),
     ];
     let ctrl = FuseController { fs_interface };
 
-    fuser::spawn_mount2(ctrl, mount_point.to_string(), &options)
+    fuser::spawn_mount2(ctrl, mount_point, &options)
 }

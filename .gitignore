@@ -27,3 +27,6 @@ Folder*
 .direnv/
 
 .env
+.vs/
+.kube/
+/k8s/.env

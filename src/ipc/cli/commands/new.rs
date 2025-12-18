@@ -11,7 +11,7 @@ use crate::{
     },
 };
 
-pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<()> {
+pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<String> {
     let mountpoint = match args.mountpoint {
         Some(mountpoint) => Ok(mountpoint),
         None => std::env::current_dir().map(|path| path.join(args.name.clone())),
@@ -28,7 +28,7 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<()> {
     } = args;
 
     let request = NewRequest {
-        mountpoint,
+        mountpoint: mountpoint.clone(),
         name: name.clone(),
         port,
         url,
@@ -39,17 +39,20 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<()> {
     send_command(Command::New(request), &mut stream).await?;
 
     match recieve_answer::<NewAnswer>(&mut stream).await? {
-        NewAnswer::Success(new_port) => {
-            println!("Pod '{name}' created with success with port '{new_port}'.");
-            Ok(())
-        }
+        NewAnswer::Success(new_port) => Ok(format!(
+            "Pod '{name}' created with success with port '{new_port}'."
+        )),
         NewAnswer::AlreadyExist => Err(io::Error::new(
-            io::ErrorKind::AddrInUse,
-            "Pod already exist, couldn't create.",
+            io::ErrorKind::AlreadyExists,
+            format!("Pod with name '{name}' already exist, couldn't create."),
+        )),
+        NewAnswer::AlreadyMounted => Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!("A pod at {mountpoint:#?} is already mounted, couldn't create."),
         )),
         NewAnswer::InvalidIp => Err(io::Error::new(
             io::ErrorKind::AddrInUse,
-            "Given port is already used.",
+            "Given port is already used, couldn't create.",
         )),
         NewAnswer::BindImpossible(e) => {
             eprintln!("Failed to bind the given pod:");
@@ -61,7 +64,7 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<()> {
         }
         NewAnswer::InvalidUrlIp => Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "Url given to connect to is invalid.",
+            "The given Url to connect to is invalid.",
         )),
     }
 }

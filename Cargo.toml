@@ -57,13 +57,7 @@ ntapi = "0.4.1"
 nt-time = "0.10.6"
 windows = { version = "0.56.0", features = [
     "Win32_Foundation",
-    "Win32_System_IO",
-    "Win32_Storage",
     "Win32_Storage_FileSystem",
-    "Win32",
-    "Wdk_Storage_FileSystem",
-    "Wdk_System",
-    "Wdk_System_SystemServices",
 ] }
 
 [dependencies]
@@ -99,7 +93,9 @@ signal-hook = "0.3.18"
 futures = "0.3"
 gethostname = "1.0.2"
 interprocess = { version = "2.2.3", features = ["tokio"] }
+camino = "1.2.1"
 fs2 = "0.4.3"
+colored = "3.0.0"
 
 [dev-dependencies]
 assert_fs = "1.1.2"

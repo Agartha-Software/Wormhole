@@ -17,7 +17,7 @@ pub async fn remove<Stream>(
 where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
 {
-    let name = match find_pod(args.pod, pods) {
+    let name = match find_pod(&args.pod, pods) {
         Some((name, _)) => name.clone(),
         None => {
             send_answer(RemoveAnswer::PodNotFound, stream).await?;
