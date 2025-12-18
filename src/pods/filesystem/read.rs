@@ -1,7 +1,7 @@
-use crate::pods::arbo::Arbo;
 use crate::pods::filesystem::file_handle::{AccessMode, FileHandle, FileHandleManager, UUID};
+use crate::pods::itree::Itree;
 use crate::pods::network::pull_file::PullError;
-use crate::{error::WhError, pods::arbo::InodeId};
+use crate::{error::WhError, pods::itree::InodeId};
 use custom_error::custom_error;
 use parking_lot::RwLockReadGuard;
 
@@ -60,7 +60,7 @@ impl FsInterface {
 
         self.disk
             .read_file(
-                &Arbo::n_read_lock(&self.arbo, "read_file")?.n_get_path_from_inode_id(file)?,
+                &Itree::n_read_lock(&self.itree, "read_file")?.n_get_path_from_inode_id(file)?,
                 offset,
                 buf,
             )

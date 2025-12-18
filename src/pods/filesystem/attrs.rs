@@ -5,12 +5,12 @@ use custom_error::custom_error;
 use crate::{
     error::WhError,
     pods::{
-        arbo::{Arbo, FsEntry, InodeId, Metadata, BLOCK_SIZE},
         filesystem::{
             file_handle::{AccessMode, FileHandleManager, UUID},
             fs_interface::FsInterface,
             permissions::has_write_perm,
         },
+        itree::{FsEntry, InodeId, Itree, Metadata, BLOCK_SIZE},
     },
 };
 
@@ -35,9 +35,9 @@ impl FsInterface {
         ino: InodeId,
         meta: Metadata,
     ) -> Result<(), AcknoledgeSetAttrError> {
-        let mut arbo = Arbo::n_write_lock(&self.arbo, "acknowledge_metadata")?;
-        let path = arbo.n_get_path_from_inode_id(ino)?;
-        let inode = arbo.n_get_inode_mut(ino)?;
+        let mut itree = Itree::n_write_lock(&self.itree, "acknowledge_metadata")?;
+        let path = itree.n_get_path_from_inode_id(ino)?;
+        let inode = itree.n_get_inode_mut(ino)?;
 
         if meta.size != inode.meta.size || meta.perm != inode.meta.perm {
             match &inode.entry {
@@ -70,7 +70,7 @@ impl FsInterface {
             }
         }
 
-        arbo.n_get_inode_mut(ino)?.meta = meta;
+        itree.n_get_inode_mut(ino)?.meta = meta;
         Ok(())
     }
 
@@ -87,10 +87,10 @@ impl FsInterface {
         file_handle: Option<UUID>,
         flags: Option<u32>,
     ) -> Result<Metadata, SetAttrError> {
-        let arbo = Arbo::n_read_lock(&self.arbo, "setattr")?;
-        let path = arbo.n_get_path_from_inode_id(ino)?;
-        let mut meta = arbo.n_get_inode(ino)?.meta.clone();
-        drop(arbo);
+        let itree = Itree::n_read_lock(&self.itree, "setattr")?;
+        let path = itree.n_get_path_from_inode_id(ino)?;
+        let mut meta = itree.n_get_inode(ino)?.meta.clone();
+        drop(itree);
 
         //Except for size, No permissions are required on the file itself, but permission is required on all of the directories in pathname that lead to the file.
 

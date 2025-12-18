@@ -9,7 +9,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::{
     error::WhResult,
     pods::{
-        arbo::{ArboIndex, Inode, InodeId, Metadata},
+        itree::{Inode, InodeId, ItreeIndex, Metadata},
         whpath::InodeName,
     },
 };
@@ -36,7 +36,7 @@ pub enum MessageContent {
     RequestFs,
     Disconnect(Address),
 
-    // (Arbo, peers, global_config)
+    // (Itree, peers, global_config)
     FsAnswer(FileSystemSerialized, Vec<Address>, Vec<u8>),
 }
 
@@ -74,8 +74,8 @@ impl fmt::Debug for MessageContent {
                 inode.name.as_str(),
                 inode.parent,
                 match inode.entry {
-                    crate::pods::arbo::FsEntry::File(_) => 'f',
-                    crate::pods::arbo::FsEntry::Directory(_) => 'd',
+                    crate::pods::itree::FsEntry::File(_) => 'f',
+                    crate::pods::itree::FsEntry::Directory(_) => 'd',
                 }
             ),
             MessageContent::RedundancyFile(id, _) => write!(f, "RedundancyFile({id}, <bin>)"),
@@ -161,6 +161,6 @@ impl fmt::Display for ToNetworkMessage {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FileSystemSerialized {
-    pub fs_index: ArboIndex,
+    pub fs_index: ItreeIndex,
     pub next_inode: InodeId,
 }

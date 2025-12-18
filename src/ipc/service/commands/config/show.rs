@@ -10,7 +10,7 @@ use crate::{
         commands::PodId,
         service::{commands::find_pod, connection::send_answer},
     },
-    pods::{arbo::LOCK_TIMEOUT, pod::Pod},
+    pods::{itree::LOCK_TIMEOUT, pod::Pod},
 };
 
 async fn config_to_string<Conf>(config: &Arc<RwLock<Conf>>) -> std::io::Result<Option<String>>

@@ -1,9 +1,9 @@
 use crate::error::WhResult;
 use crate::network::message::{MessageContent, ToNetworkMessage};
-use crate::pods::arbo::{Arbo, FsEntry};
+use crate::pods::itree::{FsEntry, Itree};
 use crate::pods::network::callbacks::Callback;
 use crate::pods::network::network_interface::NetworkInterface;
-use crate::{error::WhError, pods::arbo::InodeId};
+use crate::{error::WhError, pods::itree::InodeId};
 use custom_error::custom_error;
 
 custom_error! {
@@ -20,9 +20,9 @@ custom_error! {
 impl NetworkInterface {
     // REVIEW - recheck and simplify this if possible
     pub fn pull_file_sync(&self, file: InodeId) -> Result<Option<Callback>, PullError> {
-        let arbo = Arbo::n_read_lock(&self.arbo, "pull file sync")?;
+        let itree = Itree::n_read_lock(&self.itree, "pull file sync")?;
         let hosts = {
-            if let FsEntry::File(hosts) = &arbo.n_get_inode(file)?.entry {
+            if let FsEntry::File(hosts) = &itree.n_get_inode(file)?.entry {
                 hosts
             } else {
                 panic!("Pulling a folder is invalid.")

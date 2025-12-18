@@ -18,7 +18,7 @@ pub sender: &lt;&lt; mpsc::UnboundedSender&lt;NetworkMessage&gt; &gt;&gt;
 Connect
 AcceptConnection</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>390</x><y>760</y><w>190</w><h>70</h></coordinates><panel_attributes>lt=&lt;&lt;-</panel_attributes><additional_attributes>170;50;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>0</x><y>680</y><w>240</w><h>50</h></coordinates><panel_attributes>lt=[("sender" to send to other peer)]&lt;-
 
-</panel_attributes><additional_attributes>100;20;220;20</additional_attributes></element><element><id>UMLClass</id><coordinates><x>810</x><y>640</y><w>310</w><h>70</h></coordinates><panel_attributes>_type: Arborescence_
+</panel_attributes><additional_attributes>100;20;220;20</additional_attributes></element><element><id>UMLClass</id><coordinates><x>810</x><y>640</y><w>310</w><h>70</h></coordinates><panel_attributes>_type: Itreerescence_
 --
 Arc&lt;Vec&lt;Mutex&lt;HashMap&lt;u64, WhMeta&gt;\&gt;&gt;
 u64 : FILE INODE</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLNote</id><coordinates><x>170</x><y>0</y><w>270</w><h>240</h></coordinates><panel_attributes>Note :
@@ -72,14 +72,14 @@ receive files actions requests from
 network and local
 
 If necessary, firstly check request validity
-on the Arborescence / WhMeta
+on the Itreerescence / WhMeta
 Then (if requested) execute the action on disk
 via DiskManager
 
 Manage logical operations like cache / replicas
 
 --
-- arbo: Arc&lt;Mutex&lt;Arborescence&gt;&gt;
+- itree: Arc&lt;Mutex&lt;Itreerescence&gt;&gt;
 - mount_point: UniPath
 - disk: Arc&lt;DiskManager&gt;
 - network_sender: &lt;&lt; UnboundedSender&lt;NetworkMessage&gt; &gt;&gt;
@@ -89,8 +89,8 @@ Manage logical operations like cache / replicas
 
 --
 
-network_airport(Arc&lt;Mutex&lt;Arborescence&gt;&gt; arbo, nw_rx)
-/!\ have an arc mutex on the NetworkInterface's arbo
+network_airport(Arc&lt;Mutex&lt;Itreerescence&gt;&gt; itree, nw_rx)
+/!\ have an arc mutex on the NetworkInterface's itree
 
 
 
@@ -125,11 +125,11 @@ Entities like fuser directly use
 functions defined here when needed
 
 these functions interract with the
-arborescence to answer
+itreerescence to answer
 
 if a modification is needed they
 check the validity using the
-arborescence then
+itreerescence then
 inform the network using
 network_sender
 
@@ -140,7 +140,7 @@ on write, messages the &lt;&lt; DelayedWorker &gt;&gt;
 
 --
 disk: Arc&lt;DiskManager&gt;
-arbo: Mutex&lt;Arborescence&gt;
+itree: Mutex&lt;Itreerescence&gt;
 network_sender: &lt;&lt; UnboundedSender&lt;NetworkMessage&gt; &gt;&gt;
 --
 </panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLNote</id><coordinates><x>1850</x><y>970</y><w>160</w><h>60</h></coordinates><panel_attributes>The windows equivalent
@@ -155,7 +155,7 @@ a direct response. by example :
 
 --
 disk: Arc&lt;DiskManager&gt;
-arbo: Arc&lt;Mutex&lt;Arborescence&gt;&gt;
+itree: Arc&lt;Mutex&lt;Itreerescence&gt;&gt;
 network_sender: &lt;&lt; UnboundedSender&lt;NetworkMessage&gt; &gt;&gt;
 --
 </panel_attributes><additional_attributes></additional_attributes></element></diagram>

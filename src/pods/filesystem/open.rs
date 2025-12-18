@@ -1,9 +1,9 @@
 use crate::pods::{
-    arbo::{Arbo, InodeId},
     filesystem::{
         file_handle::{AccessMode, FileHandleManager, OpenFlags},
         permissions::{has_execute_perm, has_read_perm, has_write_perm},
     },
+    itree::{InodeId, Itree},
 };
 
 use crate::error::WhError;
@@ -97,7 +97,7 @@ impl FsInterface {
         flags: OpenFlags,
         access: AccessMode,
     ) -> Result<UUID, OpenError> {
-        let inode_perm = Arbo::n_read_lock(&self.arbo, "open")?
+        let inode_perm = Itree::n_read_lock(&self.itree, "open")?
             .n_get_inode(ino)?
             .meta
             .perm;
