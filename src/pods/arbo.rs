@@ -672,11 +672,8 @@ impl Arbo {
 
     /// given ino is not checked -> must exist in arbo
     fn recurse_tree(&self, ino: InodeId, indentation: u8) -> WhResult<Vec<TreeLine>> {
-        let entry = &self
-            .n_get_inode(ino)?
-            .entry;
-        let path = self
-            .n_get_path_from_inode_id(ino)?;
+        let entry = &self.n_get_inode(ino)?.entry;
+        let path = self.n_get_path_from_inode_id(ino)?;
         match entry {
             FsEntry::File(hosts) => Ok(vec![(indentation, ino, path, hosts.clone())]),
             FsEntry::Directory(children) => Ok(children
