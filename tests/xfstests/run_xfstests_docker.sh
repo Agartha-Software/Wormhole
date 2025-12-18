@@ -57,7 +57,7 @@ export RESULT_BASE="\$PWD/results"
 EOF
 
 # --- Launch the test ---
-# Le fichier 'exclude_tests' a été copié ici par le Dockerfile
+# The 'exclude_tests' file was copied here by the Dockerfile
 TEST_CMD="./check -fuse -E exclude_tests -g quick"
 
 echo "-----------------------------------------------------"

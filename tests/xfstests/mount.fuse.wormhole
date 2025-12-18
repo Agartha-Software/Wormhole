@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# Assistant de montage pour 'fuse.wormhole'
-# Appelé par /sbin/mount.fuse via l'option 'subtype=wormhole'
+# Mount helper for 'fuse.wormhole'
+# Called by /sbin/mount.fuse via the 'subtype=wormhole' option
 #
 set -e
 
@@ -17,8 +17,8 @@ PORT="5000"
 MOUNT_POINT="$2" # The mount point is always $2
 OPTIONS_STRING=""
 
-# --- 2. Parser les options ---
-# On ignore les deux premiers arguments (dev et mountpoint)
+# --- 2. Parse options ---
+# We ignore the first two arguments (dev and mountpoint)
 shift 2
 
 while [ $# -gt 0 ]; do
@@ -65,12 +65,12 @@ echo "  POD_NAME: $POD_NAME" >> $LOG_FILE
 echo "  PORT: $PORT" >> $LOG_FILE
 echo "  MOUNT_POINT: $MOUNT_POINT" >> $LOG_FILE
 
-# --- 3. Nettoyage préventif (FIX "Pod already exist") ---
-# On demande à wormhole de supprimer le pod s'il existe déjà (nettoyage d'un montage précédent)
+# --- 3. Preventive cleanup (FIX "Pod already exist") ---
+# Ask wormhole to remove the pod if it already exists (cleanup from a previous mount)
 echo "Cleaning up potential stale pod: $POD_NAME" >> $LOG_FILE
 $WORMHOLE_CLI remove "$POD_NAME" >> $LOG_FILE 2>&1 || true
 fusermount -u -z "$MOUNT_POINT" 2>/dev/null || true
-# On attend un court instant pour être sûr que le port est libéré
+# Wait a short moment to ensure the port is freed
 sleep 0.5
 
 cat << EOF > "$MOUNT_POINT/.global_config.toml"
@@ -88,7 +88,7 @@ echo "Created config with redundancy=1" >> $LOG_FILE
 # --- 4. Execute the mount command ---
 echo "Running: $WORMHOLE_CLI new $POD_NAME -p $PORT -m $MOUNT_POINT" >> $LOG_FILE
 
-# On redirige stderr vers stdout pour le capturer dans le log
+# Redirect stderr to stdout so it is captured in the log
 if $WORMHOLE_CLI new "$POD_NAME" -p "$PORT" -m "$MOUNT_POINT" >> $LOG_FILE 2>&1; then
     echo "Mount successful." >> $LOG_FILE
     echo "--- mount.fuse.wormhole SCRIPT SUCCESS ---" >> $LOG_FILE

@@ -1,4 +1,4 @@
-# --- Fonctionnalités non implémentées ---
+# --- Unimplemented features ---
 generic/002 # Hardlinks
 generic/005 # Symlinks
 generic/023 # Symlinks
@@ -15,7 +15,7 @@ generic/104 # Hardlinks
 generic/106 # Hardlinks
 generic/107 # Hardlinks
 
-# --- Opérations fichiers avancées non supportées ---
+# --- Advanced file operations not supported ---
 generic/004 # O_TMPFILE
 generic/008 # fallocate (fzero)
 generic/009 # fallocate (fzero)
@@ -40,7 +40,7 @@ generic/094 # fiemap
 generic/096 # fzero
 generic/103 # falloc
 
-# --- Fonctionnalités Système non supportées ---
+# --- Unsupported system features ---
 generic/026 # ACLs
 generic/053 # ACLs
 generic/099 # ACLs
@@ -56,12 +56,12 @@ generic/079 # chattr
 generic/110 # Reflink
 generic/111 # Reflink
 
-# --- Tests bloquants ou instables sur FUSE ---
+# --- Blocking or unstable tests on FUSE ---
 generic/013 # fsstress
 generic/112 # AIO Stress
 generic/113 # AIO Stress
 
-# --- Tests nécessitant un périphérique bloc réel ---
+# --- Tests requiring a real block device ---
 generic/034
 generic/059
 generic/066
@@ -71,62 +71,62 @@ generic/081
 generic/101
 generic/108
 
-# --- Blocages suspects (Hang) ---
-generic/198 # Suspect pour le blocage actuel
-generic/204 # Lock testing (souvent bloquant sur FUSE simple)
-generic/215 # MMAP write (très souvent bloquant sans implémentation robuste)
+# --- Suspected hangs ---
+generic/198 # Suspect for the current hang
+generic/204 # Lock testing (often blocking on simple FUSE)
+generic/215 # MMAP write (very often hangs without a robust implementation)
 
-# --- Echecs dus à la non-persistance (RAM disk) ---
-generic/003 # Timestamps perdus au remount
-generic/029 # Données perdues au remount
-generic/030 # Données perdues au remount
-generic/035 # Rename/Overwrite perdu
+# --- Failures due to non-persistence (RAM disk) ---
+generic/003 # Timestamps lost on remount
+generic/029 # Data lost on remount
+generic/030 # Data lost on remount
+generic/035 # Rename/Overwrite lost
 generic/075 # FSX integrity (corruption)
 generic/080 # Timestamps
 generic/091 # FSX integrity
-generic/169 # Données perdues
+generic/169 # Data lost
 
-# --- Tests de concurrence avancée (Deadlocks fréquents sur FUSE) ---
-generic/247 # Race mmap/directio (Bloquant)
-generic/248 # pwrite hang (Bloquant potentiel)
-generic/249 # splice (Souvent non supporté ou bloquant)
+# --- Advanced concurrency tests (Frequent deadlocks on FUSE) ---
+generic/247 # Race mmap/directio (Blocking)
+generic/248 # pwrite hang (Potentially blocking)
+generic/249 # splice (Often unsupported or blocking)
 generic/250 # require scratch dev
 generic/252 # require scratch dev
 
-# --- Tests vus échouer dans les logs (Permissions/Data) ---
+# --- Tests observed failing in logs (Permissions/Data) ---
 generic/120 # Permissions/Timestamps
 generic/123 # Permissions
 generic/126 # Permissions (SUID/SGID)
 generic/135 # Data integrity mismatch
 generic/193 # chown/permissions failure
 
-# --- Futurs blocages identifiés (Concurrency/Deadlock) ---
+# --- Future identified deadlocks (Concurrency/Deadlock) ---
 generic/464 # Race write/append/sync (Deadlock FUSE)
 generic/465 # Direct I/O race (Deadlock FUSE)
 
-# --- Echecs de persistance (Mount/Umount cycle) ---
-generic/313 # Persistance
-generic/315 # Persistance truncate
-generic/451 # Persistance
-generic/469 # Persistance mmap
+# --- Persistence failures (Mount/Umount cycle) ---
+generic/313 # Persistence
+generic/315 # Persistence truncate
+generic/451 # Persistence
+generic/469 # Persistence mmap
 
-# --- Autres fonctionnalités manquantes ---
-generic/306 # Permissions POSIX avancées
+# --- Other missing features ---
+generic/306 # Advanced POSIX permissions
 generic/375 # ACLs
 
-# --- Zone de danger Concurrence & Cohérence (460+) ---
+# --- Concurrency & Consistency danger zone (460+) ---
 generic/464 # Race write/append/sync (Deadlock FUSE)
 generic/465 # Direct I/O i_size (Deadlock FUSE)
-generic/466 # Fsync consistency (Risque de blocage)
-generic/468 # Race fallocate/fsync (Non supporté + Risque)
+generic/466 # Fsync consistency (Risk of hang)
+generic/468 # Race fallocate/fsync (Unsupported + Risk)
 generic/469 # Mmap vs Truncate race
-generic/478 # Lock recovery (Souvent bloquant sur FUSE)
+generic/478 # Lock recovery (Often blocking on FUSE)
 
-# --- Blocage actuel (AIO/COW Race) ---
+# --- Current hang (AIO/COW Race) ---
 generic/462
-generic/463 # Race AIO (Deadlock FUSE classique)
+generic/463 # AIO race (classic FUSE deadlock)
 
-# --- Fonctionnalités non supportées ou instables (Suite Quick) ---
+# --- Unsupported or unstable features (Quick suite) ---
 generic/467 # open_by_handle (NFS export)
 generic/470 # log writes (Device mapper target)
 generic/471 # RWF_NOWAIT (Non-blocking IO race)
@@ -136,7 +136,8 @@ generic/474 # Syncfs/Shutdown
 generic/475 # Crash recovery (Nécessite device block réel)
 generic/476 # Long running fsstress
 
-generic/760 # Blocage (Probable deadlock AIO/Concurrency)
+# generic/760 # Hang (Probable AIO/Concurrency deadlock)
+generic/760 # Hang (Probable AIO/Concurrency deadlock)
 generic/761
 generic/762
 generic/763
