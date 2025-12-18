@@ -667,25 +667,25 @@ impl Arbo {
             ROOT
         };
 
-        Ok(self.recurse_tree(ino, 0))
+        self.recurse_tree(ino, 0)
     }
 
     /// given ino is not checked -> must exist in arbo
-    fn recurse_tree(&self, ino: InodeId, indentation: u8) -> Vec<TreeLine> {
+    fn recurse_tree(&self, ino: InodeId, indentation: u8) -> WhResult<Vec<TreeLine>> {
         let entry = &self
-            .n_get_inode(ino)
-            .expect("recurse_tree: ino not found")
+            .n_get_inode(ino)?
             .entry;
         let path = self
-            .n_get_path_from_inode_id(ino)
-            .expect("recurse_tree: unable to get path");
+            .n_get_path_from_inode_id(ino)?;
         match entry {
-            FsEntry::File(hosts) => vec![(indentation, ino, path, hosts.clone())],
-            FsEntry::Directory(children) => children
+            FsEntry::File(hosts) => Ok(vec![(indentation, ino, path, hosts.clone())]),
+            FsEntry::Directory(children) => Ok(children
                 .iter()
                 .map(|c| self.recurse_tree(*c, indentation + 1))
+                .collect::<WhResult<Vec<Vec<TreeLine>>>>()?
+                .into_iter()
                 .flatten()
-                .collect::<Vec<TreeLine>>(),
+                .collect::<Vec<TreeLine>>()),
         }
     }
 }
