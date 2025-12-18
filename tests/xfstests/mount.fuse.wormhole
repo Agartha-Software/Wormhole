@@ -68,7 +68,7 @@ echo "  MOUNT_POINT: $MOUNT_POINT" >> $LOG_FILE
 # --- 3. Nettoyage préventif (FIX "Pod already exist") ---
 # On demande à wormhole de supprimer le pod s'il existe déjà (nettoyage d'un montage précédent)
 echo "Cleaning up potential stale pod: $POD_NAME" >> $LOG_FILE
-$WORMHOLE_CLI remove --name "$POD_NAME" >> $LOG_FILE 2>&1 || true
+$WORMHOLE_CLI remove "$POD_NAME" >> $LOG_FILE 2>&1 || true
 fusermount -u -z "$MOUNT_POINT" 2>/dev/null || true
 # On attend un court instant pour être sûr que le port est libéré
 sleep 0.5
