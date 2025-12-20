@@ -37,30 +37,33 @@ where
     let local_config =
         LocalConfigFile::read(args.mountpoint.join(LOCAL_CONFIG_FNAME)).unwrap_or_default();
 
-    let port = match (local_config.general.port, args.port) {
+    let listen_address = match (local_config.general.listen_address, args.listen_address) {
         (None, None) => None,
-        (None, Some(port)) => Some(port),
-        (Some(port), None) => Some(port),
-        (Some(_), Some(_)) => {
-            send_answer(NewAnswer::ConflictWithConfig("Port".to_string()), stream).await?;
+        (None, Some(listen_address)) => Some(listen_address),
+        (Some(listen_address), None) => Some(listen_address),
+        (Some(_), args_address)
+            if args.ip_address.is_some() || args.port.is_some() || args_address.is_some() =>
+        {
+            send_answer(
+                NewAnswer::ConflictWithConfig("Listen address".to_string()),
+                stream,
+            )
+            .await?;
             return Ok(false);
         }
+        _ => unreachable!(),
     };
 
-    let (server, port) = match Server::setup("0.0.0.0", port).await {
-        Ok((server, port)) => (Arc::new(server), port),
+    let server = if let Some(socket_address) = listen_address {
+        Server::from_socket_address(socket_address)
+    } else {
+        Server::from_ip_address(args.ip_address, args.port)
+    };
+
+    let (server, listen_url) = match server {
+        Ok((server, listen_url)) => (Arc::new(server), listen_url),
         Err(answer) => {
             send_answer(answer, stream).await?;
-            return Ok(false);
-        }
-    };
-
-    let listen_url = match (local_config.general.url, args.listen_url) {
-        (None, None) => format!("0.0.0.0:{port}"),
-        (None, Some(url)) => url,
-        (Some(url), None) => url,
-        (Some(_), Some(_)) => {
-            send_answer(NewAnswer::ConflictWithConfig("Url".to_string()), stream).await?;
             return Ok(false);
         }
     };
@@ -96,9 +99,8 @@ where
     let answer = match Pod::new(
         global_config,
         args.name.clone(),
-        port,
         hostname,
-        listen_url,
+        listen_url.clone(),
         args.mountpoint,
         server,
     )
@@ -106,8 +108,8 @@ where
     {
         Ok(pod) => {
             pods.insert(args.name, pod);
-            println!("New pod created successfully at '{port}'");
-            NewAnswer::Success(port)
+            println!("New pod created successfully, listening to '{listen_url}'");
+            NewAnswer::Success(listen_url)
         }
         Err(err) => NewAnswer::FailedToCreatePod(err.into()),
     };

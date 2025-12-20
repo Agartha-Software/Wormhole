@@ -2,6 +2,7 @@ use super::message::ToNetworkMessage;
 use crate::{ipc::answers::NewAnswer, pods::pod::Pod};
 use std::{
     collections::HashMap,
+    io,
     net::SocketAddr,
     sync::{Arc, Mutex},
 };
@@ -22,64 +23,85 @@ pub struct Server {
     pub state: PeerMap,
 }
 
+pub const POD_DEFAULT_IP: &'static str = "0.0.0.0"; // Change to 127.0.0.0?
 pub const POD_DEFAULT_PORT: u16 = 40000;
 pub const POD_PORT_MAX_TRIES: u16 = 100;
+pub const POD_PORT_RANGE_END: u16 = POD_DEFAULT_PORT + POD_PORT_MAX_TRIES;
 
-fn connect_bind(socket: &TcpSocket, addr: String) -> Result<(), NewAnswer> {
+fn connect_bind(socket: &TcpSocket, addr: String) -> Result<String, NewAnswer> {
     let socket_addr = addr.parse().map_err(|_| NewAnswer::InvalidIp)?;
     socket.bind(socket_addr).map_err(|e| {
         log::trace!("Automatically generated address is invalid, retrying: {e}");
         NewAnswer::BindImpossible(e.into())
+    })?;
+    Ok(addr)
+}
+
+fn new_tcp_socket() -> Result<TcpSocket, NewAnswer> {
+    let socket = TcpSocket::new_v4().map_err(|e| {
+        log::error!("Failed to bind new pod listener: {e}");
+        NewAnswer::BindImpossible(e.into())
+    })?;
+    socket.set_reuseaddr(false).map_err(|e| {
+        log::error!("Failed to bind new pod listener: {e}");
+        NewAnswer::BindImpossible(e.into())
+    })?;
+    Ok(socket)
+}
+
+fn create_listener(socket: TcpSocket) -> Result<TcpListener, NewAnswer> {
+    socket.listen(1024).map_err(|e| {
+        log::error!("Failed to bind new pod listener: {e}");
+        NewAnswer::BindImpossible(e.into())
     })
 }
 
-fn connect_to_available_port(
-    socket: &TcpSocket,
-    addr: &str,
-    port: Option<u16>,
-) -> Result<u16, NewAnswer> {
-    if let Some(port) = port {
-        let combined = format!("{}:{}", addr, port);
-        connect_bind(socket, combined)?;
-        return Ok(port);
-    }
+impl Server {
+    pub fn from_ip_address(
+        ip_address: Option<String>,
+        port: Option<u16>,
+    ) -> Result<(Server, String), NewAnswer> {
+        let ip = ip_address.unwrap_or(POD_DEFAULT_IP.to_owned());
 
-    let mut last_err: Option<NewAnswer> = None;
-    for p in 0..POD_PORT_MAX_TRIES {
-        let port_num = POD_DEFAULT_PORT + p;
-        let combined = format!("{}:{}", addr, port_num);
-        match connect_bind(socket, combined) {
-            Ok(()) => return Ok(port_num),
-            Err(e) => last_err = Some(e),
+        match port {
+            Some(port) => Server::from_socket_address(format!("{ip}:{port}")),
+            None => Server::from_range(ip),
         }
     }
 
-    // NOTE technically impossible to go there
-    Err(last_err.unwrap_or(NewAnswer::InvalidIp))
-}
+    pub fn from_socket_address(socket_address: String) -> Result<(Server, String), NewAnswer> {
+        let socket = new_tcp_socket()?;
 
-impl Server {
-    pub async fn setup(addr: &str, port: Option<u16>) -> Result<(Server, u16), NewAnswer> {
-        let socket = TcpSocket::new_v4().map_err(|e| {
-            log::error!("Failed to bind new pod listener: {e}");
-            NewAnswer::BindImpossible(e.into())
-        })?;
-        socket.set_reuseaddr(false).map_err(|e| {
-            log::error!("Failed to bind new pod listener: {e}");
-            NewAnswer::BindImpossible(e.into())
-        })?;
-        let port = connect_to_available_port(&socket, addr, port)?;
-        let listener = socket.listen(1024).map_err(|e| {
-            log::error!("Failed to bind new pod listener: {e}");
-            NewAnswer::BindImpossible(e.into())
-        })?;
+        let socket_address = connect_bind(&socket, socket_address)?;
 
         Ok((
             Server {
-                listener: listener,
+                listener: create_listener(socket)?,
                 state: PeerMap::new(Mutex::new(HashMap::new())),
             },
-            port,
+            socket_address,
+        ))
+    }
+
+    fn from_range(ip: String) -> Result<(Server, String), NewAnswer> {
+        let socket = new_tcp_socket()?;
+
+        let socket_address = (POD_DEFAULT_PORT..POD_PORT_RANGE_END)
+            .find_map(|port| connect_bind(&socket, format!("{ip}:{port}")).ok())
+            .ok_or(NewAnswer::BindImpossible(
+                io::Error::new(
+                    io::ErrorKind::AddrNotAvailable,
+                    format!("No valid address found in the range {ip}:[{POD_DEFAULT_PORT}..{POD_PORT_RANGE_END}]"),
+                )
+                .into(),
+            ))?;
+
+        Ok((
+            Server {
+                listener: create_listener(socket)?,
+                state: PeerMap::new(Mutex::new(HashMap::new())),
+            },
+            socket_address,
         ))
     }
 }

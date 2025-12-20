@@ -61,7 +61,6 @@ struct PodPrototype {
     pub peers: Vec<PeerIPC>,
     pub global_config: GlobalConfig,
     pub name: String,
-    pub port: u16,
     pub hostname: String,
     pub url: String,
     pub mountpoint: PathBuf,
@@ -78,7 +77,6 @@ custom_error! {pub PodInfoError
 async fn initiate_connection_or_empty(
     mountpoint: PathBuf,
     name: String,
-    port: u16,
     hostname: String,
     url: String,
     global_config: GlobalConfig,
@@ -117,7 +115,6 @@ async fn initiate_connection_or_empty(
                                 global_config: accept.config,
                                 hostname: new_hostname,
                                 name,
-                                port,
                                 mountpoint,
                                 url,
                                 receiver_out,
@@ -143,7 +140,6 @@ async fn initiate_connection_or_empty(
         global_config,
         hostname,
         name,
-        port,
         mountpoint,
         url,
         receiver_out,
@@ -209,7 +205,6 @@ impl Pod {
     pub async fn new(
         global_config: GlobalConfig,
         name: String,
-        port: u16,
         hostname: String,
         url: String,
         mountpoint: PathBuf,
@@ -223,7 +218,6 @@ impl Pod {
         let proto = initiate_connection_or_empty(
             mountpoint,
             name,
-            port,
             hostname,
             url,
             global_config,
@@ -279,7 +273,6 @@ impl Pod {
             arbo.clone(),
             proto.url,
             proto.hostname,
-            proto.port,
             senders_in.clone(),
             redundancy_tx.clone(),
             Arc::new(RwLock::new(proto.peers)),
@@ -538,9 +531,8 @@ impl Pod {
         LocalConfigFile {
             general: GeneralLocalConfig {
                 name: Some(self.name.clone()),
-                port: Some(self.network_interface.port),
                 hostname: Some(self.network_interface.hostname.clone()),
-                url: Some(self.network_interface.url.clone()),
+                listen_address: Some(self.network_interface.url.clone()),
             },
         }
     }
@@ -560,7 +552,6 @@ impl Pod {
         InspectInfo {
             url: self.network_interface.url.clone(),
             hostname: self.network_interface.hostname.clone(),
-            port: self.network_interface.port.clone(),
             name: self.name.clone(),
             connected_peers: peers_data,
             mount: self.mountpoint.clone(),

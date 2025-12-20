@@ -10,9 +10,8 @@ pub struct LocalConfigFile {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct GeneralLocalConfig {
     pub name: Option<String>,
-    pub port: Option<u16>,
     pub hostname: Option<String>,
-    pub url: Option<String>,
+    pub listen_address: Option<String>,
 }
 
 impl LocalConfigFile {

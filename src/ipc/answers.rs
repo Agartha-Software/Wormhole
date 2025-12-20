@@ -6,7 +6,7 @@ use crate::{cli::ConfigType, ipc::error::IoError, pods::arbo::Hosts};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum NewAnswer {
-    Success(u16),
+    Success(String),
     AlreadyExist,
     AlreadyMounted,
     InvalidIp,
@@ -62,7 +62,6 @@ impl std::fmt::Display for PeerInfo {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InspectInfo {
     pub url: String,
-    pub port: u16,
     pub hostname: String,
     pub name: String,
     pub connected_peers: Vec<PeerInfo>,

@@ -130,9 +130,6 @@ pub struct NewArgs {
     /// Name of the pod to create
     // TODO: make optional again when the url can provide the name expected
     pub name: String,
-    /// Local port for the pod to use. By default automatically find a port on the range [40000-40100]
-    #[arg(long, short)]
-    pub port: Option<u16>,
     /// Mount point to create the pod in. By default creates a mount point in the working directory with the name of the pod
     #[arg(long = "mount", short, value_parser=parse_canonicalize_non_existant)]
     pub mountpoint: Option<PathBuf>,
@@ -142,9 +139,15 @@ pub struct NewArgs {
     /// Name for this pod to use as a machine name with the network. Defaults to your Machine's name
     #[arg(long, short = 'H')]
     pub hostname: Option<String>,
-    /// Url this Pod reports to other to reach it
-    #[arg(long, short)]
-    pub listen_url: Option<String>,
+    /// Full address this Pod reports to other to reach it
+    #[arg(long, short, group = "socket-address")]
+    pub listen_address: Option<String>,
+    /// Ip address this Pod reports to other to reach it [default: 0.0.0.0]
+    #[arg(long, short, group = "ip-address")]
+    pub ip_address: Option<String>,
+    /// Local port for the pod to use. By default automatically find a port on the range [40000-40100]
+    #[arg(long, short, group = "ip-address")]
+    pub port: Option<u16>,
     /// Additional hosts to try to join from as a backup
     #[arg(raw = true)]
     pub additional_hosts: Vec<String>,

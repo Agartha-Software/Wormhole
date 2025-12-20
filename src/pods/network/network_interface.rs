@@ -50,7 +50,6 @@ pub struct NetworkInterface {
     pub arbo: Arc<RwLock<Arbo>>,
     pub url: String,
     pub hostname: String,
-    pub port: u16,
     pub to_network_message_tx: UnboundedSender<ToNetworkMessage>,
     pub to_redundancy_tx: UnboundedSender<RedundancyMessage>,
     pub callbacks: Callbacks,
@@ -63,7 +62,6 @@ impl NetworkInterface {
         arbo: Arc<RwLock<Arbo>>,
         url: String,
         hostname: String,
-        port: u16,
         to_network_message_tx: UnboundedSender<ToNetworkMessage>,
         to_redundancy_tx: UnboundedSender<RedundancyMessage>,
         peers: Arc<RwLock<Vec<PeerIPC>>>,
@@ -73,7 +71,6 @@ impl NetworkInterface {
             arbo,
             url,
             hostname,
-            port,
             to_network_message_tx,
             to_redundancy_tx,
             callbacks: Callbacks {
