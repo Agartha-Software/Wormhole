@@ -3,7 +3,7 @@ use std::os::unix::fs::PermissionsExt;
 
 use assert_fs::{
     assert::PathAssert,
-    prelude::{PathChild, PathCreateDir},
+    prelude::{PathChild},
 };
 use wormhole::pods::disk_managers::{unix_disk_manager::UnixDiskManager, DiskManager};
 
@@ -13,36 +13,36 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
 ) {
     // NEW
     {
-        disk.new_file(&"file".into(), 0o644).expect("new_file");
+        disk.new_file(&"file".try_into().unwrap(), 0o644).expect("new_file");
         temp_dir.child("file").assert(predicates::path::is_file());
 
-        disk.new_dir(&"folder".into(), 0o775).expect("new_dir");
+        disk.new_dir(&"folder".try_into().unwrap(), 0o775).expect("new_dir");
         temp_dir.child("folder").assert(predicates::path::is_dir());
     }
 
     // EXISTS
     {
-        assert!(disk.file_exists(&"file".into()), "file exists");
+        assert!(disk.file_exists(&"file".try_into().unwrap()), "file exists");
     }
 
     // REMOVE
     {
-        disk.new_file(&"file2".into(), 0o644).expect("new_file");
-        disk.remove_file(&"file2".into()).expect("remove_file");
+        disk.new_file(&"file2".try_into().unwrap(), 0o644).expect("new_file");
+        disk.remove_file(&"file2".try_into().unwrap()).expect("remove_file");
         temp_dir.child("file2").assert(predicates::path::missing());
 
-        disk.new_dir(&"dir2".into(), 0o755).expect("new_dir");
-        disk.remove_dir(&"dir2".into()).expect("remove_dir");
+        disk.new_dir(&"dir2".try_into().unwrap(), 0o755).expect("new_dir");
+        disk.remove_dir(&"dir2".try_into().unwrap()).expect("remove_dir");
         temp_dir.child("dir2").assert(predicates::path::missing());
 
-        disk.new_dir(&"dir2".into(), 0o755).expect("new_dir");
+        disk.new_dir(&"dir2".try_into().unwrap(), 0o755).expect("new_dir");
         temp_dir.child("dir2").assert(predicates::path::is_dir());
     }
 
     // WRITE
 
     let contents = b"lorem ipsum\nGogi\x01to Ergo Sum";
-    disk.write_file(&"file".into(), contents, 0)
+    disk.write_file(&"file".try_into().unwrap(), contents, 0)
         .expect("write_file");
 
     assert_eq!(
@@ -57,7 +57,7 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
     {
         let mut buf = [0; 28];
         let len = disk
-            .read_file(&"file".into(), 8, &mut buf)
+            .read_file(&"file".try_into().unwrap(), 8, &mut buf)
             .expect("read_file");
 
         assert_eq!(
@@ -69,7 +69,7 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
 
     // set_file_size
     {
-        disk.set_file_size(&"file".into(), 19)
+        disk.set_file_size(&"file".try_into().unwrap(), 19)
             .expect("set_file_size");
 
         assert_eq!(
@@ -80,9 +80,9 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
             "contents resized correctly"
         );
 
-        disk.new_file(&"file2".into(), 0o644).expect("new_file");
+        disk.new_file(&"file2".try_into().unwrap(), 0o644).expect("new_file");
 
-        disk.set_file_size(&"file2".into(), 256)
+        disk.set_file_size(&"file2".try_into().unwrap(), 256)
             .expect("set_file_size");
 
         assert_eq!(
@@ -93,17 +93,17 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
             "expanded is 0-initialized"
         );
 
-        disk.remove_file(&"file2".into()).expect("remove_file");
+        disk.remove_file(&"file2".try_into().unwrap()).expect("remove_file");
     }
 
     // MV
     {
         assert!(
-            disk.mv_file(&"folder".into(), &"".into()).is_err(),
+            disk.mv_file(&"folder".try_into().unwrap(), &"".try_into().unwrap()).is_err(),
             "moving to root is invalid but doesn't break anything"
         );
 
-        disk.mv_file(&"file".into(), &"folder/file".into())
+        disk.mv_file(&"file".try_into().unwrap(), &"folder/file".try_into().unwrap())
             .expect("mv_file");
 
         assert_eq!(
@@ -114,7 +114,7 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
             "contents remain after move"
         );
 
-        disk.mv_file(&"folder".into(), &"directory".into())
+        disk.mv_file(&"folder".try_into().unwrap(), &"directory".try_into().unwrap())
             .expect("mv_file");
 
         assert_eq!(
@@ -129,7 +129,7 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
     // PERMISSIONS
     #[cfg(target_os = "linux")]
     {
-        disk.set_permisions(&"".into(), 0o444)
+        disk.set_permisions(&"".try_into().unwrap(), 0o444)
             .expect("set_permission");
 
         let p = temp_dir
@@ -139,10 +139,10 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
             .permissions();
         assert_eq!(p.mode() & 0o777, 0o444, "root permission set correctly");
 
-        disk.set_permisions(&"".into(), 0o775)
+        disk.set_permisions(&"".try_into().unwrap(), 0o775)
             .expect("set_permission");
 
-        disk.set_permisions(&"directory/file".into(), 0o666)
+        disk.set_permisions(&"directory/file".try_into().unwrap(), 0o666)
             .expect("set_permission");
 
         let p = temp_dir
@@ -159,7 +159,7 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
 #[test]
 pub fn test_unix_disk() {
     let temp_dir = assert_fs::TempDir::new().expect("creating temp dir");
-    let disk = UnixDiskManager::new(&temp_dir.path().into()).expect("creating disk manager");
+    let disk = UnixDiskManager::new(&temp_dir.path()).expect("creating disk manager");
 
     test_generic_disk(&disk, &temp_dir);
 }
@@ -171,7 +171,7 @@ pub fn test_unix_disk() {
 
     let mountpoint = temp_dir.child("wormhole");
     mountpoint.create_dir_all();
-    let disk = UnixDiskManager::new(&mountpoint.path().into()).expect("creating disk manager");
+    let disk = UnixDiskManager::new(&mountpoint.path()).expect("creating disk manager");
     let temp_dir = temp_dir.child(".wormhole");
 
     test_generic_disk(&disk, &temp_dir);

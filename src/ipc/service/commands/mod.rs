@@ -22,7 +22,6 @@ pub use unfreeze::unfreeze;
 
 use crate::ipc::commands::PodId;
 use crate::pods::pod::Pod;
-use crate::pods::whpath::JoinPath;
 use std::collections::HashMap;
 
 pub(self) fn find_pod<'a>(
@@ -33,6 +32,6 @@ pub(self) fn find_pod<'a>(
         PodId::Name(name) => pods.get_key_value(name),
         PodId::Path(path) => pods
             .iter()
-            .find(|(_, pod)| pod.get_mountpoint().as_str() == path.as_str()),
+            .find(|(_, pod)| pod.get_mountpoint().as_os_str() == path.as_os_str()),
     }
 }

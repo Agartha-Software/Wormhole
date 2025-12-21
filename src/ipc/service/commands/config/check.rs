@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::HashMap;
 
 use crate::{
     cli::ConfigType,
@@ -24,15 +24,13 @@ where
         Some((_, pod)) => {
             let mut local_path = pod.get_mountpoint().clone();
             local_path.push(".local_config.toml");
-            let local_pathbuf = PathBuf::from(local_path.to_string());
 
             let mut global_path = pod.get_mountpoint().clone();
             global_path.push(".global_config.toml");
-            let global_pathbuf = PathBuf::from(global_path.to_string());
 
             match (
-                local_pathbuf.exists() || !config_type.is_local(),
-                global_pathbuf.exists() || !config_type.is_global(),
+                local_path.exists() || !config_type.is_local(),
+                global_path.exists() || !config_type.is_global(),
             ) {
                 (true, true) => (),
                 (false, true) => send_answer(CheckConfigAnswer::MissingLocal, stream).await?,
