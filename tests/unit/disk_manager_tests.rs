@@ -1,10 +1,7 @@
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::PermissionsExt;
 
-use assert_fs::{
-    assert::PathAssert,
-    prelude::{PathChild},
-};
+use assert_fs::{assert::PathAssert, prelude::PathChild};
 use wormhole::pods::disk_managers::{unix_disk_manager::UnixDiskManager, DiskManager};
 
 pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::path::Path>>(
@@ -13,10 +10,12 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
 ) {
     // NEW
     {
-        disk.new_file(&"file".try_into().unwrap(), 0o644).expect("new_file");
+        disk.new_file(&"file".try_into().unwrap(), 0o644)
+            .expect("new_file");
         temp_dir.child("file").assert(predicates::path::is_file());
 
-        disk.new_dir(&"folder".try_into().unwrap(), 0o775).expect("new_dir");
+        disk.new_dir(&"folder".try_into().unwrap(), 0o775)
+            .expect("new_dir");
         temp_dir.child("folder").assert(predicates::path::is_dir());
     }
 
@@ -27,15 +26,20 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
 
     // REMOVE
     {
-        disk.new_file(&"file2".try_into().unwrap(), 0o644).expect("new_file");
-        disk.remove_file(&"file2".try_into().unwrap()).expect("remove_file");
+        disk.new_file(&"file2".try_into().unwrap(), 0o644)
+            .expect("new_file");
+        disk.remove_file(&"file2".try_into().unwrap())
+            .expect("remove_file");
         temp_dir.child("file2").assert(predicates::path::missing());
 
-        disk.new_dir(&"dir2".try_into().unwrap(), 0o755).expect("new_dir");
-        disk.remove_dir(&"dir2".try_into().unwrap()).expect("remove_dir");
+        disk.new_dir(&"dir2".try_into().unwrap(), 0o755)
+            .expect("new_dir");
+        disk.remove_dir(&"dir2".try_into().unwrap())
+            .expect("remove_dir");
         temp_dir.child("dir2").assert(predicates::path::missing());
 
-        disk.new_dir(&"dir2".try_into().unwrap(), 0o755).expect("new_dir");
+        disk.new_dir(&"dir2".try_into().unwrap(), 0o755)
+            .expect("new_dir");
         temp_dir.child("dir2").assert(predicates::path::is_dir());
     }
 
@@ -80,7 +84,8 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
             "contents resized correctly"
         );
 
-        disk.new_file(&"file2".try_into().unwrap(), 0o644).expect("new_file");
+        disk.new_file(&"file2".try_into().unwrap(), 0o644)
+            .expect("new_file");
 
         disk.set_file_size(&"file2".try_into().unwrap(), 256)
             .expect("set_file_size");
@@ -93,18 +98,23 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
             "expanded is 0-initialized"
         );
 
-        disk.remove_file(&"file2".try_into().unwrap()).expect("remove_file");
+        disk.remove_file(&"file2".try_into().unwrap())
+            .expect("remove_file");
     }
 
     // MV
     {
         assert!(
-            disk.mv_file(&"folder".try_into().unwrap(), &"".try_into().unwrap()).is_err(),
+            disk.mv_file(&"folder".try_into().unwrap(), &"".try_into().unwrap())
+                .is_err(),
             "moving to root is invalid but doesn't break anything"
         );
 
-        disk.mv_file(&"file".try_into().unwrap(), &"folder/file".try_into().unwrap())
-            .expect("mv_file");
+        disk.mv_file(
+            &"file".try_into().unwrap(),
+            &"folder/file".try_into().unwrap(),
+        )
+        .expect("mv_file");
 
         assert_eq!(
             std::fs::read(temp_dir.child(&"folder").child(&"file").path())
@@ -114,8 +124,11 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
             "contents remain after move"
         );
 
-        disk.mv_file(&"folder".try_into().unwrap(), &"directory".try_into().unwrap())
-            .expect("mv_file");
+        disk.mv_file(
+            &"folder".try_into().unwrap(),
+            &"directory".try_into().unwrap(),
+        )
+        .expect("mv_file");
 
         assert_eq!(
             std::fs::read(temp_dir.child(&"directory").child(&"file").path())
