@@ -10,31 +10,6 @@ use crate::{
     },
 };
 
-// async fn extract_given_value<T, Stream>(
-//     fst: Option<T>,
-//     snd: Option<T>,
-//     default: Option<T>,
-//     conflict: &str,
-//     stream: &mut Stream,
-// ) -> std::io::Result<Option<T>>
-// where
-//     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
-// {
-//     match (fst, snd) {
-//         (None, None) => default,
-//         (None, Some(listen_address)) => Some(listen_address),
-//         (Some(listen_address), None) => Some(listen_address),
-//         (Some(_), Some(_)) => {
-//             send_answer(
-//                 NewAnswer::ConflictWithConfig("Listen address".to_string()),
-//                 stream,
-//             )
-//             .await?;
-//             return Ok(false);
-//         }
-//     }
-// }
-
 pub async fn new<Stream>(
     args: NewRequest,
     pods: &mut HashMap<String, Pod>,

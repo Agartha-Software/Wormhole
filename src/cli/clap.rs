@@ -141,8 +141,8 @@ pub struct NewArgs {
     pub hostname: Option<String>,
     /// Full address this Pod reports to other to reach it
     #[arg(long, short)]
-    pub listen_url: Option<String>,
-    /// Ip address this Pod reports to other to reach it [default: 0.0.0.0]
+    pub public_url: Option<String>,
+    /// Ip address this Pod listen [default: 0.0.0.0]
     #[arg(long, short)]
     pub ip_address: Option<IpAddr>,
     /// Local port for the pod to use. By default automatically find a port on the range [default: 40000-40100]

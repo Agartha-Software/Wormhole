@@ -236,7 +236,7 @@ pub async fn accept(
                 // closures to capture ? process
                 let wave_back = Wave {
                     hostname: network.hostname.clone(),
-                    url: network.public_url.clone(),
+                    url: None,
                     blame: wave.hostname.clone(),
                 };
                 let data = bincode::serialize(&Handshake::Wave(wave_back))?;
