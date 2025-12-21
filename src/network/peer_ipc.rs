@@ -22,7 +22,7 @@ use super::message::{Address, FromNetworkMessage, MessageAndStatus};
 
 #[derive(Debug)]
 pub struct PeerIPC {
-    pub url: String,
+    pub url: Option<String>,
     pub hostname: String,
     pub thread: tokio::task::JoinHandle<()>,
     pub sender: mpsc::UnboundedSender<MessageAndStatus>,
@@ -87,7 +87,7 @@ impl PeerIPC {
     pub async fn connect(
         url: String,
         hostname: String,
-        own_url: String,
+        public_url: Option<String>,
         receiver_in: UnboundedSender<FromNetworkMessage>,
     ) -> Result<(Self, Accept), HandshakeError> {
         let (sender_in, sender_out) = mpsc::unbounded_channel();
@@ -106,7 +106,8 @@ impl PeerIPC {
         {
             Ok((stream, _)) => {
                 let (mut sink, mut stream) = stream.split();
-                let accept = handshake::connect(&mut stream, &mut sink, hostname, own_url).await?;
+                let accept =
+                    handshake::connect(&mut stream, &mut sink, hostname, public_url).await?;
                 (
                     accept,
                     tokio::spawn(Self::work(
@@ -126,7 +127,7 @@ impl PeerIPC {
         Ok((
             Self {
                 thread,
-                url,
+                url: Some(url),
                 hostname: accept.hostname.clone(),
                 sender: sender_in,
             },
@@ -156,8 +157,7 @@ impl PeerIPC {
         {
             Ok((stream, _)) => {
                 let (mut sink, mut stream) = stream.split();
-                let wave =
-                    handshake::wave(&mut stream, &mut sink, hostname, url.clone(), blame).await?;
+                let wave = handshake::wave(&mut stream, &mut sink, hostname, blame).await?;
                 (
                     wave,
                     tokio::spawn(Self::work(
@@ -177,7 +177,7 @@ impl PeerIPC {
         Ok((
             Self {
                 thread,
-                url,
+                url: Some(url),
                 hostname: wave.hostname.clone(),
                 sender: sender_in,
             },

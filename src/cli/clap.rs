@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{net::IpAddr, path::PathBuf};
 
 use crate::{
     cli::config_clap::ConfigCommand,
@@ -140,13 +140,13 @@ pub struct NewArgs {
     #[arg(long, short = 'H')]
     pub hostname: Option<String>,
     /// Full address this Pod reports to other to reach it
-    #[arg(long, short, group = "socket-address")]
-    pub listen_address: Option<String>,
+    #[arg(long, short)]
+    pub listen_url: Option<String>,
     /// Ip address this Pod reports to other to reach it [default: 0.0.0.0]
-    #[arg(long, short, group = "ip-address")]
-    pub ip_address: Option<String>,
-    /// Local port for the pod to use. By default automatically find a port on the range [40000-40100]
-    #[arg(long, short, group = "ip-address")]
+    #[arg(long, short)]
+    pub ip_address: Option<IpAddr>,
+    /// Local port for the pod to use. By default automatically find a port on the range [default: 40000-40100]
+    #[arg(long, short)]
     pub port: Option<u16>,
     /// Additional hosts to try to join from as a backup
     #[arg(raw = true)]

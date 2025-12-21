@@ -119,7 +119,7 @@ pub struct Accept {
     pub hosts: Vec<String>,
 
     /// urls of all avaialble peers, in the same order
-    pub urls: Vec<String>,
+    pub urls: Vec<Option<String>>,
 
     /// global config of the network
     pub config: GlobalConfig,
@@ -137,7 +137,7 @@ pub struct Connect {
     pub hostname: String,
 
     /// url by which this peer may be accessed, if available
-    pub url: String,
+    pub url: Option<String>,
     // /// simple unencrypted passkey
     // pub authentification: String,
 
@@ -151,7 +151,7 @@ pub struct Wave {
     pub hostname: String,
 
     /// url by which the waving peer may be reached, if available
-    pub url: String,
+    pub url: Option<String>,
 
     /// hostname of the third party peer that acted as an entrypoint
     pub blame: String,
@@ -205,7 +205,7 @@ pub async fn accept(
                     .map(|peer| (peer.hostname.clone(), peer.url.clone()))
                     .collect::<Vec<_>>();
 
-                let (hosts, urls) = [(network.hostname.clone(), network.url.clone())]
+                let (hosts, urls) = [(network.hostname.clone(), network.public_url.clone())]
                     .into_iter()
                     .chain(url_pairs.into_iter())
                     .inspect(|(h, u)| log::trace!("accept:h{h}, u{u:?}"))
@@ -236,7 +236,7 @@ pub async fn accept(
                 // closures to capture ? process
                 let wave_back = Wave {
                     hostname: network.hostname.clone(),
-                    url: network.url.clone(),
+                    url: network.public_url.clone(),
                     blame: wave.hostname.clone(),
                 };
                 let data = bincode::serialize(&Handshake::Wave(wave_back))?;
@@ -268,7 +268,6 @@ pub async fn wave<T>(
     stream: &mut SplitStream<WebSocketStream<T>>,
     sink: &mut SplitSink<WebSocketStream<T>, Message>,
     hostname: String,
-    url: String,
     blame: String,
 ) -> Result<Wave, HandshakeError>
 where
@@ -277,7 +276,7 @@ where
 {
     let wave = Wave {
         hostname,
-        url,
+        url: None,
         blame,
     };
 
@@ -305,12 +304,12 @@ pub async fn connect(
     stream: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     sink: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
     hostname: String,
-    own_url: String,
+    url: Option<String>,
 ) -> Result<Accept, HandshakeError> {
     let connect = Connect {
         hostname,
         magic_version: GIT_HASH.into(),
-        url: own_url,
+        url,
     };
 
     let serialized = bincode::serialize(&Handshake::Connect(connect))?;

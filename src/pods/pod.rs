@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::{io, sync::Arc};
 
@@ -62,7 +63,8 @@ struct PodPrototype {
     pub global_config: GlobalConfig,
     pub name: String,
     pub hostname: String,
-    pub url: String,
+    pub public_url: Option<String>,
+    pub bound_socket: SocketAddr,
     pub mountpoint: PathBuf,
     pub receiver_out: UnboundedReceiver<FromNetworkMessage>,
     pub receiver_in: UnboundedSender<FromNetworkMessage>,
@@ -78,7 +80,8 @@ async fn initiate_connection_or_empty(
     mountpoint: PathBuf,
     name: String,
     hostname: String,
-    url: String,
+    public_url: Option<String>,
+    bound_socket: SocketAddr,
     global_config: GlobalConfig,
     fail_on_network: bool,
     receiver_in: UnboundedSender<FromNetworkMessage>,
@@ -89,7 +92,7 @@ async fn initiate_connection_or_empty(
             match PeerIPC::connect(
                 first_contact.to_owned(),
                 hostname.clone(),
-                url.clone(),
+                public_url.clone(),
                 receiver_in.clone(),
             )
             .await
@@ -97,37 +100,48 @@ async fn initiate_connection_or_empty(
                 Err(HandshakeError::CouldntConnect) => continue,
                 Err(e) => log::error!("{first_contact}: {e}"),
                 Ok((ipc, accept)) => {
-                    let new_hostname = accept.rename.unwrap_or(hostname.clone());
-
-                    match PeerIPC::peer_startup(
-                        accept.urls.into_iter().skip(1),
-                        new_hostname.clone(),
-                        accept.hostname,
-                        receiver_in.clone(),
-                    )
-                    .await
+                    if let Some(urls) =
+                        accept.urls.into_iter().skip(1).fold(Some(vec![]), |a, b| {
+                            a.and_then(|mut a| {
+                                a.push(b?);
+                                Some(a)
+                            })
+                        })
                     {
-                        Ok(mut other_ipc) => {
-                            other_ipc.insert(0, ipc);
-                            return Ok(PodPrototype {
-                                arbo: accept.arbo,
-                                peers: other_ipc,
-                                global_config: accept.config,
-                                hostname: new_hostname,
-                                name,
-                                mountpoint,
-                                url,
-                                receiver_out,
-                                receiver_in: receiver_in,
-                            });
-                        }
-                        Err(e) => log::error!("a peer failed: {e}"),
-                    };
+                        let new_hostname = accept.rename.unwrap_or(hostname.clone());
+
+                        match PeerIPC::peer_startup(
+                            urls,
+                            new_hostname.clone(),
+                            accept.hostname,
+                            receiver_in.clone(),
+                        )
+                        .await
+                        {
+                            Ok(mut other_ipc) => {
+                                other_ipc.insert(0, ipc);
+                                return Ok(PodPrototype {
+                                    arbo: accept.arbo,
+                                    peers: other_ipc,
+                                    global_config: accept.config,
+                                    hostname: new_hostname,
+                                    mountpoint: mountpoint.into(),
+                                    receiver_out,
+                                    receiver_in: receiver_in.clone(),
+                                    name,
+                                    public_url,
+                                    bound_socket,
+                                });
+                            }
+
+                            Err(e) => log::error!("a peer failed: {e}"),
+                        };
+                    }
                 }
             }
         }
         if fail_on_network {
-            log::error!("No peers answered. Stopping.");
+            log::error!("None of the specified peers could answer. Stopping.");
             return Err(io::Error::new(
                 io::ErrorKind::Other,
                 "None of the specified peers could answer",
@@ -141,20 +155,12 @@ async fn initiate_connection_or_empty(
         hostname,
         name,
         mountpoint,
-        url,
+        public_url,
+        bound_socket,
         receiver_out,
         receiver_in,
     })
 }
-
-// fn register_to_others(peers: &Vec<PeerIPC>, self_address: &Address) -> std::io::Result<()> {
-//     for peer in peers {
-//         peer.sender
-//             .send((MessageContent::Register(self_address.clone()), None))
-//             .map_err(|err| std::io::Error::new(io::ErrorKind::NotConnected, err))?;
-//     }
-//     Ok(())
-// }
 
 custom_error! {pub PodStopError
     WhError{source: WhError} = "{source}",
@@ -206,7 +212,8 @@ impl Pod {
         global_config: GlobalConfig,
         name: String,
         hostname: String,
-        url: String,
+        public_url: Option<String>,
+        bound_socket: SocketAddr,
         mountpoint: PathBuf,
         server: Arc<Server>,
     ) -> io::Result<Self> {
@@ -219,7 +226,8 @@ impl Pod {
             mountpoint,
             name,
             hostname,
-            url,
+            public_url,
+            bound_socket,
             global_config,
             // NOTE - temporary fix
             // made to help with tests and debug
@@ -271,7 +279,8 @@ impl Pod {
 
         let network_interface = Arc::new(NetworkInterface::new(
             arbo.clone(),
-            proto.url,
+            proto.public_url,
+            proto.bound_socket,
             proto.hostname,
             senders_in.clone(),
             redundancy_tx.clone(),
@@ -532,7 +541,7 @@ impl Pod {
             general: GeneralLocalConfig {
                 name: Some(self.name.clone()),
                 hostname: Some(self.network_interface.hostname.clone()),
-                listen_address: Some(self.network_interface.url.clone()),
+                public_url: self.network_interface.public_url.clone(),
             },
         }
     }
@@ -550,7 +559,8 @@ impl Pod {
             .collect();
 
         InspectInfo {
-            url: self.network_interface.url.clone(),
+            public_url: self.network_interface.public_url.clone(),
+            bound_socket: self.network_interface.bound_socket.clone(),
             hostname: self.network_interface.hostname.clone(),
             name: self.name.clone(),
             connected_peers: peers_data,

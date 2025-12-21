@@ -11,7 +11,7 @@ pub struct LocalConfigFile {
 pub struct GeneralLocalConfig {
     pub name: Option<String>,
     pub hostname: Option<String>,
-    pub listen_address: Option<String>,
+    pub public_url: Option<String>,
 }
 
 impl LocalConfigFile {

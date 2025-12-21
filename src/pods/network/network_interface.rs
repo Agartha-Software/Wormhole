@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     io::{self, ErrorKind},
+    net::SocketAddr,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -48,7 +49,8 @@ pub fn get_all_peers_address(peers: &Arc<RwLock<Vec<PeerIPC>>>) -> WhResult<Vec<
 #[derive(Debug)]
 pub struct NetworkInterface {
     pub arbo: Arc<RwLock<Arbo>>,
-    pub url: String,
+    pub public_url: Option<String>,
+    pub bound_socket: SocketAddr,
     pub hostname: String,
     pub to_network_message_tx: UnboundedSender<ToNetworkMessage>,
     pub to_redundancy_tx: UnboundedSender<RedundancyMessage>,
@@ -60,7 +62,8 @@ pub struct NetworkInterface {
 impl NetworkInterface {
     pub fn new(
         arbo: Arc<RwLock<Arbo>>,
-        url: String,
+        public_url: Option<String>,
+        bound_socket: SocketAddr,
         hostname: String,
         to_network_message_tx: UnboundedSender<ToNetworkMessage>,
         to_redundancy_tx: UnboundedSender<RedundancyMessage>,
@@ -69,7 +72,8 @@ impl NetworkInterface {
     ) -> Self {
         Self {
             arbo,
-            url,
+            public_url,
+            bound_socket,
             hostname,
             to_network_message_tx,
             to_redundancy_tx,

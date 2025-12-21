@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     config::{local_file::LocalConfigFile, types::Config, GlobalConfig},
@@ -9,6 +9,31 @@ use crate::{
         pod::Pod,
     },
 };
+
+// async fn extract_given_value<T, Stream>(
+//     fst: Option<T>,
+//     snd: Option<T>,
+//     default: Option<T>,
+//     conflict: &str,
+//     stream: &mut Stream,
+// ) -> std::io::Result<Option<T>>
+// where
+//     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
+// {
+//     match (fst, snd) {
+//         (None, None) => default,
+//         (None, Some(listen_address)) => Some(listen_address),
+//         (Some(listen_address), None) => Some(listen_address),
+//         (Some(_), Some(_)) => {
+//             send_answer(
+//                 NewAnswer::ConflictWithConfig("Listen address".to_string()),
+//                 stream,
+//             )
+//             .await?;
+//             return Ok(false);
+//         }
+//     }
+// }
 
 pub async fn new<Stream>(
     args: NewRequest,
@@ -37,48 +62,28 @@ where
     let local_config =
         LocalConfigFile::read(args.mountpoint.join(LOCAL_CONFIG_FNAME)).unwrap_or_default();
 
-    let listen_address = match (local_config.general.listen_address, args.listen_address) {
-        (None, None) => None,
-        (None, Some(listen_address)) => Some(listen_address),
-        (Some(listen_address), None) => Some(listen_address),
-        (Some(_), args_address)
-            if args.ip_address.is_some() || args.port.is_some() || args_address.is_some() =>
-        {
-            send_answer(
-                NewAnswer::ConflictWithConfig("Listen address".to_string()),
-                stream,
-            )
-            .await?;
-            return Ok(false);
-        }
-        _ => unreachable!(),
-    };
-
-    let server = if let Some(socket_address) = listen_address {
-        Server::from_socket_address(socket_address)
-    } else {
-        Server::from_ip_address(args.ip_address, args.port)
-    };
-
-    let (server, listen_url) = match server {
-        Ok((server, listen_url)) => (Arc::new(server), listen_url),
+    let (server, bound_socket) = match Server::new(args.ip_address, args.port) {
+        Ok((server, bound_socket)) => (Arc::new(server), bound_socket),
         Err(answer) => {
             send_answer(answer, stream).await?;
             return Ok(false);
         }
     };
 
-    if let Some(url) = args.url {
-        if let Ok(socket) = url.parse::<SocketAddr>() {
-            //For now this socket addr is only used as a way to verify the host but then it could be used futher
-            global_config = global_config.add_hosts(Some(socket), args.additional_hosts);
-        } else {
-            send_answer(NewAnswer::InvalidUrlIp, stream).await?;
+    let public_url = match (local_config.general.public_url, args.public_url) {
+        (None, None) => None,
+        (None, Some(public_url)) => Some(public_url),
+        (Some(public_url), None) => Some(public_url),
+        (Some(_), Some(_)) => {
+            send_answer(
+                NewAnswer::ConflictWithConfig("Public url".to_string()),
+                stream,
+            )
+            .await?;
             return Ok(false);
         }
-    } else {
-        global_config = global_config.add_hosts(None, args.additional_hosts);
-    }
+    };
+    global_config = global_config.add_hosts(public_url.clone(), args.additional_hosts);
 
     let hostname = match (local_config.general.hostname, args.hostname) {
         (None, None) => gethostname::gethostname()
@@ -100,7 +105,8 @@ where
         global_config,
         args.name.clone(),
         hostname,
-        listen_url.clone(),
+        public_url,
+        bound_socket,
         args.mountpoint,
         server,
     )
@@ -108,8 +114,8 @@ where
     {
         Ok(pod) => {
             pods.insert(args.name, pod);
-            println!("New pod created successfully, listening to '{listen_url}'");
-            NewAnswer::Success(listen_url)
+            println!("New pod created successfully, listening to '{bound_socket}'");
+            NewAnswer::Success(bound_socket)
         }
         Err(err) => NewAnswer::FailedToCreatePod(err.into()),
     };

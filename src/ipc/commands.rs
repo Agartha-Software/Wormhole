@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{net::IpAddr, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -41,8 +41,8 @@ pub struct NewRequest {
     pub name: String,
     pub mountpoint: PathBuf,
     pub url: Option<String>,
-    pub listen_address: Option<String>,
-    pub ip_address: Option<String>,
+    pub public_url: Option<String>,
+    pub ip_address: Option<IpAddr>,
     pub port: Option<u16>,
     pub hostname: Option<String>,
     pub additional_hosts: Vec<String>,
