@@ -158,5 +158,4 @@ mod test {
 
         assert!(disk.exist(&"".into()));
     }
-
 }
