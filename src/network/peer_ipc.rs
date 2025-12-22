@@ -88,7 +88,7 @@ impl PeerIPC {
         url: String,
         hostname: String,
         public_url: Option<String>,
-        receiver_in: UnboundedSender<FromNetworkMessage>,
+        receiver_in: &UnboundedSender<FromNetworkMessage>,
     ) -> Result<(Self, Accept), HandshakeError> {
         let (sender_in, sender_out) = mpsc::unbounded_channel();
 
@@ -113,7 +113,7 @@ impl PeerIPC {
                     tokio::spawn(Self::work(
                         sink,
                         stream,
-                        receiver_in,
+                        receiver_in.clone(),
                         sender_out,
                         url.clone(),
                     )),
@@ -139,7 +139,7 @@ impl PeerIPC {
         url: String,
         hostname: String,
         blame: String,
-        receiver_in: UnboundedSender<FromNetworkMessage>,
+        receiver_in: &UnboundedSender<FromNetworkMessage>,
     ) -> Result<(PeerIPC, Wave), HandshakeError> {
         let (sender_in, sender_out) = mpsc::unbounded_channel();
 
@@ -163,7 +163,7 @@ impl PeerIPC {
                     tokio::spawn(Self::work(
                         sink,
                         stream,
-                        receiver_in,
+                        receiver_in.clone(),
                         sender_out,
                         url.clone(),
                     )),
@@ -190,12 +190,12 @@ impl PeerIPC {
         peer_entrypoints: I,
         hostname: String,
         blame: String,
-        receiver_in: UnboundedSender<FromNetworkMessage>,
+        receiver_in: &UnboundedSender<FromNetworkMessage>,
     ) -> Result<Vec<PeerIPC>, HandshakeError> {
         futures_util::future::join_all(
-            peer_entrypoints.into_iter().map(|url| {
-                PeerIPC::wave(url, hostname.clone(), blame.clone(), receiver_in.clone())
-            }),
+            peer_entrypoints
+                .into_iter()
+                .map(|url| PeerIPC::wave(url, hostname.clone(), blame.clone(), receiver_in)),
         )
         .await
         .into_iter()

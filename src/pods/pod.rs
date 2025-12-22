@@ -66,8 +66,6 @@ struct PodPrototype {
     pub public_url: Option<String>,
     pub bound_socket: SocketAddr,
     pub mountpoint: PathBuf,
-    pub receiver_out: UnboundedReceiver<FromNetworkMessage>,
-    pub receiver_in: UnboundedSender<FromNetworkMessage>,
 }
 
 custom_error! {pub PodInfoError
@@ -84,8 +82,7 @@ async fn initiate_connection_or_empty(
     bound_socket: SocketAddr,
     global_config: GlobalConfig,
     fail_on_network: bool,
-    receiver_in: UnboundedSender<FromNetworkMessage>,
-    receiver_out: UnboundedReceiver<FromNetworkMessage>,
+    receiver_in: &UnboundedSender<FromNetworkMessage>,
 ) -> Result<PodPrototype, io::Error> {
     if global_config.general.entrypoints.len() >= 1 {
         for first_contact in &global_config.general.entrypoints {
@@ -93,7 +90,7 @@ async fn initiate_connection_or_empty(
                 first_contact.to_owned(),
                 hostname.clone(),
                 public_url.clone(),
-                receiver_in.clone(),
+                receiver_in,
             )
             .await
             {
@@ -114,7 +111,7 @@ async fn initiate_connection_or_empty(
                             urls,
                             new_hostname.clone(),
                             accept.hostname,
-                            receiver_in.clone(),
+                            receiver_in,
                         )
                         .await
                         {
@@ -126,8 +123,6 @@ async fn initiate_connection_or_empty(
                                     global_config: accept.config,
                                     hostname: new_hostname,
                                     mountpoint: mountpoint.into(),
-                                    receiver_out,
-                                    receiver_in: receiver_in.clone(),
                                     name,
                                     public_url,
                                     bound_socket,
@@ -157,8 +152,6 @@ async fn initiate_connection_or_empty(
         mountpoint,
         public_url,
         bound_socket,
-        receiver_out,
-        receiver_in,
     })
 }
 
@@ -233,15 +226,19 @@ impl Pod {
             // made to help with tests and debug
             // choice not to fail should later be supported by the cli
             true,
-            receiver_in,
-            receiver_out,
+            &receiver_in,
         )
         .await?;
 
-        Self::realize(proto, server).await
+        Self::realize(proto, server, receiver_in, receiver_out).await
     }
 
-    async fn realize(proto: PodPrototype, server: Arc<Server>) -> io::Result<Self> {
+    async fn realize(
+        proto: PodPrototype,
+        server: Arc<Server>,
+        receiver_in: UnboundedSender<FromNetworkMessage>,
+        receiver_out: UnboundedReceiver<FromNetworkMessage>,
+    ) -> io::Result<Self> {
         let (senders_in, senders_out) = mpsc::unbounded_channel();
 
         let (redundancy_tx, redundancy_rx) = mpsc::unbounded_channel();
@@ -296,7 +293,7 @@ impl Pod {
 
         // Start ability to recieve messages
         let network_airport_handle = tokio::spawn(NetworkInterface::network_airport(
-            proto.receiver_out,
+            receiver_out,
             fs_interface.clone(),
         ));
 
@@ -308,7 +305,7 @@ impl Pod {
 
         let new_peer_handle = tokio::spawn(NetworkInterface::incoming_connections_watchdog(
             server,
-            proto.receiver_in.clone(),
+            receiver_in,
             network_interface.clone(),
         ));
 
