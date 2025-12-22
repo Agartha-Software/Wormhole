@@ -58,14 +58,19 @@ pub struct Pod {
 }
 
 struct PodPrototype {
-    pub arbo: Arbo,
-    pub peers: Vec<PeerIPC>,
     pub global_config: GlobalConfig,
     pub name: String,
     pub hostname: String,
     pub public_url: Option<String>,
     pub bound_socket: SocketAddr,
     pub mountpoint: PathBuf,
+}
+
+struct ConnectionInfo {
+    arbo: Arbo,
+    peers: Vec<PeerIPC>,
+    global_config: GlobalConfig,
+    renamed_hostname: String,
 }
 
 custom_error! {pub PodInfoError
@@ -75,15 +80,13 @@ custom_error! {pub PodInfoError
 }
 
 async fn initiate_connection_or_empty(
-    mountpoint: PathBuf,
-    name: String,
+    mountpoint: &PathBuf,
     hostname: String,
-    public_url: Option<String>,
-    bound_socket: SocketAddr,
+    public_url: &Option<String>,
     global_config: GlobalConfig,
     fail_on_network: bool,
     receiver_in: &UnboundedSender<FromNetworkMessage>,
-) -> Result<PodPrototype, io::Error> {
+) -> Result<ConnectionInfo, io::Error> {
     if global_config.general.entrypoints.len() >= 1 {
         for first_contact in &global_config.general.entrypoints {
             match PeerIPC::connect(
@@ -117,15 +120,12 @@ async fn initiate_connection_or_empty(
                         {
                             Ok(mut other_ipc) => {
                                 other_ipc.insert(0, ipc);
-                                return Ok(PodPrototype {
+
+                                return Ok(ConnectionInfo {
                                     arbo: accept.arbo,
                                     peers: other_ipc,
                                     global_config: accept.config,
-                                    hostname: new_hostname,
-                                    mountpoint: mountpoint.into(),
-                                    name,
-                                    public_url,
-                                    bound_socket,
+                                    renamed_hostname: new_hostname,
                                 });
                             }
 
@@ -143,15 +143,11 @@ async fn initiate_connection_or_empty(
             ));
         }
     }
-    Ok(PodPrototype {
-        arbo: generate_arbo(&mountpoint, &hostname).unwrap_or(Arbo::new()),
+    Ok(ConnectionInfo {
+        arbo: generate_arbo(mountpoint, &hostname).unwrap_or(Arbo::new()),
         peers: vec![],
         global_config,
-        hostname,
-        name,
-        mountpoint,
-        public_url,
-        bound_socket,
+        renamed_hostname: hostname,
     })
 }
 
@@ -210,17 +206,13 @@ impl Pod {
         mountpoint: PathBuf,
         server: Arc<Server>,
     ) -> io::Result<Self> {
-        let global_config = global_config;
-
         log::trace!("mount point {:?}", mountpoint);
         let (receiver_in, receiver_out) = mpsc::unbounded_channel();
 
-        let proto = initiate_connection_or_empty(
-            mountpoint,
-            name,
+        let connection_info = initiate_connection_or_empty(
+            &mountpoint,
             hostname,
-            public_url,
-            bound_socket,
+            &public_url,
             global_config,
             // NOTE - temporary fix
             // made to help with tests and debug
@@ -230,7 +222,24 @@ impl Pod {
         )
         .await?;
 
-        Self::realize(proto, server, receiver_in, receiver_out).await
+        let prototype = PodPrototype {
+            global_config: connection_info.global_config,
+            name,
+            hostname: connection_info.renamed_hostname,
+            public_url,
+            bound_socket,
+            mountpoint,
+        };
+
+        Self::realize(
+            prototype,
+            server,
+            receiver_in,
+            receiver_out,
+            connection_info.arbo,
+            connection_info.peers,
+        )
+        .await
     }
 
     async fn realize(
@@ -238,6 +247,8 @@ impl Pod {
         server: Arc<Server>,
         receiver_in: UnboundedSender<FromNetworkMessage>,
         receiver_out: UnboundedReceiver<FromNetworkMessage>,
+        arbo: Arbo,
+        peers: Vec<PeerIPC>,
     ) -> io::Result<Self> {
         let (senders_in, senders_out) = mpsc::unbounded_channel();
 
@@ -248,12 +259,11 @@ impl Pod {
         #[cfg(target_os = "windows")]
         let disk_manager = Box::new(WindowsDiskManager::new(&proto.mountpoint)?);
 
-        create_all_dirs(&proto.arbo, ROOT, disk_manager.as_ref())
+        create_all_dirs(&arbo, ROOT, disk_manager.as_ref())
             .inspect_err(|e| log::error!("unable to create_all_dirs: {e}"))
             .map_err(|e| std::io::Error::new(e.kind(), format!("create_all_dirs: {e}")))?;
 
-        if let Ok(perms) = proto
-            .arbo
+        if let Ok(perms) = arbo
             .get_inode(GLOBAL_CONFIG_INO)
             .map(|inode| inode.meta.perm)
         {
@@ -271,7 +281,7 @@ impl Pod {
                 })?;
         }
 
-        let arbo: Arc<RwLock<Arbo>> = Arc::new(RwLock::new(proto.arbo));
+        let arbo: Arc<RwLock<Arbo>> = Arc::new(RwLock::new(arbo));
         let global = Arc::new(RwLock::new(proto.global_config));
 
         let network_interface = Arc::new(NetworkInterface::new(
@@ -281,7 +291,7 @@ impl Pod {
             proto.hostname,
             senders_in.clone(),
             redundancy_tx.clone(),
-            Arc::new(RwLock::new(proto.peers)),
+            Arc::new(RwLock::new(peers)),
             global.clone(),
         ));
 
