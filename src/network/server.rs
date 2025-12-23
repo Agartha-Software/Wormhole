@@ -1,5 +1,5 @@
 use super::message::ToNetworkMessage;
-use crate::{ipc::answers::NewAnswer, pods::pod::Pod};
+use crate::pods::pod::Pod;
 use std::{
     collections::HashMap,
     io,
@@ -28,30 +28,23 @@ pub const POD_DEFAULT_PORT: u16 = 40000;
 pub const POD_PORT_MAX_TRIES: u16 = 100;
 pub const POD_PORT_RANGE_END: u16 = POD_DEFAULT_PORT + POD_PORT_MAX_TRIES;
 
-fn new_tcp_socket() -> Result<TcpSocket, NewAnswer> {
-    let socket = TcpSocket::new_v4().map_err(|e| {
-        log::error!("Failed to bind new pod listener: {e}");
-        NewAnswer::BindImpossible(e.into())
-    })?;
-    socket.set_reuseaddr(false).map_err(|e| {
-        log::error!("Failed to bind new pod listener: {e}");
-        NewAnswer::BindImpossible(e.into())
-    })?;
+fn new_tcp_socket() -> io::Result<TcpSocket> {
+    let socket = TcpSocket::new_v4()
+        .inspect_err(|e| log::error!("Failed to create the socket listener: {e}"))?;
+    socket
+        .set_reuseaddr(false)
+        .inspect_err(|e| log::error!("Can't set reuseaddr of the new socket: {e}"))?;
     Ok(socket)
 }
 
-fn create_listener(socket: TcpSocket) -> Result<TcpListener, NewAnswer> {
-    socket.listen(1024).map_err(|e| {
-        log::error!("Failed to bind new pod listener: {e}");
-        NewAnswer::BindImpossible(e.into())
-    })
+fn create_listener(socket: TcpSocket) -> io::Result<TcpListener> {
+    socket
+        .listen(1024)
+        .inspect_err(|e| log::error!("Failed to create listener for the new pod: {e}"))
 }
 
 impl Server {
-    pub fn new(
-        ip_address: Option<IpAddr>,
-        port: Option<u16>,
-    ) -> Result<(Server, SocketAddr), NewAnswer> {
+    pub fn new(ip_address: Option<IpAddr>, port: Option<u16>) -> io::Result<(Server, SocketAddr)> {
         let ip = ip_address.unwrap_or(POD_DEFAULT_IP.to_owned());
 
         match port {
@@ -63,13 +56,12 @@ impl Server {
         }
     }
 
-    pub fn from_specific_address(socket_addr: SocketAddr) -> Result<Server, NewAnswer> {
+    pub fn from_specific_address(socket_addr: SocketAddr) -> io::Result<Server> {
         let socket = new_tcp_socket()?;
 
-        socket.bind(socket_addr).map_err(|e| {
-            log::trace!("Give socket address couldn't be bound: {e}");
-            NewAnswer::BindImpossible(e.into())
-        })?;
+        socket
+            .bind(socket_addr)
+            .inspect_err(|e| log::trace!("Given socket address couldn't be bound: {e}"))?;
 
         Ok(Server {
             listener: create_listener(socket)?,
@@ -77,7 +69,7 @@ impl Server {
         })
     }
 
-    fn from_range(ip: IpAddr) -> Result<(Server, SocketAddr), NewAnswer> {
+    fn from_range(ip: IpAddr) -> io::Result<(Server, SocketAddr)> {
         let socket = new_tcp_socket()?;
 
         for port in POD_DEFAULT_PORT..POD_PORT_RANGE_END {
@@ -101,12 +93,11 @@ impl Server {
             }
         }
 
-        Err(NewAnswer::BindImpossible(
+        Err(
             io::Error::new(
                 io::ErrorKind::AddrNotAvailable,
                 format!("No valid address found in the range {ip}:[{POD_DEFAULT_PORT}..{POD_PORT_RANGE_END}]"),
             )
-            .into(),
-        ))
+        )
     }
 }

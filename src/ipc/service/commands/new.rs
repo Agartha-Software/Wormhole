@@ -40,7 +40,7 @@ where
     let (server, bound_socket) = match Server::new(args.ip_address, args.port) {
         Ok((server, bound_socket)) => (Arc::new(server), bound_socket),
         Err(answer) => {
-            send_answer(answer, stream).await?;
+            send_answer(NewAnswer::BindImpossible(answer.into()), stream).await?;
             return Ok(false);
         }
     };
