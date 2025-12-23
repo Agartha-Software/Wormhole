@@ -19,6 +19,7 @@ pub fn has_read_perm(perm: u16) -> bool {
 
 pub mod test {
     #[allow(unused)]
+    #[cfg(target_os = "windows")]
     use crate::pods::arbo::WINDOWS_DEFAULT_PERMS_MODE;
     #[allow(unused)]
     use crate::pods::filesystem::permissions::{
@@ -28,6 +29,7 @@ pub mod test {
 
     #[test]
     fn test_r_bit() {
+        #[cfg(target_os = "windows")]
         assert!(
             has_read_perm(WINDOWS_DEFAULT_PERMS_MODE),
             "WINDOWS_DEFAULT_PERMS_MODE is read"
@@ -39,6 +41,7 @@ pub mod test {
 
     #[test]
     fn test_w_bit() {
+        #[cfg(target_os = "windows")]
         assert!(
             has_write_perm(WINDOWS_DEFAULT_PERMS_MODE),
             "WINDOWS_DEFAULT_PERMS_MODE is write"
@@ -50,6 +53,7 @@ pub mod test {
 
     #[test]
     fn test_x_bit() {
+        #[cfg(target_os = "windows")]
         assert!(
             !has_execute_perm(WINDOWS_DEFAULT_PERMS_MODE),
             "WINDOWS_DEFAULT_PERMS_MODE is not exec"
