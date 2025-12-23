@@ -9,7 +9,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::{
     error::WhResult,
     pods::{
-        itree::{Inode, InodeId, ItreeIndex, Metadata},
+        itree::{Inode, InodeId, ITreeIndex, Metadata},
         whpath::InodeName,
     },
 };
@@ -161,6 +161,6 @@ impl fmt::Display for ToNetworkMessage {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FileSystemSerialized {
-    pub fs_index: ItreeIndex,
+    pub fs_index: ITreeIndex,
     pub next_inode: InodeId,
 }

@@ -152,7 +152,7 @@ async fn initiate_connection(
 
 custom_error! {pub PodStopError
     WhError{source: WhError} = "{source}",
-    ItreeSavingFailed{source: io::Error} = "Could not write itree to disk: {source}",
+    ITreeSavingFailed{source: io::Error} = "Could not write itree to disk: {source}",
     PodNotRunning = "No pod with this name was found running.",
     FileNotReadable{file: InodeId, reason: String} = "Could not read file from disk: ({file}) {reason}",
     FileNotSent{file: InodeId} = "No pod was able to receive this file before stopping: ({file})",
@@ -553,13 +553,13 @@ impl Pod {
             fs_interface
                 .disk
                 .new_file(&itree_path, 0o600) // REVIEW - permissions value ?
-                .map_err(|io| PodStopError::ItreeSavingFailed { source: io })?;
+                .map_err(|io| PodStopError::ITreeSavingFailed { source: io })?;
         }
 
         fs_interface
             .disk
             .write_file(&WhPath::try_from(ITREE_FILE_FNAME).unwrap(), &itree_bin, 0)
-            .map_err(|io| PodStopError::ItreeSavingFailed { source: io })?;
+            .map_err(|io| PodStopError::ITreeSavingFailed { source: io })?;
 
         let mut fs_interface =
             Arc::try_unwrap(fs_interface).expect("fs_interface not released from every thread");

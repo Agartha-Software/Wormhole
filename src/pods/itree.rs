@@ -68,11 +68,11 @@ pub struct Inode {
     pub xattrs: XAttrs,
 }
 
-pub type ItreeIndex = HashMap<InodeId, Inode>;
+pub type ITreeIndex = HashMap<InodeId, Inode>;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ITree {
-    entries: ItreeIndex,
+    entries: ITreeIndex,
     pub next_ino: RangeFrom<Ino>,
 }
 
@@ -181,11 +181,11 @@ impl ITree {
         itree
     }
 
-    pub fn overwrite_self(&mut self, entries: ItreeIndex) {
+    pub fn overwrite_self(&mut self, entries: ITreeIndex) {
         self.entries = entries;
     }
 
-    pub fn get_raw_entries(&self) -> ItreeIndex {
+    pub fn get_raw_entries(&self) -> ITreeIndex {
         self.entries.clone()
     }
 
