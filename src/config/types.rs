@@ -5,7 +5,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{
     error::{CliError, WhError, WhResult},
-    pods::arbo::LOCK_TIMEOUT,
+    pods::itree::LOCK_TIMEOUT,
 };
 
 /** NOTE

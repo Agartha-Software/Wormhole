@@ -5,11 +5,11 @@ use std::{
     time::{Duration, SystemTime},
 };
 use wormhole::pods::{
-    arbo::{Arbo, FsEntry, Inode, Metadata, BLOCK_SIZE, ROOT},
     filesystem::fs_interface::SimpleFileType,
+    itree::{FsEntry, ITree, Inode, Metadata, BLOCK_SIZE, ROOT},
 };
 
-fn arbo_values(inode: &Inode, expected_result: Inode) {
+fn itree_values(inode: &Inode, expected_result: Inode) {
     let tolerance = Duration::from_millis(100); // Tolérance de 100 ms
 
     // Check that the inode is correct
@@ -43,28 +43,30 @@ fn arbo_values(inode: &Inode, expected_result: Inode) {
 #[parallel]
 #[test]
 fn test_inserting_and_retreiving_files() {
-    let mut arbo = Arbo::new();
+    let mut itree = ITree::new();
 
     assert!(
-        arbo.add_inode_from_parameters(
-            "file1".to_owned().try_into().unwrap(),
-            10,
-            ROOT,
-            FsEntry::File(Vec::new()),
-            0o777
-        )
-        .is_ok(),
+        itree
+            .add_inode_from_parameters(
+                "file1".to_owned().try_into().unwrap(),
+                10,
+                ROOT,
+                FsEntry::File(Vec::new()),
+                0o777
+            )
+            .is_ok(),
         "can't add file1 in / folder"
     );
     assert!(
-        arbo.add_inode_from_parameters(
-            "file2".to_owned().try_into().unwrap(),
-            11,
-            ROOT,
-            FsEntry::File(Vec::new()),
-            0o777
-        )
-        .is_ok(),
+        itree
+            .add_inode_from_parameters(
+                "file2".to_owned().try_into().unwrap(),
+                11,
+                ROOT,
+                FsEntry::File(Vec::new()),
+                0o777
+            )
+            .is_ok(),
         "can't add file2 in / folder"
     );
 
@@ -117,6 +119,6 @@ fn test_inserting_and_retreiving_files() {
         },
         xattrs: HashMap::new(),
     };
-    arbo_values(&arbo.get_inode(10).unwrap(), result_one);
-    arbo_values(&arbo.get_inode(11).unwrap(), result_two);
+    itree_values(&itree.get_inode(10).unwrap(), result_one);
+    itree_values(&itree.get_inode(11).unwrap(), result_two);
 }
