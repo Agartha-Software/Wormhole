@@ -6,7 +6,7 @@ use crate::{
     network::server::Server,
     pods::{
         arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
-        pod::Pod,
+        pod::{Pod, PodPrototype},
     },
 };
 
@@ -76,17 +76,16 @@ where
         }
     };
 
-    let answer = match Pod::new(
+    let prototype = PodPrototype {
         global_config,
-        args.name.clone(),
+        name: args.name.clone(),
         hostname,
         public_url,
         bound_socket,
-        args.mountpoint,
-        server,
-    )
-    .await
-    {
+        mountpoint: args.mountpoint,
+    };
+
+    let answer = match Pod::new(prototype, server).await {
         Ok(pod) => {
             pods.insert(args.name, pod);
             println!("New pod created successfully, listening to '{bound_socket}'");

@@ -25,6 +25,7 @@ use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use fuser;
 use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
 
@@ -57,7 +58,8 @@ pub struct Pod {
     name: String,
 }
 
-struct PodPrototype {
+#[derive(Serialize, Deserialize, Clone)]
+pub struct PodPrototype {
     pub global_config: GlobalConfig,
     pub name: String,
     pub hostname: String,
@@ -66,12 +68,7 @@ struct PodPrototype {
     pub mountpoint: PathBuf,
 }
 
-struct ConnectionInfo {
-    arbo: Arbo,
-    peers: Vec<PeerIPC>,
-    global_config: GlobalConfig,
-    renamed_hostname: String,
-}
+type ConnectionInfo = (Arbo, Vec<PeerIPC>);
 
 custom_error! {pub PodInfoError
     WhError{source: WhError} = "{source}",
@@ -79,20 +76,17 @@ custom_error! {pub PodInfoError
     FileNotFound = "PodInfoError: file not found",
 }
 
-async fn initiate_connection_or_empty(
-    mountpoint: &PathBuf,
-    hostname: String,
-    public_url: &Option<String>,
-    global_config: GlobalConfig,
+async fn try_to_connect_prototype(
+    protoype: &mut PodPrototype,
     fail_on_network: bool,
     receiver_in: &UnboundedSender<FromNetworkMessage>,
 ) -> Result<ConnectionInfo, io::Error> {
-    if global_config.general.entrypoints.len() >= 1 {
-        for first_contact in &global_config.general.entrypoints {
+    if protoype.global_config.general.entrypoints.len() >= 1 {
+        for first_contact in &protoype.global_config.general.entrypoints {
             match PeerIPC::connect(
                 first_contact.to_owned(),
-                hostname.clone(),
-                public_url.clone(),
+                protoype.hostname.clone(),
+                protoype.public_url.clone(),
                 receiver_in,
             )
             .await
@@ -108,7 +102,7 @@ async fn initiate_connection_or_empty(
                             })
                         })
                     {
-                        let new_hostname = accept.rename.unwrap_or(hostname.clone());
+                        let new_hostname = accept.rename.unwrap_or(protoype.hostname.clone());
 
                         match PeerIPC::peer_startup(
                             urls,
@@ -121,12 +115,10 @@ async fn initiate_connection_or_empty(
                             Ok(mut other_ipc) => {
                                 other_ipc.insert(0, ipc);
 
-                                return Ok(ConnectionInfo {
-                                    arbo: accept.arbo,
-                                    peers: other_ipc,
-                                    global_config: accept.config,
-                                    renamed_hostname: new_hostname,
-                                });
+                                protoype.hostname = new_hostname;
+                                protoype.global_config = accept.config;
+
+                                return Ok((accept.arbo, other_ipc));
                             }
 
                             Err(e) => log::error!("a peer failed: {e}"),
@@ -143,12 +135,10 @@ async fn initiate_connection_or_empty(
             ));
         }
     }
-    Ok(ConnectionInfo {
-        arbo: generate_arbo(mountpoint, &hostname).unwrap_or(Arbo::new()),
-        peers: vec![],
-        global_config,
-        renamed_hostname: hostname,
-    })
+    Ok((
+        generate_arbo(&protoype.mountpoint, &protoype.hostname).unwrap_or(Arbo::new()),
+        vec![],
+    ))
 }
 
 custom_error! {pub PodStopError
@@ -197,23 +187,12 @@ fn create_all_dirs(arbo: &Arbo, from: InodeId, disk: &dyn DiskManager) -> io::Re
 }
 
 impl Pod {
-    pub async fn new(
-        global_config: GlobalConfig,
-        name: String,
-        hostname: String,
-        public_url: Option<String>,
-        bound_socket: SocketAddr,
-        mountpoint: PathBuf,
-        server: Arc<Server>,
-    ) -> io::Result<Self> {
-        log::trace!("mount point {:?}", mountpoint);
+    pub async fn new(mut prototype: PodPrototype, server: Arc<Server>) -> io::Result<Self> {
+        log::trace!("mount point {:?}", prototype.mountpoint);
         let (receiver_in, receiver_out) = mpsc::unbounded_channel();
 
-        let connection_info = initiate_connection_or_empty(
-            &mountpoint,
-            hostname,
-            &public_url,
-            global_config,
+        let (arbo, peers) = try_to_connect_prototype(
+            &mut prototype,
             // NOTE - temporary fix
             // made to help with tests and debug
             // choice not to fail should later be supported by the cli
@@ -222,27 +201,10 @@ impl Pod {
         )
         .await?;
 
-        let prototype = PodPrototype {
-            global_config: connection_info.global_config,
-            name,
-            hostname: connection_info.renamed_hostname,
-            public_url,
-            bound_socket,
-            mountpoint,
-        };
-
-        Self::realize(
-            prototype,
-            server,
-            receiver_in,
-            receiver_out,
-            connection_info.arbo,
-            connection_info.peers,
-        )
-        .await
+        Self::realize(prototype, server, receiver_in, receiver_out, arbo, peers)
     }
 
-    async fn realize(
+    fn realize(
         proto: PodPrototype,
         server: Arc<Server>,
         receiver_in: UnboundedSender<FromNetworkMessage>,
