@@ -22,7 +22,7 @@ use std::collections::HashMap;
 use std::io::IsTerminal;
 use std::process::ExitCode;
 use tokio::sync::mpsc::{self, UnboundedSender};
-use wormhole::startup::startup;
+use wormhole::pods::startup::load_saved_pods;
 
 use wormhole::ipc::service::start_commands_listeners;
 use wormhole::pods::pod::Pod;
@@ -61,8 +61,8 @@ async fn main() -> ExitCode {
         }
     }
 
-    if let Err(err) = startup(&mut pods).await {
-        eprintln!("Failed to startup: {:?}", err);
+    if let Err(err) = load_saved_pods(&mut pods).await {
+        eprintln!("Failed to load saved pods: {:?}", err);
         return ExitCode::FAILURE;
     }
 

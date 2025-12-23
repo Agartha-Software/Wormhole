@@ -415,6 +415,11 @@ impl Pod {
 
         // drop(self.fuse_handle); // FIXME - do something like block the filesystem
 
+        let _ = self
+            .save_pod()
+            .await
+            .inspect_err(|err| log::error!("Couldn't save the pod data: {err}"));
+
         let arbo = Arbo::n_read_lock(&self.network_interface.arbo, "Pod::Pod::stop(1)")?;
 
         let peers: Vec<Address> = self
@@ -503,6 +508,19 @@ impl Pod {
 
     pub fn contains(&self, path: &PathBuf) -> bool {
         path.starts_with(&self.mountpoint)
+    }
+
+    pub fn try_generate_prototype(&self) -> Option<PodPrototype> {
+        let global_config = self.global_config.try_read_for(LOCK_TIMEOUT)?.clone();
+
+        Some(PodPrototype {
+            global_config,
+            name: self.name.clone(),
+            hostname: self.network_interface.hostname.clone(),
+            public_url: self.network_interface.public_url.clone(),
+            bound_socket: self.network_interface.bound_socket.clone(),
+            mountpoint: self.mountpoint.clone(),
+        })
     }
 
     pub fn generate_local_config(&self) -> LocalConfigFile {

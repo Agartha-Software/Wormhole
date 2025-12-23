@@ -274,10 +274,6 @@ impl NetworkInterface {
 
     pub fn write_file(&self, id: InodeId, new_size: usize) -> WhResult<()> {
         let meta = self.affect_write_locally(id, new_size)?;
-        // let self_hostname = LocalConfig::read_lock(&self.local_config, "affect_write_locally")?
-        //     .general
-        //     .hostname
-        //     .clone();
 
         if !Arbo::is_local_only(id) {
             self.to_network_message_tx

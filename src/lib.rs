@@ -17,7 +17,6 @@ pub mod ipc;
 pub mod network;
 pub mod pods;
 pub mod signals;
-pub mod startup;
 #[cfg(target_os = "windows")]
 pub mod winfsp;
 
