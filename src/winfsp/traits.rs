@@ -22,35 +22,19 @@ use crate::{
 use nt_time::FileTime;
 use windows::Win32::{
     Foundation::{
-        GENERIC_EXECUTE, GENERIC_READ, GENERIC_WRITE, NTSTATUS, STATUS_ACCESS_DENIED,
+        GENERIC_EXECUTE, GENERIC_READ, GENERIC_WRITE, STATUS_ACCESS_DENIED,
         STATUS_DATA_ERROR, STATUS_DIRECTORY_NOT_EMPTY, STATUS_FILE_IS_A_DIRECTORY,
-        STATUS_INTERNAL_ERROR, STATUS_INVALID_HANDLE, STATUS_INVALID_PARAMETER,
-        STATUS_NETWORK_UNREACHABLE, STATUS_NOT_A_DIRECTORY, STATUS_NO_MEMORY,
-        STATUS_OBJECT_NAME_EXISTS, STATUS_OBJECT_NAME_INVALID, STATUS_OBJECT_NAME_NOT_FOUND,
-        STATUS_OBJECT_PATH_NOT_FOUND, STATUS_PENDING, STATUS_POSSIBLE_DEADLOCK,
-        GENERIC_EXECUTE, GENERIC_READ, GENERIC_WRITE, STATUS_ACCESS_DENIED, STATUS_DATA_ERROR,
-        STATUS_DIRECTORY_NOT_EMPTY, STATUS_FILE_IS_A_DIRECTORY, STATUS_ILLEGAL_CHARACTER,
-        STATUS_INVALID_DEVICE_REQUEST, STATUS_INVALID_HANDLE, STATUS_INVALID_PARAMETER,
-        STATUS_NETWORK_UNREACHABLE, STATUS_NOT_A_DIRECTORY, STATUS_OBJECT_NAME_EXISTS,
-        STATUS_OBJECT_NAME_NOT_FOUND, STATUS_OBJECT_PATH_NOT_FOUND, STATUS_PENDING,
-        STATUS_POSSIBLE_DEADLOCK,
+        STATUS_ILLEGAL_CHARACTER, STATUS_INTERNAL_ERROR, STATUS_INVALID_DEVICE_REQUEST,
+        STATUS_INVALID_HANDLE, STATUS_INVALID_PARAMETER, STATUS_NETWORK_UNREACHABLE,
+        STATUS_NOT_A_DIRECTORY, STATUS_NO_MEMORY, STATUS_OBJECT_NAME_EXISTS,
+        STATUS_OBJECT_NAME_NOT_FOUND, STATUS_OBJECT_PATH_NOT_FOUND,
+        STATUS_PENDING, STATUS_POSSIBLE_DEADLOCK,
     },
     Storage::FileSystem::{
         FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_DIRECTORY, FILE_WRITE_ATTRIBUTES, SYNCHRONIZE,
     },
 };
 use winfsp::{filesystem::FileInfo, FspError};
-
-impl TryFrom<&winfsp::U16CStr> for WhPath {
-    type Error = NTSTATUS;
-
-    fn try_from(value: &winfsp::U16CStr) -> Result<WhPath, Self::Error> {
-        match value.to_string() {
-            Err(_) => Err(STATUS_OBJECT_NAME_INVALID),
-            Ok(string) => Ok(WhPath::from(&string.replace("\\", "/"))),
-        }
-    }
-}
 
 /// unashamedly copied [`<FspError as From<std::io::Error>>::from`](https://docs.rs/winfsp/latest/winfsp/enum.FspError.html#method.from)
 /// needed because the lib impl is a consuming into, whereas io::Error is not [Clone]-able
@@ -60,12 +44,6 @@ fn io2fsp(e: &std::io::Error) -> FspError {
         FspError::WIN32(e as u32)
     } else {
         FspError::IO(e.kind())
-    }
-}
-
-impl WhPath {
-    pub fn to_winfsp(&self) -> String {
-        self.inner.replace("/", "\\")
     }
 }
 

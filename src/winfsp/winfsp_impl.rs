@@ -21,13 +21,14 @@ use winfsp::{
 };
 use winfsp_sys::{FspCleanupDelete, FILE_ACCESS_RIGHTS};
 
+use crate::{error::WhError};
 use crate::pods::{
     arbo::{Arbo, InodeId},
     filesystem::{
         file_handle::{AccessMode, FileHandleManager, OpenFlags},
         fs_interface::{FsInterface, SimpleFileType},
-    error::WhError,
     },
+    whpath::{ConversionError, InodeName, WhPath, WhPathError},
 };
 
 #[derive(PartialEq, Debug)]
@@ -326,7 +327,7 @@ impl FileSystemContext for FSPController {
         context: Option<&Self::FileContext>,
         file_info: &mut winfsp::filesystem::FileInfo,
     ) -> winfsp::Result<()> {
-        log::trace!("flush({})", &context.map(|c|c.ino));
+        log::trace!("flush({:?})", &context.map(|c| c.ino));
         if let Some(context) = context {
             let mut file_handles =
                 FileHandleManager::write_lock(&self.fs_interface.file_handles, "release")?;
