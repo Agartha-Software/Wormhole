@@ -22,7 +22,7 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<String> {
         url,
         hostname,
         additional_hosts,
-        public_url,
+        listen_url,
         ip_address,
         port,
         ..
@@ -33,7 +33,7 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<String> {
         name: name.clone(),
         ip_address,
         port,
-        public_url,
+        public_url: listen_url,
         url,
         hostname,
         additional_hosts,
