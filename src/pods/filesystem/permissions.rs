@@ -59,8 +59,8 @@ pub mod test {
             "WINDOWS_DEFAULT_PERMS_MODE is not exec"
         );
         assert!(
-            has_execute_perm(WRITE_BIT_FLAG),
-            "WRITE_BIT_FLAG is correct"
+            has_execute_perm(EXECUTE_BIT_FLAG),
+            "EXECUTE_BIT_FLAG is correct"
         );
         assert!(has_execute_perm(0o100), "has_execute_perm is correct");
         assert!(has_execute_perm(0o777), "has_execute_perm is correct");
