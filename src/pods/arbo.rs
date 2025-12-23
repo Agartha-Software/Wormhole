@@ -769,7 +769,7 @@ pub fn generate_arbo(path: &Path, host: &String) -> io::Result<Arbo> {
 }
 
 #[cfg(target_os = "windows")]
-const WINDOWS_DEFAULT_PERMS_MODE: u16 = 666;
+pub const WINDOWS_DEFAULT_PERMS_MODE: u16 = 0o660;
 
 /* NOTE
  * is currently made with fuse in sight. Will probably need to be edited to be windows compatible
@@ -840,6 +840,11 @@ impl TryInto<Metadata> for fs::Metadata {
 impl TryInto<Metadata> for fs::Metadata {
     type Error = std::io::Error;
     fn try_into(self) -> Result<Metadata, std::io::Error> {
+        let perm = if self.is_file() { 
+            WINDOWS_DEFAULT_PERMS_MODE
+        } else {
+            WINDOWS_DEFAULT_PERMS_MODE | 0o110
+        };
         Ok(Metadata {
             ino: 0, // TODO: unsafe default
             size: self.len(),
@@ -853,7 +858,7 @@ impl TryInto<Metadata> for fs::Metadata {
             } else {
                 SimpleFileType::Directory
             },
-            perm: WINDOWS_DEFAULT_PERMS_MODE,
+            perm,
             nlink: 0 as u32,
             uid: 0,
             gid: 0,

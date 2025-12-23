@@ -22,6 +22,7 @@ use winfsp::{
 use winfsp_sys::{FspCleanupDelete, FILE_ACCESS_RIGHTS};
 
 use crate::{error::WhError};
+use crate::pods::arbo::WINDOWS_DEFAULT_PERMS_MODE;
 use crate::pods::{
     arbo::{Arbo, InodeId},
     filesystem::{
@@ -271,7 +272,7 @@ impl FileSystemContext for FSPController {
                 kind,
                 OpenFlags::from_win_u32(granted_access),
                 AccessMode::from_win_u32(granted_access),
-                0o777, // TODO
+                WINDOWS_DEFAULT_PERMS_MODE,
             )
             .inspect_err(|e| log::error!("create::{e};"))?;
         *file_info.as_mut() = (&inode.meta).into();
