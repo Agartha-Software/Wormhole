@@ -249,9 +249,7 @@ impl Filesystem for FuseController {
             Err(e) => return reply.error(e.to_libc()),
         };
 
-        let attr = self
-            .fs_interface
-            .get_inode_xattr(ino, name);
+        let attr = self.fs_interface.get_inode_xattr(ino, name);
 
         let data = match attr {
             Ok(data) => data,

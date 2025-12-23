@@ -21,7 +21,7 @@ use winfsp::{
 };
 use winfsp_sys::{FspCleanupDelete, FILE_ACCESS_RIGHTS};
 
-use crate::{error::WhError};
+use crate::error::WhError;
 use crate::pods::arbo::WINDOWS_DEFAULT_PERMS_MODE;
 use crate::pods::{
     arbo::{Arbo, InodeId},

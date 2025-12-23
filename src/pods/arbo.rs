@@ -840,7 +840,7 @@ impl TryInto<Metadata> for fs::Metadata {
 impl TryInto<Metadata> for fs::Metadata {
     type Error = std::io::Error;
     fn try_into(self) -> Result<Metadata, std::io::Error> {
-        let perm = if self.is_file() { 
+        let perm = if self.is_file() {
             WINDOWS_DEFAULT_PERMS_MODE
         } else {
             WINDOWS_DEFAULT_PERMS_MODE | 0o110
