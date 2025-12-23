@@ -37,8 +37,8 @@ pub const GLOBAL_CONFIG_INO: u64 = 2;
 pub const GLOBAL_CONFIG_FNAME: &str = ".global_config.toml";
 pub const LOCAL_CONFIG_INO: u64 = 3;
 pub const LOCAL_CONFIG_FNAME: &str = ".local_config.toml";
-pub const ARBO_FILE_INO: u64 = 4;
-pub const ARBO_FILE_FNAME: &str = ".itree";
+pub const ITREE_FILE_INO: u64 = 4;
+pub const ITREE_FILE_FNAME: &str = ".itree";
 
 // SECTION types
 
@@ -691,12 +691,12 @@ impl ITree {
 
 // !SECTION
 
-/// If itree can be read and deserialized from parent_folder/[ARBO_FILE_NAME] returns Some(ITree)
+/// If itree can be read and deserialized from parent_folder/[ITREE_FILE_NAME] returns Some(ITree)
 fn recover_serialized_itree(parent_folder: &Path) -> Option<ITree> {
     // error handling is silent on purpose as it will be recoded with the new error system
     // If an error happens, will just proceed like the itree was not on disk
     // In the future, we should maybe warn and keep a copy, avoiding the user from losing data
-    bincode::deserialize(&fs::read(parent_folder.join(ARBO_FILE_FNAME)).ok()?).ok()
+    bincode::deserialize(&fs::read(parent_folder.join(ITREE_FILE_FNAME)).ok()?).ok()
 }
 
 fn index_folder_recursive(

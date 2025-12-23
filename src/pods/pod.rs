@@ -37,7 +37,7 @@ use crate::pods::{
     network::network_interface::NetworkInterface,
 };
 
-use super::itree::{InodeId, ARBO_FILE_FNAME, ARBO_FILE_INO, GLOBAL_CONFIG_INO};
+use super::itree::{InodeId, ITREE_FILE_FNAME, ITREE_FILE_INO, GLOBAL_CONFIG_INO};
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -455,7 +455,7 @@ impl Pod {
                 .filter_map(|inode| {
                     if inode.id == GLOBAL_CONFIG_INO
                         || inode.id == LOCAL_CONFIG_INO
-                        || inode.id == ARBO_FILE_INO
+                        || inode.id == ITREE_FILE_INO
                     {
                         None
                     } else {
@@ -547,7 +547,7 @@ impl Pod {
             .inspect(|_| log::error!("await error: peer_broadcast_handle"));
         *peers.write() = Vec::new(); // dropping PeerIPCs
 
-        let itree_path = WhPath::try_from(ARBO_FILE_FNAME).unwrap();
+        let itree_path = WhPath::try_from(ITREE_FILE_FNAME).unwrap();
 
         if !fs_interface.disk.file_exists(&itree_path) {
             fs_interface
@@ -558,7 +558,7 @@ impl Pod {
 
         fs_interface
             .disk
-            .write_file(&WhPath::try_from(ARBO_FILE_FNAME).unwrap(), &itree_bin, 0)
+            .write_file(&WhPath::try_from(ITREE_FILE_FNAME).unwrap(), &itree_bin, 0)
             .map_err(|io| PodStopError::ItreeSavingFailed { source: io })?;
 
         let mut fs_interface =
