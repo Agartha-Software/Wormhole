@@ -3,7 +3,7 @@ use crate::pods::{filesystem::permissions::has_write_perm, whpath::InodeName};
 
 use crate::{
     error::WhError,
-    pods::itree::{FsEntry, InodeId, ITree},
+    pods::itree::{FsEntry, ITree, InodeId},
 };
 use custom_error::custom_error;
 

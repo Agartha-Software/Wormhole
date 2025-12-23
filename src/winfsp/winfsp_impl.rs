@@ -28,7 +28,7 @@ use crate::{
             file_handle::{AccessMode, OpenFlags},
             fs_interface::{FsInterface, SimpleFileType},
         },
-        itree::{InodeId, ITree},
+        itree::{ITree, InodeId},
         whpath::{ConversionError, InodeName, WhPath, WhPathError},
     },
 };

@@ -10,7 +10,7 @@ use crate::{
             fs_interface::FsInterface,
             permissions::has_write_perm,
         },
-        itree::{FsEntry, InodeId, ITree, Metadata, BLOCK_SIZE},
+        itree::{FsEntry, ITree, InodeId, Metadata, BLOCK_SIZE},
     },
 };
 

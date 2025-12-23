@@ -3,7 +3,7 @@ use crate::pods::{
         file_handle::{AccessMode, FileHandleManager, OpenFlags},
         permissions::{has_execute_perm, has_read_perm, has_write_perm},
     },
-    itree::{InodeId, ITree},
+    itree::{ITree, InodeId},
 };
 
 use crate::error::WhError;

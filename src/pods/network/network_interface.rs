@@ -30,7 +30,7 @@ use crate::pods::{
 
 use crate::pods::{
     filesystem::fs_interface::FsInterface,
-    itree::{Inode, InodeId, ITree, LOCK_TIMEOUT},
+    itree::{ITree, Inode, InodeId, LOCK_TIMEOUT},
 };
 
 use crate::pods::network::callbacks::Callbacks;

@@ -3,7 +3,7 @@ use custom_error::custom_error;
 use crate::error::{WhError, WhResult};
 use crate::pods::filesystem::fs_interface::FsInterface;
 use crate::pods::filesystem::permissions::has_read_perm;
-use crate::pods::itree::{FsEntry, Ino, ITree, Metadata};
+use crate::pods::itree::{FsEntry, ITree, Ino, Metadata};
 
 custom_error! {
     pub ReadDirError

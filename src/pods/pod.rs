@@ -37,7 +37,7 @@ use crate::pods::{
     network::network_interface::NetworkInterface,
 };
 
-use super::itree::{InodeId, ITREE_FILE_FNAME, ITREE_FILE_INO, GLOBAL_CONFIG_INO};
+use super::itree::{InodeId, GLOBAL_CONFIG_INO, ITREE_FILE_FNAME, ITREE_FILE_INO};
 
 #[allow(dead_code)]
 #[derive(Debug)]

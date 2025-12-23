@@ -4,7 +4,7 @@ use crate::{
     network::message::{Address, MessageContent, RedundancyMessage, ToNetworkMessage},
     pods::{
         filesystem::fs_interface::FsInterface,
-        itree::{FsEntry, Ino, InodeId, ITree},
+        itree::{FsEntry, ITree, Ino, InodeId},
     },
 };
 use futures_util::future::join_all;

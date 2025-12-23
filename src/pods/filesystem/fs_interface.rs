@@ -4,7 +4,7 @@ use crate::pods::disk_managers::DiskManager;
 use crate::pods::filesystem::attrs::AcknoledgeSetAttrError;
 use crate::pods::filesystem::permissions::has_execute_perm;
 use crate::pods::itree::{
-    FsEntry, Inode, InodeId, ITree, Metadata, GLOBAL_CONFIG_FNAME, GLOBAL_CONFIG_INO,
+    FsEntry, ITree, Inode, InodeId, Metadata, GLOBAL_CONFIG_FNAME, GLOBAL_CONFIG_INO,
 };
 use crate::pods::network::callbacks::Callback;
 use crate::pods::network::network_interface::NetworkInterface;

@@ -6,7 +6,7 @@ use crate::{
     error::{WhError, WhResult},
     pods::{
         filesystem::permissions::has_write_perm,
-        itree::{InodeId, ITree, Metadata},
+        itree::{ITree, InodeId, Metadata},
         whpath::{InodeName, WhPath},
     },
 };

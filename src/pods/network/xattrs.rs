@@ -2,7 +2,7 @@ use crate::{
     error::{WhError, WhResult},
     network::message::{MessageContent, ToNetworkMessage},
     pods::{
-        itree::{InodeId, ITree},
+        itree::{ITree, InodeId},
         network::network_interface::NetworkInterface,
     },
 };

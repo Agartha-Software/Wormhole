@@ -4,7 +4,7 @@ use crate::{
     error::WhError,
     pods::{
         filesystem::permissions::has_write_perm,
-        itree::{FsEntry, Inode, ITree},
+        itree::{FsEntry, ITree, Inode},
         whpath::InodeName,
     },
 };
