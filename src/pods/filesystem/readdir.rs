@@ -3,7 +3,7 @@ use custom_error::custom_error;
 use crate::error::{WhError, WhResult};
 use crate::pods::filesystem::fs_interface::FsInterface;
 use crate::pods::filesystem::permissions::has_read_perm;
-use crate::pods::itree::{FsEntry, Ino, Itree, Metadata};
+use crate::pods::itree::{FsEntry, Ino, ITree, Metadata};
 
 custom_error! {
     pub ReadDirError
@@ -13,7 +13,7 @@ custom_error! {
 
 impl FsInterface {
     pub fn read_dir(&self, ino: Ino) -> Result<Vec<(u64, String, Metadata)>, ReadDirError> {
-        let itree = Itree::n_read_lock(&self.itree, "fs_interface.read_dir")?;
+        let itree = ITree::n_read_lock(&self.itree, "fs_interface.read_dir")?;
         let dir = itree.n_get_inode(ino)?.clone();
 
         if !has_read_perm(dir.meta.perm) {

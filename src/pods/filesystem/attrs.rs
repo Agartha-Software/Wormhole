@@ -10,7 +10,7 @@ use crate::{
             fs_interface::FsInterface,
             permissions::has_write_perm,
         },
-        itree::{FsEntry, InodeId, Itree, Metadata, BLOCK_SIZE},
+        itree::{FsEntry, InodeId, ITree, Metadata, BLOCK_SIZE},
     },
 };
 
@@ -35,7 +35,7 @@ impl FsInterface {
         ino: InodeId,
         meta: Metadata,
     ) -> Result<(), AcknoledgeSetAttrError> {
-        let mut itree = Itree::n_write_lock(&self.itree, "acknowledge_metadata")?;
+        let mut itree = ITree::n_write_lock(&self.itree, "acknowledge_metadata")?;
         let path = itree.n_get_path_from_inode_id(ino)?;
         let inode = itree.n_get_inode_mut(ino)?;
 
@@ -87,7 +87,7 @@ impl FsInterface {
         file_handle: Option<UUID>,
         flags: Option<u32>,
     ) -> Result<Metadata, SetAttrError> {
-        let itree = Itree::n_read_lock(&self.itree, "setattr")?;
+        let itree = ITree::n_read_lock(&self.itree, "setattr")?;
         let path = itree.n_get_path_from_inode_id(ino)?;
         let mut meta = itree.n_get_inode(ino)?.meta.clone();
         drop(itree);

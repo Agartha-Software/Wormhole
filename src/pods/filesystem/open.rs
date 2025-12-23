@@ -3,7 +3,7 @@ use crate::pods::{
         file_handle::{AccessMode, FileHandleManager, OpenFlags},
         permissions::{has_execute_perm, has_read_perm, has_write_perm},
     },
-    itree::{InodeId, Itree},
+    itree::{InodeId, ITree},
 };
 
 use crate::error::WhError;
@@ -97,7 +97,7 @@ impl FsInterface {
         flags: OpenFlags,
         access: AccessMode,
     ) -> Result<UUID, OpenError> {
-        let inode_perm = Itree::n_read_lock(&self.itree, "open")?
+        let inode_perm = ITree::n_read_lock(&self.itree, "open")?
             .n_get_inode(ino)?
             .meta
             .perm;

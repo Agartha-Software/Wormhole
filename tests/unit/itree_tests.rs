@@ -6,7 +6,7 @@ use std::{
 };
 use wormhole::pods::{
     filesystem::fs_interface::SimpleFileType,
-    itree::{FsEntry, Inode, Itree, Metadata, BLOCK_SIZE, ROOT},
+    itree::{FsEntry, Inode, ITree, Metadata, BLOCK_SIZE, ROOT},
 };
 
 fn itree_values(inode: &Inode, expected_result: Inode) {
@@ -43,7 +43,7 @@ fn itree_values(inode: &Inode, expected_result: Inode) {
 #[parallel]
 #[test]
 fn test_inserting_and_retreiving_files() {
-    let mut itree = Itree::new();
+    let mut itree = ITree::new();
 
     assert!(
         itree

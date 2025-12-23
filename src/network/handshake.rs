@@ -15,7 +15,7 @@ use tokio_tungstenite::{
 use crate::{
     config::{GlobalConfig, LocalConfig},
     error::WhError,
-    pods::{itree::Itree, network::network_interface::NetworkInterface},
+    pods::{itree::ITree, network::network_interface::NetworkInterface},
 };
 
 custom_error! {
@@ -125,7 +125,7 @@ pub struct Accept {
     pub config: GlobalConfig,
 
     /// ITree of the network
-    pub itree: Itree,
+    pub itree: ITree,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

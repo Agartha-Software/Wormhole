@@ -4,7 +4,7 @@ use crate::{
     network::message::{Address, MessageContent, RedundancyMessage, ToNetworkMessage},
     pods::{
         filesystem::fs_interface::FsInterface,
-        itree::{FsEntry, Ino, InodeId, Itree},
+        itree::{FsEntry, Ino, InodeId, ITree},
     },
 };
 use futures_util::future::join_all;
@@ -72,7 +72,7 @@ fn eligible_to_apply(
     available_peers: usize,
     self_addr: &Address,
 ) -> Option<InodeId> {
-    if Itree::is_local_only(ino) {
+    if ITree::is_local_only(ino) {
         return None;
     }
     let hosts = if let FsEntry::File(hosts) = entry {
@@ -103,7 +103,7 @@ async fn check_integrity(
 
     // Applies redundancy to needed files
     let selected_files: Vec<Ino> =
-        Itree::n_read_lock(&nw_interface.itree, "redundancy: check_integrity")?
+        ITree::n_read_lock(&nw_interface.itree, "redundancy: check_integrity")?
             .iter()
             .filter_map(|(ino, inode)| {
                 eligible_to_apply(
@@ -145,7 +145,7 @@ async fn apply_to(
     peers: &Vec<Address>,
     ino: u64,
 ) -> WhResult<usize> {
-    if Itree::is_local_only(ino) {
+    if ITree::is_local_only(ino) {
         return Ok(0);
     }
     let file_binary = Arc::new(fs_interface.read_local_file(ino)?);

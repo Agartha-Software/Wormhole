@@ -1,6 +1,6 @@
 use crate::error::WhResult;
 use crate::network::message::{MessageContent, ToNetworkMessage};
-use crate::pods::itree::{FsEntry, Itree};
+use crate::pods::itree::{FsEntry, ITree};
 use crate::pods::network::callbacks::Callback;
 use crate::pods::network::network_interface::NetworkInterface;
 use crate::{error::WhError, pods::itree::InodeId};
@@ -20,7 +20,7 @@ custom_error! {
 impl NetworkInterface {
     // REVIEW - recheck and simplify this if possible
     pub fn pull_file_sync(&self, file: InodeId) -> Result<Option<Callback>, PullError> {
-        let itree = Itree::n_read_lock(&self.itree, "pull file sync")?;
+        let itree = ITree::n_read_lock(&self.itree, "pull file sync")?;
         let hosts = {
             if let FsEntry::File(hosts) = &itree.n_get_inode(file)?.entry {
                 hosts

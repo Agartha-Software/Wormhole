@@ -71,7 +71,7 @@ pub struct Inode {
 pub type ItreeIndex = HashMap<InodeId, Inode>;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Itree {
+pub struct ITree {
     entries: ItreeIndex,
     pub next_ino: RangeFrom<Ino>,
 }
@@ -140,7 +140,7 @@ impl Inode {
     }
 }
 
-impl Itree {
+impl ITree {
     pub fn first_ino() -> Ino {
         return 11;
     }
@@ -216,9 +216,9 @@ impl Itree {
 
     #[must_use]
     pub fn read_lock<'a>(
-        itree: &'a Arc<RwLock<Itree>>,
+        itree: &'a Arc<RwLock<ITree>>,
         called_from: &'a str,
-    ) -> io::Result<RwLockReadGuard<'a, Itree>> {
+    ) -> io::Result<RwLockReadGuard<'a, ITree>> {
         if let Some(itree) = itree.try_read_for(LOCK_TIMEOUT) {
             Ok(itree)
         } else {
@@ -231,9 +231,9 @@ impl Itree {
 
     #[must_use]
     pub fn n_read_lock<'a>(
-        itree: &'a Arc<RwLock<Itree>>,
+        itree: &'a Arc<RwLock<ITree>>,
         called_from: &'a str,
-    ) -> WhResult<RwLockReadGuard<'a, Itree>> {
+    ) -> WhResult<RwLockReadGuard<'a, ITree>> {
         itree.try_read_for(LOCK_TIMEOUT).ok_or(WhError::WouldBlock {
             called_from: called_from.to_owned(),
         })
@@ -241,9 +241,9 @@ impl Itree {
 
     #[must_use]
     pub fn write_lock<'a>(
-        itree: &'a Arc<RwLock<Itree>>,
+        itree: &'a Arc<RwLock<ITree>>,
         called_from: &'a str,
-    ) -> io::Result<RwLockWriteGuard<'a, Itree>> {
+    ) -> io::Result<RwLockWriteGuard<'a, ITree>> {
         if let Some(itree) = itree.try_write_for(LOCK_TIMEOUT) {
             Ok(itree)
         } else {
@@ -256,9 +256,9 @@ impl Itree {
 
     #[must_use]
     pub fn n_write_lock<'a>(
-        itree: &'a Arc<RwLock<Itree>>,
+        itree: &'a Arc<RwLock<ITree>>,
         called_from: &'a str,
-    ) -> WhResult<RwLockWriteGuard<'a, Itree>> {
+    ) -> WhResult<RwLockWriteGuard<'a, ITree>> {
         itree
             .try_write_for(LOCK_TIMEOUT)
             .ok_or(WhError::WouldBlock {
@@ -396,7 +396,7 @@ impl Itree {
     }
 
     #[must_use]
-    /// Remove inode from the [Itree]
+    /// Remove inode from the [ITree]
     pub fn n_remove_inode(&mut self, id: InodeId) -> Result<Inode, RemoveInodeError> {
         let inode = self.n_get_inode(id)?;
         match &inode.entry {
@@ -479,7 +479,7 @@ impl Itree {
     }
 
     #[must_use]
-    /// Recursively traverse the [Itree] tree from the [Inode] to form a path
+    /// Recursively traverse the [ITree] tree from the [Inode] to form a path
     ///
     /// Possible Errors:
     ///   InodeNotFound: if the inode isn't inside the tree
@@ -691,8 +691,8 @@ impl Itree {
 
 // !SECTION
 
-/// If itree can be read and deserialized from parent_folder/[ARBO_FILE_NAME] returns Some(Itree)
-fn recover_serialized_itree(parent_folder: &Path) -> Option<Itree> {
+/// If itree can be read and deserialized from parent_folder/[ARBO_FILE_NAME] returns Some(ITree)
+fn recover_serialized_itree(parent_folder: &Path) -> Option<ITree> {
     // error handling is silent on purpose as it will be recoded with the new error system
     // If an error happens, will just proceed like the itree was not on disk
     // In the future, we should maybe warn and keep a copy, avoiding the user from losing data
@@ -700,7 +700,7 @@ fn recover_serialized_itree(parent_folder: &Path) -> Option<Itree> {
 }
 
 fn index_folder_recursive(
-    itree: &mut Itree,
+    itree: &mut ITree,
     parent: Ino,
     path: &Path,
     host: &String,
@@ -714,7 +714,7 @@ fn index_folder_recursive(
             .map_err(|e: InodeNameError| e.to_io())?;
         let meta = entry.metadata()?;
 
-        let special_ino = Itree::get_special(fname.as_ref(), parent);
+        let special_ino = ITree::get_special(fname.as_ref(), parent);
 
         let used_ino = match special_ino {
             Some(_) if !ftype.is_file() => {
@@ -760,11 +760,11 @@ fn index_folder_recursive(
     Ok(())
 }
 
-pub fn generate_itree(path: &Path, host: &String) -> io::Result<Itree> {
+pub fn generate_itree(path: &Path, host: &String) -> io::Result<ITree> {
     if let Some(itree) = recover_serialized_itree(path) {
         Ok(itree)
     } else {
-        let mut itree = Itree::new();
+        let mut itree = ITree::new();
 
         index_folder_recursive(&mut itree, ROOT, path, host)?;
         Ok(itree)

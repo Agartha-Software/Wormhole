@@ -36,7 +36,7 @@ pub enum MessageContent {
     RequestFs,
     Disconnect(Address),
 
-    // (Itree, peers, global_config)
+    // (ITree, peers, global_config)
     FsAnswer(FileSystemSerialized, Vec<Address>, Vec<u8>),
 }
 

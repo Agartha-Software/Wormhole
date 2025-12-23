@@ -3,21 +3,21 @@ use crate::pods::{filesystem::permissions::has_write_perm, whpath::InodeName};
 
 use crate::{
     error::WhError,
-    pods::itree::{FsEntry, InodeId, Itree},
+    pods::itree::{FsEntry, InodeId, ITree},
 };
 use custom_error::custom_error;
 
 use super::fs_interface::FsInterface;
 
 custom_error! {
-    /// Error describing the removal of a [Inode] from the [Itree]
+    /// Error describing the removal of a [Inode] from the [ITree]
     pub RemoveInodeError
     WhError{source: WhError} = "{source}",
     NonEmpty = "Can't remove non-empty dir",
 }
 
 custom_error! {
-    /// Error describing the removal of a [Inode] from the [Itree] and the local file or folder
+    /// Error describing the removal of a [Inode] from the [ITree] and the local file or folder
     pub RemoveFileError
     WhError{source: WhError} = "{source}",
     NonEmpty = "Can't remove non-empty dir",
@@ -43,7 +43,7 @@ impl FsInterface {
         name: InodeName,
     ) -> Result<(), RemoveFileError> {
         let target = {
-            let itree = Itree::n_read_lock(&self.itree, "fs_interface::fuse_remove_inode")?;
+            let itree = ITree::n_read_lock(&self.itree, "fs_interface::fuse_remove_inode")?;
             let parent = itree.n_get_inode(parent)?;
             if !has_write_perm(parent.meta.perm) {
                 return Err(RemoveFileError::PermissionDenied);
@@ -55,7 +55,7 @@ impl FsInterface {
     }
 
     pub fn remove_inode_locally(&self, id: InodeId) -> Result<(), RemoveFileError> {
-        let itree = Itree::n_read_lock(&self.itree, "fs_interface::remove_inode")?;
+        let itree = ITree::n_read_lock(&self.itree, "fs_interface::remove_inode")?;
         let to_remove_path = itree.n_get_path_from_inode_id(id)?;
         let entry = itree.n_get_inode(id)?.entry.to_owned();
         drop(itree);

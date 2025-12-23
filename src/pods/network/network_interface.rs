@@ -30,7 +30,7 @@ use crate::pods::{
 
 use crate::pods::{
     filesystem::fs_interface::FsInterface,
-    itree::{Inode, InodeId, Itree, LOCK_TIMEOUT},
+    itree::{Inode, InodeId, ITree, LOCK_TIMEOUT},
 };
 
 use crate::pods::network::callbacks::Callbacks;
@@ -47,7 +47,7 @@ pub fn get_all_peers_address(peers: &Arc<RwLock<Vec<PeerIPC>>>) -> WhResult<Vec<
 }
 #[derive(Debug)]
 pub struct NetworkInterface {
-    pub itree: Arc<RwLock<Itree>>,
+    pub itree: Arc<RwLock<ITree>>,
     pub url: Option<String>,
     pub to_network_message_tx: UnboundedSender<ToNetworkMessage>,
     pub to_redundancy_tx: UnboundedSender<RedundancyMessage>,
@@ -59,7 +59,7 @@ pub struct NetworkInterface {
 
 impl NetworkInterface {
     pub fn new(
-        itree: Arc<RwLock<Itree>>,
+        itree: Arc<RwLock<ITree>>,
         url: Option<String>,
         to_network_message_tx: UnboundedSender<ToNetworkMessage>,
         to_redundancy_tx: UnboundedSender<RedundancyMessage>,
@@ -169,9 +169,9 @@ impl NetworkInterface {
     /// Add the requested entry to the itree and inform the network
     pub fn register_new_inode(&self, inode: Inode) -> Result<(), MakeInodeError> {
         let inode_id = inode.id.clone();
-        Itree::n_write_lock(&self.itree, "register_new_inode")?.add_inode(inode.clone())?;
+        ITree::n_write_lock(&self.itree, "register_new_inode")?.add_inode(inode.clone())?;
 
-        if !Itree::is_local_only(inode_id) {
+        if !ITree::is_local_only(inode_id) {
             self.to_network_message_tx
                 .send(ToNetworkMessage::BroadcastMessage(MessageContent::Inode(
                     inode,
@@ -190,7 +190,7 @@ impl NetworkInterface {
         new_name: InodeName,
         overwrite: bool,
     ) -> Result<(), RenameError> {
-        let mut itree = Itree::n_write_lock(&self.itree, "itree_rename_file")?;
+        let mut itree = ITree::n_write_lock(&self.itree, "itree_rename_file")?;
 
         itree.mv_inode(parent, new_parent, name.as_ref(), new_name.clone())?;
 
@@ -209,7 +209,7 @@ impl NetworkInterface {
         name: InodeName,
         new_name: InodeName,
     ) -> Result<(), RenameError> {
-        let mut itree = Itree::n_write_lock(&self.itree, "itree_rename_file")?;
+        let mut itree = ITree::n_write_lock(&self.itree, "itree_rename_file")?;
 
         itree
             .mv_inode(parent, new_parent, name.as_ref(), new_name)
@@ -223,15 +223,15 @@ impl NetworkInterface {
     #[must_use]
     /// Get a new inode, add the requested entry to the itree and inform the network
     pub fn acknowledge_new_file(&self, inode: Inode, _id: InodeId) -> Result<(), MakeInodeError> {
-        let mut itree = Itree::n_write_lock(&self.itree, "acknowledge_new_file")?;
+        let mut itree = ITree::n_write_lock(&self.itree, "acknowledge_new_file")?;
         itree.add_inode(inode)
     }
 
-    /// Remove [Inode] from the [Itree] and inform the network of the removal
+    /// Remove [Inode] from the [ITree] and inform the network of the removal
     pub fn unregister_inode(&self, id: InodeId) -> Result<(), RemoveInodeError> {
-        Itree::n_write_lock(&self.itree, "unregister_inode")?.n_remove_inode(id)?;
+        ITree::n_write_lock(&self.itree, "unregister_inode")?.n_remove_inode(id)?;
 
-        if !Itree::is_local_only(id) {
+        if !ITree::is_local_only(id) {
             self.to_network_message_tx
                 .send(ToNetworkMessage::BroadcastMessage(MessageContent::Remove(
                     id,
@@ -242,13 +242,13 @@ impl NetworkInterface {
         Ok(())
     }
 
-    /// Remove [Inode] from the [Itree]
+    /// Remove [Inode] from the [ITree]
     pub fn acknowledge_unregister_inode(&self, id: InodeId) -> Result<Inode, RemoveInodeError> {
-        Itree::n_write_lock(&self.itree, "acknowledge_unregister_inode")?.n_remove_inode(id)
+        ITree::n_write_lock(&self.itree, "acknowledge_unregister_inode")?.n_remove_inode(id)
     }
 
     pub fn acknowledge_hosts_edition(&self, id: InodeId, hosts: Vec<Address>) -> WhResult<()> {
-        let mut itree = Itree::n_write_lock(&self.itree, "acknowledge_hosts_edition")?;
+        let mut itree = ITree::n_write_lock(&self.itree, "acknowledge_hosts_edition")?;
 
         itree.n_set_inode_hosts(id, hosts) // TODO - if unable to update for some reason, should be passed to the background worker
     }
@@ -264,7 +264,7 @@ impl NetworkInterface {
     }
 
     fn affect_write_locally(&self, id: InodeId, new_size: usize) -> WhResult<Metadata> {
-        let mut itree = Itree::n_write_lock(&self.itree, "network_interface.affect_write_locally")?;
+        let mut itree = ITree::n_write_lock(&self.itree, "network_interface.affect_write_locally")?;
         let inode = itree.n_get_inode_mut(id)?;
         let new_size = (new_size as u64).max(inode.meta.size);
         inode.meta.size = new_size as u64;
@@ -286,7 +286,7 @@ impl NetworkInterface {
             .hostname
             .clone();
 
-        if !Itree::is_local_only(id) {
+        if !ITree::is_local_only(id) {
             self.to_network_message_tx
                 .send(ToNetworkMessage::BroadcastMessage(
                     MessageContent::RevokeFile(id, self_hostname, meta),
@@ -304,24 +304,24 @@ impl NetworkInterface {
     }
 
     pub fn add_inode_hosts(&self, ino: InodeId, hosts: Vec<Address>) -> WhResult<()> {
-        Itree::n_write_lock(&self.itree, "network_interface::update_hosts")?
+        ITree::n_write_lock(&self.itree, "network_interface::update_hosts")?
             .n_add_inode_hosts(ino, hosts)?;
         self.update_remote_hosts(ino)
     }
 
     pub fn update_hosts(&self, ino: InodeId, hosts: Vec<Address>) -> WhResult<()> {
-        Itree::n_write_lock(&self.itree, "network_interface::update_hosts")?
+        ITree::n_write_lock(&self.itree, "network_interface::update_hosts")?
             .n_set_inode_hosts(ino, hosts)?;
         self.update_remote_hosts(ino)
     }
 
     fn update_remote_hosts(&self, ino: InodeId) -> WhResult<()> {
-        let inode = Itree::n_read_lock(&self.itree, "update_remote_hosts")?
+        let inode = ITree::n_read_lock(&self.itree, "update_remote_hosts")?
             .n_get_inode(ino)?
             .clone();
 
         if let FsEntry::File(hosts) = &inode.entry {
-            if !Itree::is_local_only(inode.id) {
+            if !ITree::is_local_only(inode.id) {
                 self.to_network_message_tx
                     .send(ToNetworkMessage::BroadcastMessage(
                         MessageContent::EditHosts(inode.id, hosts.clone()),
@@ -337,16 +337,16 @@ impl NetworkInterface {
     }
 
     pub fn aknowledge_new_hosts(&self, id: InodeId, new_hosts: Vec<Address>) -> io::Result<()> {
-        Itree::write_lock(&self.itree, "aknowledge_new_hosts")?.add_inode_hosts(id, new_hosts)
+        ITree::write_lock(&self.itree, "aknowledge_new_hosts")?.add_inode_hosts(id, new_hosts)
     }
 
     pub fn aknowledge_hosts_removal(&self, id: InodeId, new_hosts: Vec<Address>) -> io::Result<()> {
-        Itree::write_lock(&self.itree, "aknowledge_hosts_removal")?
+        ITree::write_lock(&self.itree, "aknowledge_hosts_removal")?
             .remove_inode_hosts(id, new_hosts)
     }
 
     pub fn update_metadata(&self, id: InodeId, meta: Metadata) -> WhResult<()> {
-        let mut itree = Itree::n_write_lock(&self.itree, "network_interface::update_metadata")?;
+        let mut itree = ITree::n_write_lock(&self.itree, "network_interface::update_metadata")?;
         let mut fixed_meta = meta;
         let ref_meta = &itree.n_get_inode(id)?.meta;
 
@@ -371,7 +371,7 @@ impl NetworkInterface {
         itree.n_set_inode_meta(id, fixed_meta.clone())?;
         drop(itree);
 
-        if !Itree::is_local_only(id) {
+        if !ITree::is_local_only(id) {
             self.to_network_message_tx
                 .send(ToNetworkMessage::BroadcastMessage(
                     MessageContent::EditMetadata(id, fixed_meta),
@@ -443,14 +443,14 @@ impl NetworkInterface {
     // }
 
     pub fn send_itree(&self, to: Address, global_config_bytes: Vec<u8>) -> io::Result<()> {
-        let itree = Itree::read_lock(&self.itree, "send_itree")?;
+        let itree = ITree::read_lock(&self.itree, "send_itree")?;
         let mut entries = itree.get_raw_entries();
 
         //Remove ignored entries
-        entries.retain(|ino, _| !Itree::is_local_only(*ino));
+        entries.retain(|ino, _| !ITree::is_local_only(*ino));
         entries.entry(1u64).and_modify(|inode| {
             if let FsEntry::Directory(childrens) = &mut inode.entry {
-                childrens.retain(|x| !Itree::is_local_only(*x));
+                childrens.retain(|x| !ITree::is_local_only(*x));
             }
         });
 
@@ -501,7 +501,7 @@ impl NetworkInterface {
             .retain(|p| p.hostname != addr);
 
         log::debug!("Disconnecting {addr}. Removing from inodes hosts");
-        for inode in Itree::write_lock(&self.itree, "disconnect_peer")?.inodes_mut() {
+        for inode in ITree::write_lock(&self.itree, "disconnect_peer")?.inodes_mut() {
             if let FsEntry::File(hosts) = &mut inode.entry {
                 hosts.retain(|h| *h != addr);
             }

@@ -1,6 +1,6 @@
 use crate::{
     error::WhError,
-    pods::itree::{InodeId, Itree},
+    pods::itree::{InodeId, ITree},
 };
 use custom_error::custom_error;
 use parking_lot::RwLockWriteGuard;
@@ -56,7 +56,7 @@ impl FsInterface {
 
         file_handle.dirty = true;
 
-        let itree = Itree::n_read_lock(&self.itree, "fs_interface.write")?;
+        let itree = ITree::n_read_lock(&self.itree, "fs_interface.write")?;
         let path = itree.n_get_path_from_inode_id(id)?;
         drop(itree);
 

@@ -33,7 +33,7 @@ use crate::network::{message::Address, peer_ipc::PeerIPC, server::Server};
 
 use crate::pods::{
     filesystem::fs_interface::FsInterface,
-    itree::{generate_itree, Itree},
+    itree::{generate_itree, ITree},
     network::network_interface::NetworkInterface,
 };
 
@@ -59,7 +59,7 @@ pub struct Pod {
 }
 
 struct PodPrototype {
-    pub itree: Itree,
+    pub itree: ITree,
     pub peers: Vec<PeerIPC>,
     pub global_config: GlobalConfig,
     pub local_config: LocalConfig,
@@ -162,11 +162,11 @@ custom_error! {pub PodStopError
     DiskManagerStopFailed{e: io::Error} = "Unable to stop the disk manager properly. Your files are still on the system folder: ('.'mount_path). {e}",
 }
 
-/// Create all the directories present in Itree. (not the files)
+/// Create all the directories present in ITree. (not the files)
 ///
 /// Required at setup to resolve issue #179
 /// (files pulling need the parent folder to be already present)
-fn create_all_dirs(itree: &Itree, from: InodeId, disk: &dyn DiskManager) -> io::Result<()> {
+fn create_all_dirs(itree: &ITree, from: InodeId, disk: &dyn DiskManager) -> io::Result<()> {
     let from = itree.n_get_inode(from).map_err(|e| e.into_io())?;
 
     return match &from.entry {
@@ -229,7 +229,7 @@ impl Pod {
                     ));
                 }
                 let itree = generate_itree(mountpoint, &local_config.general.hostname)
-                    .unwrap_or(Itree::new());
+                    .unwrap_or(ITree::new());
                 PodPrototype {
                     itree,
                     peers: vec![],
@@ -299,7 +299,7 @@ impl Pod {
 
         let url = proto.local_config.general.url.clone();
 
-        let itree: Arc<RwLock<Itree>> = Arc::new(RwLock::new(proto.itree));
+        let itree: Arc<RwLock<ITree>> = Arc::new(RwLock::new(proto.itree));
         let local = Arc::new(RwLock::new(proto.local_config));
         let global = Arc::new(RwLock::new(proto.global_config));
 
@@ -369,7 +369,7 @@ impl Pod {
     // SECTION getting info from the pod (for the cli)
 
     pub fn get_file_hosts(&self, path: &WhPath) -> Result<Vec<Address>, PodInfoError> {
-        let binding = Itree::n_read_lock(&self.network_interface.itree, "Pod::get_info")?;
+        let binding = ITree::n_read_lock(&self.network_interface.itree, "Pod::get_info")?;
         let entry = &binding
             .get_inode_from_path(path)
             .map_err(|_| PodInfoError::FileNotFound)?
@@ -387,7 +387,7 @@ impl Pod {
         &self,
         path: Option<&WhPath>,
     ) -> Result<CliHostTree, PodInfoError> {
-        let itree = Itree::n_read_lock(&self.network_interface.itree, "Pod::get_info")?;
+        let itree = ITree::n_read_lock(&self.network_interface.itree, "Pod::get_info")?;
 
         Ok(CliHostTree {
             lines: itree.get_file_tree_and_hosts(path)?,
@@ -440,7 +440,7 @@ impl Pod {
     }
 
     /// Gets every file hosted by this pod only and sends them to other pods
-    async fn send_files_when_stopping(&self, itree: &Itree, peers: Vec<Address>) {
+    async fn send_files_when_stopping(&self, itree: &ITree, peers: Vec<Address>) {
         futures_util::future::join_all(
             itree
                 .files_hosted_only_by(
@@ -480,7 +480,7 @@ impl Pod {
 
         // drop(self.fuse_handle); // FIXME - do something like block the filesystem
 
-        let itree = Itree::n_read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
+        let itree = ITree::n_read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
 
         let peers: Vec<Address> = self
             .peers
