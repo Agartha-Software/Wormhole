@@ -97,7 +97,7 @@ impl Server {
                 }
                 Err(err) => {
                     log::trace!(
-                        "Couldn't bind automatically generated address '{socket_addr}', retrying: {err}"
+                        "Couldn't bind automatically generated address '{socket_addr}' '{err}', retrying!"
                     );
                     continue;
                 }

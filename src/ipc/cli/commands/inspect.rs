@@ -39,8 +39,8 @@ pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String
             \x20  Name:\t\t{}\n\
             \x20  Mount:\t\t{:#?}\n\
             \x20  Hostname:\t\t{}\n\
-            \x20  Public Url:\t{}\n\
-            \x20  Listening Address:\t\t\t{}\n\
+            \x20  Url:\t\t\t{}\n\
+            \x20  Bound Address:\t{}\n\
             \x20  Connected peers:\t{}",
             info.name,
             info.mount,

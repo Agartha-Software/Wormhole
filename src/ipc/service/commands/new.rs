@@ -58,7 +58,7 @@ where
             return Ok(false);
         }
     };
-    global_config = global_config.add_hosts(public_url.clone(), args.additional_hosts);
+    global_config = global_config.add_hosts(args.url, args.additional_hosts);
 
     let hostname = match (local_config.general.hostname, args.hostname) {
         (None, None) => gethostname::gethostname()
