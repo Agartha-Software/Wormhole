@@ -57,13 +57,13 @@ impl Server {
         match port {
             Some(port) => {
                 let socket_addr = SocketAddr::new(ip, port);
-                Server::from_specific_address(socket_addr)
+                Server::from_specific_address(socket_addr).map(|server| (server, socket_addr))
             }
             None => Server::from_range(ip),
         }
     }
 
-    fn from_specific_address(socket_addr: SocketAddr) -> Result<(Server, SocketAddr), NewAnswer> {
+    pub fn from_specific_address(socket_addr: SocketAddr) -> Result<Server, NewAnswer> {
         let socket = new_tcp_socket()?;
 
         socket.bind(socket_addr).map_err(|e| {
@@ -71,13 +71,10 @@ impl Server {
             NewAnswer::BindImpossible(e.into())
         })?;
 
-        Ok((
-            Server {
-                listener: create_listener(socket)?,
-                state: PeerMap::new(Mutex::new(HashMap::new())),
-            },
-            socket_addr,
-        ))
+        Ok(Server {
+            listener: create_listener(socket)?,
+            state: PeerMap::new(Mutex::new(HashMap::new())),
+        })
     }
 
     fn from_range(ip: IpAddr) -> Result<(Server, SocketAddr), NewAnswer> {
