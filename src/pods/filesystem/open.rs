@@ -21,6 +21,7 @@ custom_error! {pub OpenError
     MultipleAccessFlags = "Multiple access flags given",
 }
 
+#[cfg(target_os = "linux")]
 const FMODE_EXEC: i32 = 0x20;
 
 impl AccessMode {

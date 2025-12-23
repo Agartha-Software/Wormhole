@@ -12,7 +12,6 @@ use crate::{
             write::WriteError,
         },
         network::pull_file::PullError,
-        whpath::WhPath,
     },
 };
 use custom_error::custom_error;
@@ -145,9 +144,6 @@ impl FsInterface {
 
             self.disk
                 .write_file(&path, &patched.0, 0)
-                .map_err(WriteError::from)?;
-            self.disk
-                .write_file(&WhPath::from("patched.temp"), &patched.0, 0)
                 .map_err(WriteError::from)?;
             self.acknowledge_metadata(ino, meta).map_err(|e| match e {
                 AcknoledgeSetAttrError::WhError { source } => FlushError::from(source),

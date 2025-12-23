@@ -1,8 +1,8 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{io, sync::Arc};
 
 use crate::config::{GlobalConfig, LocalConfig};
-use crate::data::tree_hosts::{CliHostTree, TreeLine};
+use crate::data::tree_hosts::CliHostTree;
 use crate::error::{WhError, WhResult};
 #[cfg(target_os = "linux")]
 use crate::fuse::fuse_impl::mount_fuse;
@@ -12,12 +12,13 @@ use crate::network::HandshakeError;
 use crate::pods::arbo::{
     FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME, LOCAL_CONFIG_INO, LOCK_TIMEOUT, ROOT,
 };
-#[cfg(target_os = "windows")]
-use crate::pods::disk_managers::dummy_disk_manager::DummyDiskManager;
 #[cfg(target_os = "linux")]
 use crate::pods::disk_managers::unix_disk_manager::UnixDiskManager;
+#[cfg(target_os = "windows")]
+use crate::pods::disk_managers::windows_disk_manager::WindowsDiskManager;
 use crate::pods::disk_managers::DiskManager;
 use crate::pods::network::redundancy::redundancy_worker;
+use crate::pods::whpath::WhPath;
 #[cfg(target_os = "windows")]
 use crate::winfsp::winfsp_impl::{mount_fsp, WinfspHost};
 use custom_error::custom_error;
@@ -34,7 +35,6 @@ use crate::pods::{
     arbo::{generate_arbo, Arbo},
     filesystem::fs_interface::FsInterface,
     network::network_interface::NetworkInterface,
-    whpath::WhPath,
 };
 
 use super::arbo::{InodeId, ARBO_FILE_FNAME, ARBO_FILE_INO, GLOBAL_CONFIG_INO};
@@ -44,7 +44,7 @@ use super::arbo::{InodeId, ARBO_FILE_FNAME, ARBO_FILE_INO, GLOBAL_CONFIG_INO};
 pub struct Pod {
     network_interface: Arc<NetworkInterface>,
     fs_interface: Arc<FsInterface>,
-    mountpoint: WhPath,
+    mountpoint: PathBuf,
     pub peers: Arc<RwLock<Vec<PeerIPC>>>,
     #[cfg(target_os = "linux")]
     fuse_handle: fuser::BackgroundSession,
@@ -63,7 +63,7 @@ struct PodPrototype {
     pub peers: Vec<PeerIPC>,
     pub global_config: GlobalConfig,
     pub local_config: LocalConfig,
-    pub mountpoint: WhPath,
+    pub mountpoint: PathBuf,
     pub receiver_out: UnboundedReceiver<FromNetworkMessage>,
     pub receiver_in: UnboundedSender<FromNetworkMessage>,
 }
@@ -75,7 +75,7 @@ custom_error! {pub PodInfoError
 }
 
 async fn initiate_connection(
-    mountpoint: &WhPath,
+    mountpoint: &Path,
     local_config: &LocalConfig,
     global_config: &GlobalConfig,
     receiver_in: &UnboundedSender<FromNetworkMessage>,
@@ -119,7 +119,7 @@ async fn initiate_connection(
                                     peers: other_ipc,
                                     global_config: accept.config,
                                     local_config,
-                                    mountpoint: mountpoint.clone(),
+                                    mountpoint: mountpoint.into(),
                                     receiver_out,
                                     receiver_in: receiver_in.clone(),
                                 })
@@ -155,7 +155,11 @@ custom_error! {pub PodStopError
     ArboSavingFailed{source: io::Error} = "Could not write arbo to disk: {source}",
     PodNotRunning = "No pod with this name was found running.",
     FileNotReadable{file: InodeId, reason: String} = "Could not read file from disk: ({file}) {reason}",
-    FileNotSent{file: InodeId} = "No pod was able to receive this file before stopping: ({file})"
+    FileNotSent{file: InodeId} = "No pod was able to receive this file before stopping: ({file})",
+    #[cfg(target_os = "linux")]
+    DiskManagerStopFailed{e: io::Error} = "Unable to stop the disk manager properly. Should not be an error on your platform {e}",
+    #[cfg(target_os = "windows")]
+    DiskManagerStopFailed{e: io::Error} = "Unable to stop the disk manager properly. Your files are still on the system folder: ('.'mount_path). {e}",
 }
 
 /// Create all the directories present in Arbo. (not the files)
@@ -171,13 +175,17 @@ fn create_all_dirs(arbo: &Arbo, from: InodeId, disk: &dyn DiskManager) -> io::Re
             let current_path = arbo
                 .n_get_path_from_inode_id(from.id)
                 .map_err(|e| e.into_io())?;
-            disk.new_dir(&current_path, from.meta.perm).or_else(|e| {
-                if e.kind() == io::ErrorKind::AlreadyExists {
-                    Ok(())
-                } else {
-                    Err(e)
-                }
-            })?;
+
+            // skipping root folder
+            if current_path != WhPath::root() {
+                disk.new_dir(&current_path, from.meta.perm).or_else(|e| {
+                    if e.kind() == io::ErrorKind::AlreadyExists {
+                        Ok(())
+                    } else {
+                        Err(e)
+                    }
+                })?;
+            }
 
             for child in children {
                 create_all_dirs(arbo, *child, disk)?
@@ -191,16 +199,16 @@ impl Pod {
     pub async fn new(
         global_config: GlobalConfig,
         local_config: LocalConfig,
-        mountpoint: WhPath,
+        mountpoint: &Path,
         server: Arc<Server>,
     ) -> io::Result<Self> {
         let global_config = global_config;
 
-        log::trace!("mount point {}", mountpoint);
+        log::trace!("mount point {:?}", mountpoint);
         let (receiver_in, receiver_out) = mpsc::unbounded_channel();
 
         let proto = match initiate_connection(
-            &mountpoint,
+            mountpoint,
             &local_config,
             &global_config,
             &receiver_in,
@@ -220,14 +228,14 @@ impl Pod {
                         "None of the specified peers could answer",
                     ));
                 }
-                let arbo = generate_arbo(&mountpoint, &local_config.general.hostname)
+                let arbo = generate_arbo(mountpoint, &local_config.general.hostname)
                     .unwrap_or(Arbo::new());
                 PodPrototype {
                     arbo,
                     peers: vec![],
                     global_config,
                     local_config,
-                    mountpoint,
+                    mountpoint: mountpoint.into(),
                     receiver_out,
                     receiver_in,
                 }
@@ -245,7 +253,7 @@ impl Pod {
         #[cfg(target_os = "linux")]
         let disk_manager = Box::new(UnixDiskManager::new(&proto.mountpoint)?);
         #[cfg(target_os = "windows")]
-        let disk_manager = Box::new(DummyDiskManager::new(&proto.mountpoint)?);
+        let disk_manager = Box::new(WindowsDiskManager::new(&proto.mountpoint)?);
 
         create_all_dirs(&proto.arbo, ROOT, disk_manager.as_ref())
             .inspect_err(|e| log::error!("unable to create_all_dirs: {e}"))
@@ -256,10 +264,10 @@ impl Pod {
             .get_inode(GLOBAL_CONFIG_INO)
             .map(|inode| inode.meta.perm)
         {
-            let _ = disk_manager.new_file(&GLOBAL_CONFIG_FNAME.into(), perms);
+            let _ = disk_manager.new_file(&WhPath::try_from(GLOBAL_CONFIG_FNAME).unwrap(), perms);
             disk_manager
                 .write_file(
-                    &GLOBAL_CONFIG_FNAME.into(),
+                    &WhPath::try_from(GLOBAL_CONFIG_FNAME).unwrap(),
                     toml::to_string(&proto.global_config)
                         .expect("infallible")
                         .as_bytes(),
@@ -275,10 +283,10 @@ impl Pod {
             .get_inode(LOCAL_CONFIG_INO)
             .map(|inode| inode.meta.perm)
         {
-            let _ = disk_manager.new_file(&LOCAL_CONFIG_FNAME.into(), perms);
+            let _ = disk_manager.new_file(&WhPath::try_from(LOCAL_CONFIG_FNAME).unwrap(), perms);
             disk_manager
                 .write_file(
-                    &LOCAL_CONFIG_FNAME.into(),
+                    &WhPath::try_from(LOCAL_CONFIG_FNAME).unwrap(),
                     toml::to_string(&proto.local_config)
                         .expect("infallible")
                         .as_bytes(),
@@ -337,6 +345,7 @@ impl Pod {
             fs_interface.clone(),
         ));
 
+        // FIXME - if mount fuse or fsp errors, drops of disk managers don't seems to be called
         Ok(Self {
             network_interface,
             fs_interface: fs_interface.clone(),
@@ -359,19 +368,10 @@ impl Pod {
 
     // SECTION getting info from the pod (for the cli)
 
-    pub fn get_file_hosts(&self, path: WhPath) -> Result<Vec<Address>, PodInfoError> {
-        let path_string = path.to_string();
-        log::info!("Get file host at: {}", path_string);
-        let path = path_string
-            .strip_prefix(&self.mountpoint.to_string())
-            .ok_or(PodInfoError::WrongFileType {
-                detail: "Asked path is a directory (directories have no hosts)".to_owned(),
-            })?;
-        log::info!("Get file host at local path: {}", path);
-
+    pub fn get_file_hosts(&self, path: &WhPath) -> Result<Vec<Address>, PodInfoError> {
         let binding = Arbo::n_read_lock(&self.network_interface.arbo, "Pod::get_info")?;
         let entry = &binding
-            .get_inode_from_path(&WhPath::from(path))
+            .get_inode_from_path(path)
             .map_err(|_| PodInfoError::FileNotFound)?
             .entry;
 
@@ -385,39 +385,13 @@ impl Pod {
 
     pub fn get_file_tree_and_hosts(
         &self,
-        path: Option<WhPath>,
+        path: Option<&WhPath>,
     ) -> Result<CliHostTree, PodInfoError> {
         let arbo = Arbo::n_read_lock(&self.network_interface.arbo, "Pod::get_info")?;
-        let ino = if let Some(path) = path {
-            arbo.get_inode_from_path(&path)
-                .map_err(|_| PodInfoError::FileNotFound)?
-                .id
-        } else {
-            ROOT
-        };
 
         Ok(CliHostTree {
-            lines: Self::recurse_tree(&*arbo, ino, 0),
+            lines: arbo.get_file_tree_and_hosts(path)?,
         })
-    }
-
-    /// given ino is not checked -> must exist in arbo
-    fn recurse_tree(arbo: &Arbo, ino: InodeId, indentation: u8) -> Vec<TreeLine> {
-        let entry = &arbo
-            .n_get_inode(ino)
-            .expect("recurse_tree: ino not found")
-            .entry;
-        let path = arbo
-            .n_get_path_from_inode_id(ino)
-            .expect("recurse_tree: unable to get path");
-        match entry {
-            FsEntry::File(hosts) => vec![(indentation, ino, path, hosts.clone())],
-            FsEntry::Directory(children) => children
-                .iter()
-                .map(|c| Pod::recurse_tree(arbo, *c, indentation + 1))
-                .flatten()
-                .collect::<Vec<TreeLine>>(),
-        }
     }
 
     // !SECTION
@@ -537,7 +511,7 @@ impl Pod {
             network_airport_handle,
             peer_broadcast_handle,
             new_peer_handle,
-            redundancy_worker_handle: _,
+            redundancy_worker_handle,
             global_config: _,
             local_config: _,
         } = self;
@@ -547,26 +521,55 @@ impl Pod {
         #[cfg(target_os = "windows")]
         drop(fsp_host);
 
+        redundancy_worker_handle.abort();
+        let _ = redundancy_worker_handle
+            .await
+            .inspect(|_| log::error!("await error: redundancy_worker_handle"));
+        network_airport_handle.abort();
+        let _ = network_airport_handle
+            .await
+            .inspect(|_| log::error!("await error: network_airport_handle"));
+        new_peer_handle.abort();
+        let _ = new_peer_handle
+            .await
+            .inspect(|_| log::error!("await error: new_peer_handle"));
+        peer_broadcast_handle.abort();
+        let _ = peer_broadcast_handle
+            .await
+            .inspect(|_| log::error!("await error: peer_broadcast_handle"));
+        *peers.write() = Vec::new(); // dropping PeerIPCs
+
+        let arbo_path = WhPath::try_from(ARBO_FILE_FNAME).unwrap();
+
+        if !fs_interface.disk.file_exists(&arbo_path) {
+            fs_interface
+                .disk
+                .new_file(&arbo_path, 0o600) // REVIEW - permissions value ?
+                .map_err(|io| PodStopError::ArboSavingFailed { source: io })?;
+        }
+
         fs_interface
             .disk
-            .write_file(&ARBO_FILE_FNAME.into(), &arbo_bin, 0)
+            .write_file(&WhPath::try_from(ARBO_FILE_FNAME).unwrap(), &arbo_bin, 0)
             .map_err(|io| PodStopError::ArboSavingFailed { source: io })?;
 
-        *peers.write() = Vec::new(); // dropping PeerIPCs
-        network_airport_handle.abort();
-        new_peer_handle.abort();
-        peer_broadcast_handle.abort();
+        let mut fs_interface =
+            Arc::try_unwrap(fs_interface).expect("fs_interface not released from every thread");
+
+        fs_interface
+            .disk
+            .stop()
+            .map_err(|e| PodStopError::DiskManagerStopFailed { e: e })?;
+
         Ok(())
     }
 
-    pub fn get_mountpoint(&self) -> &WhPath {
+    pub fn get_mountpoint(&self) -> &PathBuf {
         return &self.mountpoint;
     }
 
     pub fn contains(&self, path: &PathBuf) -> bool {
-        let mountpoint = PathBuf::from(self.mountpoint.to_string());
-
-        path.starts_with(mountpoint)
+        path.starts_with(&self.mountpoint)
     }
 
     pub fn get_inspect_info(&self) -> InspectInfo {
@@ -589,7 +592,7 @@ impl Pod {
                 .expect("Can't lock network"),
             name: "".to_string(), //TODO to delete
             connected_peers: peers_data,
-            mount: PathBuf::from(self.mountpoint.to_string()),
+            mount: self.mountpoint.clone(),
         }
     }
 }

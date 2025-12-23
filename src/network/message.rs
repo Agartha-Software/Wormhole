@@ -11,6 +11,7 @@ use crate::{
     pods::{
         arbo::{ArboIndex, Ino, Inode, InodeId, Metadata},
         filesystem::diffs::{Delta, Signature},
+        whpath::InodeName,
     },
 };
 
@@ -22,6 +23,8 @@ pub enum MessageContent {
     Inode(Inode),
 
     RedundancyFile(InodeId, Arc<Vec<u8>>),
+    /// Parent, New Parent, Name, New Name, overwrite
+    Rename(InodeId, InodeId, InodeName, InodeName, bool),
     EditHosts(InodeId, Vec<Address>),
     RevokeFile(InodeId, Address, Metadata),
     AddHosts(InodeId, Vec<Address>),
@@ -41,8 +44,6 @@ pub enum MessageContent {
     PullAnswer(InodeId, Vec<u8>),
 
     Remove(InodeId),
-    /// Parent, New Parent, Name, New Name, overwrite
-    Rename(InodeId, InodeId, String, String, bool),
     EditMetadata(InodeId, Metadata),
     SetXAttr(InodeId, String, Vec<u8>),
     RemoveXAttr(InodeId, String),
@@ -90,7 +91,7 @@ impl fmt::Debug for MessageContent {
                 f,
                 "Inode({{{}, name: {}, parent:{}, {}}})",
                 inode.id,
-                inode.name,
+                inode.name.as_str(),
                 inode.parent,
                 match inode.entry {
                     crate::pods::arbo::FsEntry::File(_) => 'f',
@@ -105,7 +106,11 @@ impl fmt::Debug for MessageContent {
             MessageContent::Rename(parent, new_parent, name, new_name, overwrite) => write!(
                 f,
                 "Rename(parent: {}, new_parent: {}, name: {}, new_name: {}, overwrite: {})",
-                parent, new_parent, name, new_name, overwrite
+                parent,
+                new_parent,
+                name.as_str(),
+                new_name.as_str(),
+                overwrite
             ),
             MessageContent::EditHosts(id, hosts) => write!(f, "EditHosts({id}, {hosts:?})"),
             MessageContent::RevokeFile(id, address, _) => {

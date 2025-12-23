@@ -8,17 +8,14 @@ use crate::ipc::{
     commands::Command,
 };
 
-pub async fn gethosts(args: GetHostsArgs, mut stream: Stream) -> Result<(), io::Error> {
+pub async fn gethosts(args: GetHostsArgs, mut stream: Stream) -> Result<String, io::Error> {
     send_command(
         Command::GetHosts(GetHostsRequest { path: args.path }),
         &mut stream,
     )
     .await?;
     match recieve_answer::<GetHostsAnswer>(&mut stream).await? {
-        GetHostsAnswer::Hosts(hosts) => {
-            println!("Hosts: {:?}", hosts);
-            Ok(())
-        }
+        GetHostsAnswer::Hosts(hosts) => Ok(format!("Hosts: {hosts:?}")),
         GetHostsAnswer::FileNotInsideARunningPod => Err(io::Error::new(
             io::ErrorKind::NotConnected,
             "The given path does isn't inside a pod.",

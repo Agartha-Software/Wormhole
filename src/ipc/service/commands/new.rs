@@ -7,7 +7,6 @@ use crate::{
     pods::{
         arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
         pod::Pod,
-        whpath::JoinPath,
     },
 };
 
@@ -19,11 +18,16 @@ pub async fn new<Stream>(
 where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
 {
+    if pods.get(&args.name).is_some() {
+        send_answer(NewAnswer::AlreadyExist, stream).await?;
+        return Ok(false);
+    }
+
     if pods
         .values()
-        .any(|p| p.get_mountpoint().as_str() == args.mountpoint.as_str())
+        .any(|p| *p.get_mountpoint() == args.mountpoint)
     {
-        send_answer(NewAnswer::AlreadyExist, stream).await?;
+        send_answer(NewAnswer::AlreadyMounted, stream).await?;
         return Ok(false);
     }
 
@@ -58,21 +62,14 @@ where
         }
     };
 
-    let answer = match Pod::new(
-        global_config,
-        local_config,
-        args.mountpoint.as_os_str().into(),
-        server,
-    )
-    .await
-    {
+    let answer = match Pod::new(global_config, local_config, &args.mountpoint, server).await {
         Ok(pod) => {
             pods.insert(args.name, pod);
+            println!("New pod created successfully at '{port}'");
             NewAnswer::Success(port)
         }
         Err(err) => NewAnswer::FailedToCreatePod(err.into()),
     };
-    println!("New pod created successfully at '{port}'");
     send_answer(answer, stream).await?;
     Ok(false)
 }

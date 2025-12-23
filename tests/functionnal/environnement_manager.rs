@@ -55,7 +55,7 @@ impl EnvironnementManager {
         let mut command = Command::new("cargo");
         command.kill_on_drop(true);
 
-        // GHActions does'nt pipe a stdin so we have to make one ourselves from a FD
+        // GHActions doesn't pipe a stdin so we have to make one ourselves from a FD
         let (write, read) = std::os::unix::net::UnixStream::pair()?;
 
         let stdio = Stdio::from(read.as_fd().try_clone_to_owned().unwrap());

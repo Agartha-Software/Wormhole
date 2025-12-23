@@ -1,10 +1,16 @@
-use crate::{error::WhResult, network::message::Address};
+use crate::{
+    data::tree_hosts::TreeLine,
+    error::WhResult,
+    network::message::Address,
+    pods::whpath::{InodeName, InodeNameError, WhPath},
+};
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fs, io,
     ops::RangeFrom,
+    path::Path,
     sync::Arc,
     time::{Duration, SystemTime},
 };
@@ -14,7 +20,6 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
 use crate::error::WhError;
 use crate::pods::filesystem::fs_interface::SimpleFileType;
-use crate::pods::whpath::WhPath;
 
 use super::filesystem::{make_inode::MakeInodeError, remove_inode::RemoveInodeError};
 
@@ -57,7 +62,7 @@ pub type XAttrs = HashMap<String, Vec<u8>>;
 pub struct Inode {
     pub parent: InodeId,
     pub id: InodeId,
-    pub name: String,
+    pub name: InodeName,
     pub entry: FsEntry,
     pub meta: Metadata,
     pub xattrs: XAttrs,
@@ -78,20 +83,6 @@ pub const BLOCK_SIZE: u64 = 512;
 // SECTION implementations
 
 impl FsEntry {
-    // pub fn get_path(&self) -> &PathBuf {
-    //     match self {
-    //         FsEntry::File(path) => path,
-    //         FsEntry::Directory(children) => path,
-    //     }
-    // }
-
-    // pub fn get_name(&self) -> io::Result<&OsStr> {
-    //     match Path::new(self.get_path()).file_name() {
-    //         Some(name) => Ok(name),
-    //         None => Err(io::Error::new(io::ErrorKind::Other, "Invalid path ending")),
-    //     }
-    // }
-
     pub fn get_filetype(&self) -> SimpleFileType {
         match self {
             FsEntry::File(_) => SimpleFileType::File,
@@ -111,7 +102,13 @@ impl FsEntry {
 }
 
 impl Inode {
-    pub fn new(name: String, parent_ino: InodeId, id: InodeId, entry: FsEntry, perm: u16) -> Self {
+    pub fn new(
+        name: InodeName,
+        parent_ino: InodeId,
+        id: InodeId,
+        entry: FsEntry,
+        perm: u16,
+    ) -> Self {
         let meta = Metadata {
             ino: id,
             size: 0,
@@ -159,7 +156,7 @@ impl Arbo {
             Inode {
                 parent: ROOT,
                 id: ROOT,
-                name: "/".to_owned(),
+                name: WhPath::root().to_string().try_into().unwrap(),
                 entry: FsEntry::Directory(vec![]),
                 meta: Metadata {
                     ino: ROOT,
@@ -313,8 +310,8 @@ impl Arbo {
     /// Create a new [Inode] from the given parameters and insert it inside the local arbo
     pub fn add_inode_from_parameters(
         &mut self,
-        name: String,
-        id: InodeId, //REVIEW: Renamed id to be more coherent with the Inode struct
+        name: InodeName,
+        id: InodeId,
         parent_ino: InodeId,
         entry: FsEntry,
         perm: u16,
@@ -345,10 +342,9 @@ impl Arbo {
         let parent = self.n_get_inode_mut(parent)?;
 
         let children = match &mut parent.entry {
-            // REVIEW: Can we expect parent to always be a file to not flood wherror with errors that will never happen
-            FsEntry::File(_) => panic!("Parent is a file"),
-            FsEntry::Directory(children) => Ok(children),
-        }?;
+            FsEntry::File(_) => return Err(WhError::InodeIsNotADirectory),
+            FsEntry::Directory(children) => children,
+        };
 
         children.retain(|parent_child| *parent_child != child);
         Ok(())
@@ -431,8 +427,8 @@ impl Arbo {
         &mut self,
         parent: InodeId,
         new_parent: InodeId,
-        name: &String,
-        new_name: &String,
+        name: &str,
+        new_name: InodeName,
     ) -> WhResult<()> {
         let parent_inode = self.entries.get(&parent).ok_or(WhError::InodeNotFound)?;
         let item_id = self.n_get_inode_child_by_name(parent_inode, name)?.id;
@@ -440,7 +436,7 @@ impl Arbo {
         self.n_remove_child(parent, item_id)?;
 
         let item = self.n_get_inode_mut(item_id)?;
-        item.name = new_name.clone();
+        item.name = new_name;
         item.parent = new_parent;
 
         self.n_add_child(new_parent, item_id)
@@ -466,7 +462,7 @@ impl Arbo {
     #[must_use]
     pub fn get_path_from_inode_id(&self, inode_index: InodeId) -> io::Result<WhPath> {
         if inode_index == ROOT {
-            return Ok(WhPath::from("/"));
+            return Ok(WhPath::root());
         }
         let inode = match self.entries.get(&inode_index) {
             Some(inode) => inode,
@@ -476,7 +472,7 @@ impl Arbo {
         };
 
         let mut parent_path = self.get_path_from_inode_id(inode.parent)?;
-        parent_path.push(&inode.name.clone());
+        parent_path.push((&inode.name).into());
         Ok(parent_path)
     }
 
@@ -487,7 +483,7 @@ impl Arbo {
     ///   InodeNotFound: if the inode isn't inside the tree
     pub fn n_get_path_from_inode_id(&self, inode_index: InodeId) -> WhResult<WhPath> {
         if inode_index == ROOT {
-            return Ok(WhPath::from("/"));
+            return Ok(WhPath::root());
         }
         let inode = self
             .entries
@@ -495,12 +491,12 @@ impl Arbo {
             .ok_or(WhError::InodeNotFound)?;
 
         let mut parent_path = self.n_get_path_from_inode_id(inode.parent)?;
-        parent_path.push(&inode.name.clone());
+        parent_path.push((&inode.name).into());
         Ok(parent_path)
     }
 
     #[must_use]
-    pub fn get_inode_child_by_name(&self, parent: &Inode, name: &String) -> io::Result<&Inode> {
+    pub fn get_inode_child_by_name(&self, parent: &Inode, name: &str) -> io::Result<&Inode> {
         if let Ok(children) = parent.entry.get_children() {
             for child in children.iter() {
                 if let Some(child) = self.entries.get(child) {
@@ -519,7 +515,7 @@ impl Arbo {
     }
 
     #[must_use]
-    pub fn n_get_inode_child_by_name(&self, parent: &Inode, name: &String) -> WhResult<&Inode> {
+    pub fn n_get_inode_child_by_name(&self, parent: &Inode, name: &str) -> WhResult<&Inode> {
         if let Ok(children) = parent.entry.get_children() {
             for child in children.iter() {
                 if let Some(child) = self.entries.get(child) {
@@ -538,7 +534,7 @@ impl Arbo {
     pub fn get_inode_from_path(&self, path: &WhPath) -> io::Result<&Inode> {
         let mut actual_inode = self.entries.get(&ROOT).expect("inode_from_path: NO ROOT");
 
-        for name in path.clone().to_vector().iter() {
+        for name in path.iter() {
             actual_inode = self.get_inode_child_by_name(&actual_inode, name)?;
         }
 
@@ -648,46 +644,75 @@ impl Arbo {
         Ok(())
     }
 
-    pub fn set_inode_xattr(&mut self, ino: InodeId, key: String, data: Vec<u8>) -> WhResult<()> {
+    pub fn set_inode_xattr(&mut self, ino: InodeId, key: &str, data: Vec<u8>) -> WhResult<()> {
         let inode = self.n_get_inode_mut(ino)?;
 
-        inode.xattrs.insert(key, data);
+        inode.xattrs.insert(key.into(), data);
         Ok(())
     }
 
-    pub fn remove_inode_xattr(&mut self, ino: InodeId, key: String) -> WhResult<()> {
+    pub fn remove_inode_xattr(&mut self, ino: InodeId, key: &str) -> WhResult<()> {
         let inode = self.n_get_inode_mut(ino)?;
 
-        inode.xattrs.remove(&key);
+        inode.xattrs.remove(key);
         Ok(())
+    }
+
+    pub fn get_file_tree_and_hosts(&self, path: Option<&WhPath>) -> WhResult<Vec<TreeLine>> {
+        let ino = if let Some(path) = path {
+            self.get_inode_from_path(path)
+                .map_err(|_| WhError::InodeNotFound)?
+                .id
+        } else {
+            ROOT
+        };
+
+        self.recurse_tree(ino, 0)
+    }
+
+    /// given ino is not checked -> must exist in arbo
+    fn recurse_tree(&self, ino: InodeId, indentation: u8) -> WhResult<Vec<TreeLine>> {
+        let entry = &self.n_get_inode(ino)?.entry;
+        let path = self.n_get_path_from_inode_id(ino)?;
+        match entry {
+            FsEntry::File(hosts) => Ok(vec![(indentation, ino, path, hosts.clone())]),
+            FsEntry::Directory(children) => Ok(children
+                .iter()
+                .map(|c| self.recurse_tree(*c, indentation + 1))
+                .collect::<WhResult<Vec<Vec<TreeLine>>>>()?
+                .into_iter()
+                .flatten()
+                .collect::<Vec<TreeLine>>()),
+        }
     }
 }
 
 // !SECTION
 
 /// If arbo can be read and deserialized from parent_folder/[ARBO_FILE_NAME] returns Some(Arbo)
-fn recover_serialized_arbo(parent_folder: &WhPath) -> Option<Arbo> {
+fn recover_serialized_arbo(parent_folder: &Path) -> Option<Arbo> {
     // error handling is silent on purpose as it will be recoded with the new error system
     // If an error happens, will just proceed like the arbo was not on disk
     // In the future, we should maybe warn and keep a copy, avoiding the user from losing data
-    bincode::deserialize(&fs::read(parent_folder.join(ARBO_FILE_FNAME).to_string()).ok()?).ok()
+    bincode::deserialize(&fs::read(parent_folder.join(ARBO_FILE_FNAME)).ok()?).ok()
 }
 
-#[cfg(target_os = "linux")]
 fn index_folder_recursive(
     arbo: &mut Arbo,
     parent: Ino,
-    path: &WhPath,
+    path: &Path,
     host: &String,
 ) -> io::Result<()> {
-    let str_path = path.to_string();
-    for entry in fs::read_dir(str_path)? {
+    for entry in fs::read_dir(path)? {
         let entry = entry.expect("error in filesystem indexion (1)");
         let ftype = entry.file_type().expect("error in filesystem indexion (2)");
-        let fname = entry.file_name().to_string_lossy().to_string();
+        let fname: InodeName = entry
+            .file_name()
+            .try_into()
+            .map_err(|e: InodeNameError| e.to_io())?;
         let meta = entry.metadata()?;
 
-        let special_ino = Arbo::get_special(&fname, parent);
+        let special_ino = Arbo::get_special(fname.as_ref(), parent);
 
         let used_ino = match special_ino {
             Some(_) if !ftype.is_file() => {
@@ -703,6 +728,11 @@ fn index_folder_recursive(
                 .ok_or(io::Error::other("ran out of Inodes"))?,
         };
 
+        #[cfg(target_os = "linux")]
+        let perm_mode = meta.permissions().mode() as u16;
+        #[cfg(target_os = "windows")]
+        let perm_mode = WINDOWS_DEFAULT_PERMS_MODE;
+
         arbo.add_inode(Inode::new(
             fname.clone(),
             parent,
@@ -712,7 +742,7 @@ fn index_folder_recursive(
             } else {
                 FsEntry::Directory(Vec::new())
             },
-            meta.permissions().mode() as u16,
+            perm_mode,
         ))
         .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err.to_string()))?;
         let mut meta: Metadata = meta.try_into()?;
@@ -727,17 +757,19 @@ fn index_folder_recursive(
     Ok(())
 }
 
-pub fn generate_arbo(path: &WhPath, host: &String) -> io::Result<Arbo> {
+pub fn generate_arbo(path: &Path, host: &String) -> io::Result<Arbo> {
     if let Some(arbo) = recover_serialized_arbo(path) {
         Ok(arbo)
     } else {
         let mut arbo = Arbo::new();
 
-        #[cfg(target_os = "linux")]
         index_folder_recursive(&mut arbo, ROOT, path, host)?;
         Ok(arbo)
     }
 }
+
+#[cfg(target_os = "windows")]
+const WINDOWS_DEFAULT_PERMS_MODE: u16 = 666;
 
 /* NOTE
  * is currently made with fuse in sight. Will probably need to be edited to be windows compatible
@@ -799,6 +831,34 @@ impl TryInto<Metadata> for fs::Metadata {
             gid: self.gid(),
             rdev: self.rdev() as u32,
             blksize: self.blksize() as u32,
+            flags: 0,
+        })
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl TryInto<Metadata> for fs::Metadata {
+    type Error = std::io::Error;
+    fn try_into(self) -> Result<Metadata, std::io::Error> {
+        Ok(Metadata {
+            ino: 0, // TODO: unsafe default
+            size: self.len(),
+            blocks: 0,
+            atime: self.accessed()?,
+            mtime: self.modified()?,
+            ctime: self.modified()?,
+            crtime: self.created()?,
+            kind: if self.is_file() {
+                SimpleFileType::File
+            } else {
+                SimpleFileType::Directory
+            },
+            perm: WINDOWS_DEFAULT_PERMS_MODE,
+            nlink: 0 as u32,
+            uid: 0,
+            gid: 0,
+            rdev: 0 as u32,
+            blksize: 0 as u32,
             flags: 0,
         })
     }

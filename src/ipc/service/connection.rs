@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use crate::{
     ipc::{
         commands::Command,
-        service::commands::{freeze, gethosts, inspect, new, remove, status, tree, unfreeze},
+        service::commands::{
+            check, freeze, generate, gethosts, inspect, new, remove, show, status, tree, unfreeze,
+        },
     },
     pods::pod::Pod,
 };
@@ -15,20 +17,17 @@ pub async fn handle_connection<Stream>(pods: &mut HashMap<String, Pod>, mut stre
 where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
 {
-    log::debug!("Connection recieved");
+    log::trace!("Connection from CLI recieved!");
 
     let size = stream
         .read_u32()
         .await
         .expect("Failed to read recieved command, shouldn't be possible!");
-    log::trace!("waiting for {size} bytes!");
     let mut buffer: Vec<u8> = Vec::with_capacity(size as usize);
     let _size = stream
         .read_buf(&mut buffer)
         .await
         .expect("Failed to read recieved command, shouldn't be possible!");
-
-    log::trace!("found {_size} bytes!");
 
     match bincode::deserialize::<Command>(&buffer) {
         Ok(command) => handle_command(command, pods, stream)
@@ -68,13 +67,18 @@ where
     let stream = &mut stream;
 
     match command {
-        Command::Unfreeze(data) => unfreeze(data, stream).await,
-        Command::Freeze(data) => freeze(data, stream).await,
-        Command::New(data) => new(data, pods, stream).await,
-        Command::GetHosts(data) => gethosts(data, pods, stream).await,
-        Command::Inspect(data) => inspect(data, pods, stream).await,
-        Command::Remove(data) => remove(data, pods, stream).await,
+        Command::Unfreeze(pod_id) => unfreeze(pod_id, stream).await,
+        Command::Freeze(pod_id) => freeze(pod_id, stream).await,
+        Command::New(request) => new(request, pods, stream).await,
+        Command::GetHosts(request) => gethosts(request, pods, stream).await,
+        Command::Inspect(pod_id) => inspect(pod_id, pods, stream).await,
+        Command::Remove(request) => remove(request, pods, stream).await,
         Command::Status => status(stream).await,
-        Command::Tree(data) => tree(data, pods, stream).await,
+        Command::Tree(pod_id) => tree(pod_id, pods, stream).await,
+        Command::GenerateConfig(pod_id, overwrite, config_type) => {
+            generate(pod_id, overwrite, config_type, pods, stream).await
+        }
+        Command::ShowConfig(pod_id, config_type) => show(pod_id, config_type, pods, stream).await,
+        Command::CheckConfig(data, config_type) => check(data, config_type, pods, stream).await,
     }
 }

@@ -16,7 +16,7 @@ use crate::{
             write::WriteError,
         },
         network::pull_file::PullError,
-        whpath::WhPath,
+        whpath::{InodeNameError, WhPathError},
     },
 };
 use nt_time::FileTime;
@@ -28,6 +28,12 @@ use windows::Win32::{
         STATUS_NETWORK_UNREACHABLE, STATUS_NOT_A_DIRECTORY, STATUS_NO_MEMORY,
         STATUS_OBJECT_NAME_EXISTS, STATUS_OBJECT_NAME_INVALID, STATUS_OBJECT_NAME_NOT_FOUND,
         STATUS_OBJECT_PATH_NOT_FOUND, STATUS_PENDING, STATUS_POSSIBLE_DEADLOCK,
+        GENERIC_EXECUTE, GENERIC_READ, GENERIC_WRITE, STATUS_ACCESS_DENIED, STATUS_DATA_ERROR,
+        STATUS_DIRECTORY_NOT_EMPTY, STATUS_FILE_IS_A_DIRECTORY, STATUS_ILLEGAL_CHARACTER,
+        STATUS_INVALID_DEVICE_REQUEST, STATUS_INVALID_HANDLE, STATUS_INVALID_PARAMETER,
+        STATUS_NETWORK_UNREACHABLE, STATUS_NOT_A_DIRECTORY, STATUS_OBJECT_NAME_EXISTS,
+        STATUS_OBJECT_NAME_NOT_FOUND, STATUS_OBJECT_PATH_NOT_FOUND, STATUS_PENDING,
+        STATUS_POSSIBLE_DEADLOCK,
     },
     Storage::FileSystem::{
         FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_DIRECTORY, FILE_WRITE_ATTRIBUTES, SYNCHRONIZE,
@@ -101,6 +107,23 @@ impl From<WhError> for FspError {
             WhError::NetworkDied { called_from: _ } => STATUS_NETWORK_UNREACHABLE.into(),
             WhError::WouldBlock { called_from: _ } => STATUS_PENDING.into(),
             WhError::InodeIsADirectory => STATUS_FILE_IS_A_DIRECTORY.into(),
+        }
+    }
+}
+
+impl From<InodeNameError> for FspError {
+    fn from(_: InodeNameError) -> Self {
+        STATUS_ILLEGAL_CHARACTER.into()
+    }
+}
+
+impl From<WhPathError> for FspError {
+    fn from(e: WhPathError) -> Self {
+        match e {
+            WhPathError::NotRelative => STATUS_INVALID_DEVICE_REQUEST.into(),
+            WhPathError::ConversionError { source: _ } => STATUS_ILLEGAL_CHARACTER.into(),
+            WhPathError::NotNormalized => STATUS_INVALID_DEVICE_REQUEST.into(),
+            WhPathError::InvalidOperation => STATUS_INVALID_DEVICE_REQUEST.into(),
         }
     }
 }
