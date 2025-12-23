@@ -61,7 +61,7 @@ async fn main() -> ExitCode {
         }
     }
 
-    if let Err(err) = startup() {
+    if let Err(err) = startup(&mut pods).await {
         eprintln!("Failed to startup: {:?}", err);
         return ExitCode::FAILURE;
     }
