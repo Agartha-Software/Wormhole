@@ -1,11 +1,11 @@
 use crate::error::WhResult;
 use crate::network::message::Address;
-use crate::pods::arbo::{
-    Arbo, FsEntry, Inode, InodeId, Metadata, GLOBAL_CONFIG_FNAME, GLOBAL_CONFIG_INO,
-};
 use crate::pods::disk_managers::DiskManager;
 use crate::pods::filesystem::attrs::AcknoledgeSetAttrError;
 use crate::pods::filesystem::permissions::has_execute_perm;
+use crate::pods::itree::{
+    FsEntry, ITree, Inode, InodeId, Metadata, GLOBAL_CONFIG_FNAME, GLOBAL_CONFIG_INO,
+};
 use crate::pods::network::callbacks::Callback;
 use crate::pods::network::network_interface::NetworkInterface;
 use crate::pods::whpath::WhPath;
@@ -24,7 +24,7 @@ pub struct FsInterface {
     pub network_interface: Arc<NetworkInterface>,
     pub disk: Box<dyn DiskManager>,
     pub file_handles: Arc<RwLock<FileHandleManager>>,
-    pub arbo: Arc<RwLock<Arbo>>, // here only to read, as most write are made by network_interface
+    pub itree: Arc<RwLock<ITree>>, // here only to read, as most write are made by network_interface
 }
 
 #[derive(PartialEq, Debug, Serialize, Deserialize, Clone)]
@@ -48,20 +48,20 @@ impl FsInterface {
     pub fn new(
         network_interface: Arc<NetworkInterface>,
         disk_manager: Box<dyn DiskManager>,
-        arbo: Arc<RwLock<Arbo>>,
+        itree: Arc<RwLock<ITree>>,
     ) -> Self {
         Self {
             network_interface,
             disk: disk_manager,
             file_handles: Arc::new(RwLock::new(FileHandleManager::new())),
-            arbo,
+            itree,
         }
     }
 
     // SECTION - local -> write
     #[deprecated]
     pub fn set_inode_meta(&self, ino: InodeId, meta: Metadata) -> io::Result<()> {
-        let path = Arbo::read_lock(&self.arbo, "fs_interface::set_inode_meta")?
+        let path = ITree::read_lock(&self.itree, "fs_interface::set_inode_meta")?
             .get_path_from_inode_id(ino)?;
 
         self.disk.set_file_size(&path, meta.size as usize)?;
@@ -77,24 +77,26 @@ impl FsInterface {
     /// get an entry
     /// return Ok(None) if no permissions to access entries
     pub fn get_entry_from_name(&self, parent: InodeId, name: &str) -> WhResult<Option<Inode>> {
-        let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface.get_entry_from_name")?;
-        let p_inode = arbo.n_get_inode(parent)?;
+        let itree = ITree::n_read_lock(&self.itree, "fs_interface.get_entry_from_name")?;
+        let p_inode = itree.n_get_inode(parent)?;
         if !has_execute_perm(p_inode.meta.perm) {
             return Ok(None);
         }
-        Ok(Some(arbo.n_get_inode_child_by_name(p_inode, name)?.clone()))
+        Ok(Some(
+            itree.n_get_inode_child_by_name(p_inode, name)?.clone(),
+        ))
     }
 
     pub fn get_inode_attributes(&self, ino: InodeId) -> io::Result<Metadata> {
-        let arbo = Arbo::read_lock(&self.arbo, "fs_interface::get_inode_attributes")?;
+        let itree = ITree::read_lock(&self.itree, "fs_interface::get_inode_attributes")?;
 
-        Ok(arbo.get_inode(ino)?.meta.clone())
+        Ok(itree.get_inode(ino)?.meta.clone())
     }
 
     pub fn n_get_inode_attributes(&self, ino: InodeId) -> WhResult<Metadata> {
-        let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface::get_inode_attributes")?;
+        let itree = ITree::n_read_lock(&self.itree, "fs_interface::get_inode_attributes")?;
 
-        Ok(arbo.n_get_inode(ino)?.meta.clone())
+        Ok(itree.n_get_inode(ino)?.meta.clone())
     }
 
     // !SECTION
@@ -106,8 +108,8 @@ impl FsInterface {
         self.network_interface.promote_next_inode(inode.id + 1)?;
 
         let new_path = {
-            let arbo = Arbo::n_read_lock(&self.arbo, "recept_inode")?;
-            arbo.n_get_path_from_inode_id(inode.id)?
+            let itree = ITree::n_read_lock(&self.itree, "recept_inode")?;
+            itree.n_get_path_from_inode_id(inode.id)?
         };
 
         match inode.entry {
@@ -128,12 +130,12 @@ impl FsInterface {
     }
 
     pub fn recept_redundancy(&self, id: InodeId, binary: Arc<Vec<u8>>) -> WhResult<()> {
-        let arbo = Arbo::write_lock(&self.arbo, "recept_binary")
-            .expect("recept_binary: can't read lock arbo");
-        let (path, perms) = arbo
+        let itree = ITree::write_lock(&self.itree, "recept_binary")
+            .expect("recept_binary: can't read lock itree");
+        let (path, perms) = itree
             .n_get_path_from_inode_id(id)
-            .and_then(|path| arbo.n_get_inode(id).map(|inode| (path, inode.meta.perm)))?;
-        drop(arbo);
+            .and_then(|path| itree.n_get_inode(id).map(|inode| (path, inode.meta.perm)))?;
+        drop(itree);
 
         let _created = self.disk.new_file(&path, perms);
         self.disk
@@ -142,7 +144,7 @@ impl FsInterface {
             .expect("disk error");
         // TODO -> in case of failure, other hosts still think this one is valid. Should send error report to the redundancy manager
 
-        Arbo::n_write_lock(&self.arbo, "recept_redundancy")?
+        ITree::n_write_lock(&self.itree, "recept_redundancy")?
             .n_add_inode_hosts(id, vec![self.network_interface.hostname.clone()])
             .inspect_err(|e| {
                 log::error!("Can't update (local) hosts for redundancy pulled file ({id}): {e}")
@@ -150,11 +152,11 @@ impl FsInterface {
     }
 
     pub fn recept_binary(&self, id: InodeId, binary: Vec<u8>) -> io::Result<()> {
-        let arbo = Arbo::read_lock(&self.arbo, "recept_binary")
-            .expect("recept_binary: can't read lock arbo");
-        let (path, perms) = match arbo
+        let itree = ITree::read_lock(&self.itree, "recept_binary")
+            .expect("recept_binary: can't read lock itree");
+        let (path, perms) = match itree
             .n_get_path_from_inode_id(id)
-            .and_then(|path| arbo.n_get_inode(id).map(|inode| (path, inode.meta.perm)))
+            .and_then(|path| itree.n_get_inode(id).map(|inode| (path, inode.meta.perm)))
         {
             Ok(value) => value,
             Err(_) => {
@@ -164,7 +166,7 @@ impl FsInterface {
                     .resolve(Callback::Pull(id), false)
             }
         };
-        drop(arbo);
+        drop(itree);
         let _created = self.disk.new_file(&path, perms);
         let status = self
             .disk
@@ -183,8 +185,8 @@ impl FsInterface {
 
     pub fn recept_edit_hosts(&self, id: InodeId, hosts: Vec<Address>) -> WhResult<()> {
         if !hosts.contains(&self.network_interface.hostname) {
-            let path =
-                Arbo::n_read_lock(&self.arbo, "recept_edit_hosts")?.n_get_path_from_inode_id(id)?;
+            let path = ITree::n_read_lock(&self.itree, "recept_edit_hosts")?
+                .n_get_path_from_inode_id(id)?;
             if let Err(e) = self.disk.remove_file(&path) {
                 log::debug!("recept_edit_hosts: can't delete file. {}", e);
             }
@@ -206,7 +208,7 @@ impl FsInterface {
         if needs_delete {
             // TODO: recept_revoke_hosts, for the redudancy, should recieve the written text (data from write) instead of deleting and adding it back completely with apply_redudancy
             if let Err(e) = self.disk.remove_file(
-                &Arbo::n_read_lock(&self.arbo, "recept_revoke_hosts")?
+                &ITree::n_read_lock(&self.itree, "recept_revoke_hosts")?
                     .n_get_path_from_inode_id(id)?,
             ) {
                 log::debug!("recept_revoke_hosts: can't delete file. {}", e);
@@ -222,7 +224,8 @@ impl FsInterface {
     pub fn recept_remove_hosts(&self, id: InodeId, hosts: Vec<Address>) -> io::Result<()> {
         if hosts.contains(&self.network_interface.hostname) {
             if let Err(e) = self.disk.remove_file(
-                &Arbo::read_lock(&self.arbo, "recept_remove_hosts")?.get_path_from_inode_id(id)?,
+                &ITree::read_lock(&self.itree, "recept_remove_hosts")?
+                    .get_path_from_inode_id(id)?,
             ) {
                 log::debug!("recept_remove_hosts: can't delete file. {}", e);
             }
@@ -235,8 +238,8 @@ impl FsInterface {
 
     // SECTION remote -> read
     pub fn send_filesystem(&self, to: Address) -> io::Result<()> {
-        let arbo = Arbo::read_lock(&self.arbo, "fs_interface::send_filesystem")?;
-        let global_config_file_size = arbo
+        let itree = ITree::read_lock(&self.itree, "fs_interface::send_filesystem")?;
+        let global_config_file_size = itree
             .get_inode(GLOBAL_CONFIG_INO)
             .map(|inode| inode.meta.size)
             .ok();
@@ -245,7 +248,7 @@ impl FsInterface {
         } else {
             None
         };
-        drop(arbo);
+        drop(itree);
         log::info!("reading global config at {global_config_path:?}");
 
         let mut global_config_bytes = Vec::new();
@@ -258,13 +261,13 @@ impl FsInterface {
                     .expect("disk can't read file (global condfig)");
             }
         }
-        self.network_interface.send_arbo(to, global_config_bytes)
+        self.network_interface.send_itree(to, global_config_bytes)
     }
 
     pub fn send_file(&self, inode: InodeId, to: Address) -> io::Result<()> {
-        let arbo = Arbo::read_lock(&self.arbo, "send_arbo")?;
-        let path = arbo.get_path_from_inode_id(inode)?;
-        let mut size = arbo.get_inode(inode)?.meta.size as usize;
+        let itree = ITree::read_lock(&self.itree, "send_itree")?;
+        let path = itree.get_path_from_inode_id(inode)?;
+        let mut size = itree.get_inode(inode)?.meta.size as usize;
         let mut data = Vec::new();
         data.resize(size, 0);
         size = self.disk.read_file(&path, 0, &mut data)?;
@@ -273,12 +276,12 @@ impl FsInterface {
     }
 
     pub fn read_local_file(&self, inode: InodeId) -> WhResult<Vec<u8>> {
-        let arbo = Arbo::n_read_lock(&self.arbo, "send_arbo")?;
-        let path = arbo
+        let itree = ITree::n_read_lock(&self.itree, "send_itree")?;
+        let path = itree
             .get_path_from_inode_id(inode)
             .map_err(|_| crate::error::WhError::InodeNotFound)?;
-        let size = arbo.n_get_inode(inode)?.meta.size;
-        drop(arbo);
+        let size = itree.n_get_inode(inode)?.meta.size;
+        drop(itree);
 
         let mut buff = Vec::new();
         buff.resize(size as usize, 0);

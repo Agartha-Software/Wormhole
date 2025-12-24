@@ -5,7 +5,7 @@ use tokio::sync::broadcast;
 
 use crate::{
     error::{WhError, WhResult},
-    pods::arbo::{InodeId, LOCK_TIMEOUT},
+    pods::itree::{InodeId, LOCK_TIMEOUT},
 };
 
 #[derive(Eq, Hash, PartialEq, Clone, Copy, Debug)]

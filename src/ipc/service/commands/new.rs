@@ -5,7 +5,7 @@ use crate::{
     ipc::{answers::NewAnswer, commands::NewRequest, service::connection::send_answer},
     network::server::Server,
     pods::{
-        arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
+        itree::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
         pod::{Pod, PodPrototype},
     },
 };

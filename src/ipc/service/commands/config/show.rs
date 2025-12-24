@@ -10,7 +10,7 @@ use crate::{
         commands::PodId,
         service::{commands::find_pod, connection::send_answer},
     },
-    pods::{arbo::LOCK_TIMEOUT, pod::Pod},
+    pods::{itree::LOCK_TIMEOUT, pod::Pod},
 };
 
 async fn locked_config_to_string<Conf>(

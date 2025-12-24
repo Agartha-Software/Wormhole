@@ -17,21 +17,21 @@ use crate::{
         peer_ipc::PeerIPC,
         server::Server,
     },
-    pods::{arbo::Ino, filesystem::make_inode::MakeInodeError, whpath::InodeName},
+    pods::{filesystem::make_inode::MakeInodeError, itree::Ino, whpath::InodeName},
 };
 use parking_lot::RwLock;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
-use crate::pods::arbo::{FsEntry, Metadata};
+use crate::pods::itree::{FsEntry, Metadata};
 use crate::pods::{
-    arbo::BLOCK_SIZE,
     filesystem::{remove_inode::RemoveInodeError, rename::RenameError},
+    itree::BLOCK_SIZE,
 };
 
 use crate::pods::{
-    arbo::{Arbo, Inode, InodeId, LOCK_TIMEOUT},
     filesystem::fs_interface::FsInterface,
+    itree::{ITree, Inode, InodeId, LOCK_TIMEOUT},
 };
 
 use crate::pods::network::callbacks::Callbacks;
@@ -48,7 +48,7 @@ pub fn get_all_peers_address(peers: &Arc<RwLock<Vec<PeerIPC>>>) -> WhResult<Vec<
 }
 #[derive(Debug)]
 pub struct NetworkInterface {
-    pub arbo: Arc<RwLock<Arbo>>,
+    pub itree: Arc<RwLock<ITree>>,
     pub public_url: Option<String>,
     pub bound_socket: SocketAddr,
     pub hostname: String,
@@ -61,7 +61,7 @@ pub struct NetworkInterface {
 
 impl NetworkInterface {
     pub fn new(
-        arbo: Arc<RwLock<Arbo>>,
+        itree: Arc<RwLock<ITree>>,
         public_url: Option<String>,
         bound_socket: SocketAddr,
         hostname: String,
@@ -71,7 +71,7 @@ impl NetworkInterface {
         global_config: Arc<RwLock<GlobalConfig>>,
     ) -> Self {
         Self {
-            arbo,
+            itree,
             public_url,
             bound_socket,
             hostname,
@@ -87,7 +87,7 @@ impl NetworkInterface {
 
     #[deprecated(note = "bad to preallocate inodes like this")]
     pub fn get_next_inode(&self) -> io::Result<Ino> {
-        self.arbo
+        self.itree
             .write()
             .next_ino
             .next()
@@ -109,7 +109,7 @@ impl NetworkInterface {
     /** TODO: Doc when reviews are finished */
     #[deprecated(note = "bad to preallocate inodes like this")]
     pub fn n_get_next_inode(&self) -> WhResult<u64> {
-        self.arbo
+        self.itree
             .write()
             .next_ino
             .next()
@@ -131,9 +131,9 @@ impl NetworkInterface {
         // Ok(available_inode)
     }
 
-    #[deprecated(note = "probably bad to manipulate arbo from the outside like this")]
+    #[deprecated(note = "probably bad to manipulate itree from the outside like this")]
     pub fn promote_next_inode(&self, new: Ino) -> WhResult<()> {
-        let next = &mut self.arbo.write().next_ino;
+        let next = &mut self.itree.write().next_ino;
         new.ge(&next.start)
             .then_some(())
             .ok_or(WhError::InodeNotFound)
@@ -160,12 +160,12 @@ impl NetworkInterface {
     }
 
     #[must_use]
-    /// Add the requested entry to the arbo and inform the network
+    /// Add the requested entry to the itree and inform the network
     pub fn register_new_inode(&self, inode: Inode) -> Result<(), MakeInodeError> {
         let inode_id = inode.id.clone();
-        Arbo::n_write_lock(&self.arbo, "register_new_inode")?.add_inode(inode.clone())?;
+        ITree::n_write_lock(&self.itree, "register_new_inode")?.add_inode(inode.clone())?;
 
-        if !Arbo::is_local_only(inode_id) {
+        if !ITree::is_local_only(inode_id) {
             self.to_network_message_tx
                 .send(ToNetworkMessage::BroadcastMessage(MessageContent::Inode(
                     inode,
@@ -184,9 +184,9 @@ impl NetworkInterface {
         new_name: InodeName,
         overwrite: bool,
     ) -> Result<(), RenameError> {
-        let mut arbo = Arbo::n_write_lock(&self.arbo, "arbo_rename_file")?;
+        let mut itree = ITree::n_write_lock(&self.itree, "itree_rename_file")?;
 
-        arbo.mv_inode(parent, new_parent, name.as_ref(), new_name.clone())?;
+        itree.mv_inode(parent, new_parent, name.as_ref(), new_name.clone())?;
 
         self.to_network_message_tx
             .send(ToNetworkMessage::BroadcastMessage(MessageContent::Rename(
@@ -203,9 +203,10 @@ impl NetworkInterface {
         name: InodeName,
         new_name: InodeName,
     ) -> Result<(), RenameError> {
-        let mut arbo = Arbo::n_write_lock(&self.arbo, "arbo_rename_file")?;
+        let mut itree = ITree::n_write_lock(&self.itree, "itree_rename_file")?;
 
-        arbo.mv_inode(parent, new_parent, name.as_ref(), new_name)
+        itree
+            .mv_inode(parent, new_parent, name.as_ref(), new_name)
             .map_err(|err| match err {
                 WhError::InodeNotFound => RenameError::DestinationParentNotFound,
                 WhError::InodeIsNotADirectory => RenameError::DestinationParentNotFolder,
@@ -214,17 +215,17 @@ impl NetworkInterface {
     }
 
     #[must_use]
-    /// Get a new inode, add the requested entry to the arbo and inform the network
+    /// Get a new inode, add the requested entry to the itree and inform the network
     pub fn acknowledge_new_file(&self, inode: Inode, _id: InodeId) -> Result<(), MakeInodeError> {
-        let mut arbo = Arbo::n_write_lock(&self.arbo, "acknowledge_new_file")?;
-        arbo.add_inode(inode)
+        let mut itree = ITree::n_write_lock(&self.itree, "acknowledge_new_file")?;
+        itree.add_inode(inode)
     }
 
-    /// Remove [Inode] from the [Arbo] and inform the network of the removal
+    /// Remove [Inode] from the [ITree] and inform the network of the removal
     pub fn unregister_inode(&self, id: InodeId) -> Result<(), RemoveInodeError> {
-        Arbo::n_write_lock(&self.arbo, "unregister_inode")?.n_remove_inode(id)?;
+        ITree::n_write_lock(&self.itree, "unregister_inode")?.n_remove_inode(id)?;
 
-        if !Arbo::is_local_only(id) {
+        if !ITree::is_local_only(id) {
             self.to_network_message_tx
                 .send(ToNetworkMessage::BroadcastMessage(MessageContent::Remove(
                     id,
@@ -235,15 +236,15 @@ impl NetworkInterface {
         Ok(())
     }
 
-    /// Remove [Inode] from the [Arbo]
+    /// Remove [Inode] from the [ITree]
     pub fn acknowledge_unregister_inode(&self, id: InodeId) -> Result<Inode, RemoveInodeError> {
-        Arbo::n_write_lock(&self.arbo, "acknowledge_unregister_inode")?.n_remove_inode(id)
+        ITree::n_write_lock(&self.itree, "acknowledge_unregister_inode")?.n_remove_inode(id)
     }
 
     pub fn acknowledge_hosts_edition(&self, id: InodeId, hosts: Vec<Address>) -> WhResult<()> {
-        let mut arbo = Arbo::n_write_lock(&self.arbo, "acknowledge_hosts_edition")?;
+        let mut itree = ITree::n_write_lock(&self.itree, "acknowledge_hosts_edition")?;
 
-        arbo.n_set_inode_hosts(id, hosts) // TODO - if unable to update for some reason, should be passed to the background worker
+        itree.n_set_inode_hosts(id, hosts) // TODO - if unable to update for some reason, should be passed to the background worker
     }
 
     pub fn send_file(&self, inode: InodeId, data: Vec<u8>, to: Address) -> io::Result<()> {
@@ -257,8 +258,8 @@ impl NetworkInterface {
     }
 
     fn affect_write_locally(&self, id: InodeId, new_size: usize) -> WhResult<Metadata> {
-        let mut arbo = Arbo::n_write_lock(&self.arbo, "network_interface.affect_write_locally")?;
-        let inode = arbo.n_get_inode_mut(id)?;
+        let mut itree = ITree::n_write_lock(&self.itree, "network_interface.affect_write_locally")?;
+        let inode = itree.n_get_inode_mut(id)?;
         let new_size = (new_size as u64).max(inode.meta.size);
         inode.meta.size = new_size as u64;
         inode.meta.blocks = ((new_size + BLOCK_SIZE - 1) / BLOCK_SIZE) as u64;
@@ -275,7 +276,7 @@ impl NetworkInterface {
     pub fn write_file(&self, id: InodeId, new_size: usize) -> WhResult<()> {
         let meta = self.affect_write_locally(id, new_size)?;
 
-        if !Arbo::is_local_only(id) {
+        if !ITree::is_local_only(id) {
             self.to_network_message_tx
                 .send(ToNetworkMessage::BroadcastMessage(
                     MessageContent::RevokeFile(id, self.hostname.clone(), meta),
@@ -293,24 +294,24 @@ impl NetworkInterface {
     }
 
     pub fn add_inode_hosts(&self, ino: InodeId, hosts: Vec<Address>) -> WhResult<()> {
-        Arbo::n_write_lock(&self.arbo, "network_interface::update_hosts")?
+        ITree::n_write_lock(&self.itree, "network_interface::update_hosts")?
             .n_add_inode_hosts(ino, hosts)?;
         self.update_remote_hosts(ino)
     }
 
     pub fn update_hosts(&self, ino: InodeId, hosts: Vec<Address>) -> WhResult<()> {
-        Arbo::n_write_lock(&self.arbo, "network_interface::update_hosts")?
+        ITree::n_write_lock(&self.itree, "network_interface::update_hosts")?
             .n_set_inode_hosts(ino, hosts)?;
         self.update_remote_hosts(ino)
     }
 
     fn update_remote_hosts(&self, ino: InodeId) -> WhResult<()> {
-        let inode = Arbo::n_read_lock(&self.arbo, "update_remote_hosts")?
+        let inode = ITree::n_read_lock(&self.itree, "update_remote_hosts")?
             .n_get_inode(ino)?
             .clone();
 
         if let FsEntry::File(hosts) = &inode.entry {
-            if !Arbo::is_local_only(inode.id) {
+            if !ITree::is_local_only(inode.id) {
                 self.to_network_message_tx
                     .send(ToNetworkMessage::BroadcastMessage(
                         MessageContent::EditHosts(inode.id, hosts.clone()),
@@ -326,17 +327,18 @@ impl NetworkInterface {
     }
 
     pub fn aknowledge_new_hosts(&self, id: InodeId, new_hosts: Vec<Address>) -> io::Result<()> {
-        Arbo::write_lock(&self.arbo, "aknowledge_new_hosts")?.add_inode_hosts(id, new_hosts)
+        ITree::write_lock(&self.itree, "aknowledge_new_hosts")?.add_inode_hosts(id, new_hosts)
     }
 
     pub fn aknowledge_hosts_removal(&self, id: InodeId, new_hosts: Vec<Address>) -> io::Result<()> {
-        Arbo::write_lock(&self.arbo, "aknowledge_hosts_removal")?.remove_inode_hosts(id, new_hosts)
+        ITree::write_lock(&self.itree, "aknowledge_hosts_removal")?
+            .remove_inode_hosts(id, new_hosts)
     }
 
     pub fn update_metadata(&self, id: InodeId, meta: Metadata) -> WhResult<()> {
-        let mut arbo = Arbo::n_write_lock(&self.arbo, "network_interface::update_metadata")?;
+        let mut itree = ITree::n_write_lock(&self.itree, "network_interface::update_metadata")?;
         let mut fixed_meta = meta;
-        let ref_meta = &arbo.n_get_inode(id)?.meta;
+        let ref_meta = &itree.n_get_inode(id)?.meta;
 
         // meta's SystemTime is fragile: it can be silently corrupted such that
         // serialization leads to a failure we can't deal with
@@ -356,10 +358,10 @@ impl NetworkInterface {
             fixed_meta.mtime = ref_meta.mtime;
         }
 
-        arbo.n_set_inode_meta(id, fixed_meta.clone())?;
-        drop(arbo);
+        itree.n_set_inode_meta(id, fixed_meta.clone())?;
+        drop(itree);
 
-        if !Arbo::is_local_only(id) {
+        if !ITree::is_local_only(id) {
             self.to_network_message_tx
                 .send(ToNetworkMessage::BroadcastMessage(
                     MessageContent::EditMetadata(id, fixed_meta),
@@ -405,7 +407,7 @@ impl NetworkInterface {
     //         .expect("register_to_others: unable to update modification on the network thread");
     // }
 
-    // pub async fn request_arbo(&self, to: Address) -> io::Result<bool> {
+    // pub async fn request_itree(&self, to: Address) -> io::Result<bool> {
     //     let callback = self.callbacks.create(Callback::PullFs)?;
 
     //     self.to_network_message_tx
@@ -413,7 +415,7 @@ impl NetworkInterface {
     //             (MessageContent::RequestFs, None),
     //             vec![to],
     //         ))
-    //         .expect("request_arbo: unable to update modification on the network thread");
+    //         .expect("request_itree: unable to update modification on the network thread");
 
     //     self.callbacks.async_wait_for(callback).await
     // }
@@ -430,15 +432,15 @@ impl NetworkInterface {
     //     }
     // }
 
-    pub fn send_arbo(&self, to: Address, global_config_bytes: Vec<u8>) -> io::Result<()> {
-        let arbo = Arbo::read_lock(&self.arbo, "send_arbo")?;
-        let mut entries = arbo.get_raw_entries();
+    pub fn send_itree(&self, to: Address, global_config_bytes: Vec<u8>) -> io::Result<()> {
+        let itree = ITree::read_lock(&self.itree, "send_itree")?;
+        let mut entries = itree.get_raw_entries();
 
         //Remove ignored entries
-        entries.retain(|ino, _| !Arbo::is_local_only(*ino));
+        entries.retain(|ino, _| !ITree::is_local_only(*ino));
         entries.entry(1u64).and_modify(|inode| {
             if let FsEntry::Directory(childrens) = &mut inode.entry {
-                childrens.retain(|x| !Arbo::is_local_only(*x));
+                childrens.retain(|x| !ITree::is_local_only(*x));
             }
         });
 
@@ -469,7 +471,7 @@ impl NetworkInterface {
                     ),
                     vec![to],
                 ))
-                .expect("send_arbo: unable to update modification on the network thread");
+                .expect("send_itree: unable to update modification on the network thread");
             Ok(())
         } else {
             Err(std::io::Error::new(
@@ -489,7 +491,7 @@ impl NetworkInterface {
             .retain(|p| p.hostname != addr);
 
         log::debug!("Disconnecting {addr}. Removing from inodes hosts");
-        for inode in Arbo::write_lock(&self.arbo, "disconnect_peer")?.inodes_mut() {
+        for inode in ITree::write_lock(&self.itree, "disconnect_peer")?.inodes_mut() {
             if let FsEntry::File(hosts) = &mut inode.entry {
                 hosts.retain(|h| *h != addr);
             }

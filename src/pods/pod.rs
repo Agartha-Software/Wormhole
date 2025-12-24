@@ -11,12 +11,12 @@ use crate::fuse::fuse_impl::mount_fuse;
 use crate::ipc::answers::{InspectInfo, PeerInfo};
 use crate::network::message::{FromNetworkMessage, MessageContent, ToNetworkMessage};
 use crate::network::HandshakeError;
-use crate::pods::arbo::{FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_INO, LOCK_TIMEOUT, ROOT};
 #[cfg(target_os = "linux")]
 use crate::pods::disk_managers::unix_disk_manager::UnixDiskManager;
 #[cfg(target_os = "windows")]
 use crate::pods::disk_managers::windows_disk_manager::WindowsDiskManager;
 use crate::pods::disk_managers::DiskManager;
+use crate::pods::itree::{FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_INO, LOCK_TIMEOUT, ROOT};
 use crate::pods::network::redundancy::redundancy_worker;
 use crate::pods::whpath::WhPath;
 #[cfg(target_os = "windows")]
@@ -32,12 +32,12 @@ use tokio::task::JoinHandle;
 use crate::network::{message::Address, peer_ipc::PeerIPC, server::Server};
 
 use crate::pods::{
-    arbo::{generate_arbo, Arbo},
     filesystem::fs_interface::FsInterface,
+    itree::{generate_itree, ITree},
     network::network_interface::NetworkInterface,
 };
 
-use super::arbo::{InodeId, ARBO_FILE_FNAME, ARBO_FILE_INO, GLOBAL_CONFIG_INO};
+use super::itree::{InodeId, GLOBAL_CONFIG_INO, ITREE_FILE_FNAME, ITREE_FILE_INO};
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -68,7 +68,7 @@ pub struct PodPrototype {
     pub mountpoint: PathBuf,
 }
 
-type ConnectionInfo = (Arbo, Vec<PeerIPC>);
+type ConnectionInfo = (ITree, Vec<PeerIPC>);
 
 custom_error! {pub PodInfoError
     WhError{source: WhError} = "{source}",
@@ -118,7 +118,7 @@ async fn try_to_connect_prototype(
                                 protoype.hostname = new_hostname;
                                 protoype.global_config = accept.config;
 
-                                return Ok((accept.arbo, other_ipc));
+                                return Ok((accept.itree, other_ipc));
                             }
 
                             Err(e) => log::error!("a peer failed: {e}"),
@@ -136,14 +136,14 @@ async fn try_to_connect_prototype(
         }
     }
     Ok((
-        generate_arbo(&protoype.mountpoint, &protoype.hostname).unwrap_or(Arbo::new()),
+        generate_itree(&protoype.mountpoint, &protoype.hostname).unwrap_or(ITree::new()),
         vec![],
     ))
 }
 
 custom_error! {pub PodStopError
     WhError{source: WhError} = "{source}",
-    ArboSavingFailed{source: io::Error} = "Could not write arbo to disk: {source}",
+    ITreeSavingFailed{source: io::Error} = "Could not write itree to disk: {source}",
     PodNotRunning = "No pod with this name was found running.",
     FileNotReadable{file: InodeId, reason: String} = "Could not read file from disk: ({file}) {reason}",
     FileNotSent{file: InodeId} = "No pod was able to receive this file before stopping: ({file})",
@@ -153,17 +153,17 @@ custom_error! {pub PodStopError
     DiskManagerStopFailed{e: io::Error} = "Unable to stop the disk manager properly. Your files are still on the system folder: ('.'mount_path). {e}",
 }
 
-/// Create all the directories present in Arbo. (not the files)
+/// Create all the directories present in ITree. (not the files)
 ///
 /// Required at setup to resolve issue #179
 /// (files pulling need the parent folder to be already present)
-fn create_all_dirs(arbo: &Arbo, from: InodeId, disk: &dyn DiskManager) -> io::Result<()> {
-    let from = arbo.n_get_inode(from).map_err(|e| e.into_io())?;
+fn create_all_dirs(itree: &ITree, from: InodeId, disk: &dyn DiskManager) -> io::Result<()> {
+    let from = itree.n_get_inode(from).map_err(|e| e.into_io())?;
 
     return match &from.entry {
         FsEntry::File(_) => Ok(()),
         FsEntry::Directory(children) => {
-            let current_path = arbo
+            let current_path = itree
                 .n_get_path_from_inode_id(from.id)
                 .map_err(|e| e.into_io())?;
 
@@ -179,7 +179,7 @@ fn create_all_dirs(arbo: &Arbo, from: InodeId, disk: &dyn DiskManager) -> io::Re
             }
 
             for child in children {
-                create_all_dirs(arbo, *child, disk)?
+                create_all_dirs(itree, *child, disk)?
             }
             Ok(())
         }
@@ -191,7 +191,7 @@ impl Pod {
         log::trace!("mount point {:?}", prototype.mountpoint);
         let (receiver_in, receiver_out) = mpsc::unbounded_channel();
 
-        let (arbo, peers) = try_to_connect_prototype(
+        let (itree, peers) = try_to_connect_prototype(
             &mut prototype,
             // NOTE - temporary fix
             // made to help with tests and debug
@@ -201,7 +201,7 @@ impl Pod {
         )
         .await?;
 
-        Self::realize(prototype, server, receiver_in, receiver_out, arbo, peers)
+        Self::realize(prototype, server, receiver_in, receiver_out, itree, peers)
     }
 
     fn realize(
@@ -209,7 +209,7 @@ impl Pod {
         server: Arc<Server>,
         receiver_in: UnboundedSender<FromNetworkMessage>,
         receiver_out: UnboundedReceiver<FromNetworkMessage>,
-        arbo: Arbo,
+        itree: ITree,
         peers: Vec<PeerIPC>,
     ) -> io::Result<Self> {
         let (senders_in, senders_out) = mpsc::unbounded_channel();
@@ -221,11 +221,11 @@ impl Pod {
         #[cfg(target_os = "windows")]
         let disk_manager = Box::new(WindowsDiskManager::new(&proto.mountpoint)?);
 
-        create_all_dirs(&arbo, ROOT, disk_manager.as_ref())
+        create_all_dirs(&itree, ROOT, disk_manager.as_ref())
             .inspect_err(|e| log::error!("unable to create_all_dirs: {e}"))
             .map_err(|e| std::io::Error::new(e.kind(), format!("create_all_dirs: {e}")))?;
 
-        if let Ok(perms) = arbo
+        if let Ok(perms) = itree
             .get_inode(GLOBAL_CONFIG_INO)
             .map(|inode| inode.meta.perm)
         {
@@ -243,11 +243,11 @@ impl Pod {
                 })?;
         }
 
-        let arbo: Arc<RwLock<Arbo>> = Arc::new(RwLock::new(arbo));
+        let itree: Arc<RwLock<ITree>> = Arc::new(RwLock::new(itree));
         let global = Arc::new(RwLock::new(proto.global_config));
 
         let network_interface = Arc::new(NetworkInterface::new(
-            arbo.clone(),
+            itree.clone(),
             proto.public_url,
             proto.bound_socket,
             proto.hostname,
@@ -260,7 +260,7 @@ impl Pod {
         let fs_interface = Arc::new(FsInterface::new(
             network_interface.clone(),
             disk_manager,
-            arbo.clone(),
+            itree.clone(),
         ));
 
         // Start ability to recieve messages
@@ -313,7 +313,7 @@ impl Pod {
     // SECTION getting info from the pod (for the cli)
 
     pub fn get_file_hosts(&self, path: &WhPath) -> Result<Vec<Address>, PodInfoError> {
-        let binding = Arbo::n_read_lock(&self.network_interface.arbo, "Pod::get_info")?;
+        let binding = ITree::n_read_lock(&self.network_interface.itree, "Pod::get_info")?;
         let entry = &binding
             .get_inode_from_path(path)
             .map_err(|_| PodInfoError::FileNotFound)?
@@ -331,10 +331,10 @@ impl Pod {
         &self,
         path: Option<&WhPath>,
     ) -> Result<CliHostTree, PodInfoError> {
-        let arbo = Arbo::n_read_lock(&self.network_interface.arbo, "Pod::get_info")?;
+        let itree = ITree::n_read_lock(&self.network_interface.itree, "Pod::get_info")?;
 
         Ok(CliHostTree {
-            lines: arbo.get_file_tree_and_hosts(path)?,
+            lines: itree.get_file_tree_and_hosts(path)?,
         })
     }
 
@@ -384,13 +384,14 @@ impl Pod {
     }
 
     /// Gets every file hosted by this pod only and sends them to other pods
-    async fn send_files_when_stopping(&self, arbo: &Arbo, peers: Vec<Address>) {
+    async fn send_files_when_stopping(&self, itree: &ITree, peers: Vec<Address>) {
         futures_util::future::join_all(
-            arbo.files_hosted_only_by(&self.network_interface.hostname.clone())
+            itree
+                .files_hosted_only_by(&self.network_interface.hostname.clone())
                 .filter_map(|inode| {
                     if inode.id == GLOBAL_CONFIG_INO
                         || inode.id == LOCAL_CONFIG_INO
-                        || inode.id == ARBO_FILE_INO
+                        || inode.id == ITREE_FILE_INO
                     {
                         None
                     } else {
@@ -420,7 +421,7 @@ impl Pod {
             .await
             .inspect_err(|err| log::error!("Couldn't save the pod data: {err}"));
 
-        let arbo = Arbo::n_read_lock(&self.network_interface.arbo, "Pod::Pod::stop(1)")?;
+        let itree = ITree::n_read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
 
         let peers: Vec<Address> = self
             .peers
@@ -429,9 +430,9 @@ impl Pod {
             .map(|peer| peer.hostname.clone())
             .collect();
 
-        self.send_files_when_stopping(&arbo, peers).await;
-        let arbo_bin = bincode::serialize(&*arbo).expect("can't serialize arbo to bincode");
-        drop(arbo);
+        self.send_files_when_stopping(&itree, peers).await;
+        let itree_bin = bincode::serialize(&*itree).expect("can't serialize itree to bincode");
+        drop(itree);
 
         self.network_interface
             .to_network_message_tx
@@ -477,19 +478,19 @@ impl Pod {
             .inspect(|_| log::error!("await error: peer_broadcast_handle"));
         *peers.write() = Vec::new(); // dropping PeerIPCs
 
-        let arbo_path = WhPath::try_from(ARBO_FILE_FNAME).unwrap();
+        let itree_path = WhPath::try_from(ITREE_FILE_FNAME).unwrap();
 
-        if !fs_interface.disk.file_exists(&arbo_path) {
+        if !fs_interface.disk.file_exists(&itree_path) {
             fs_interface
                 .disk
-                .new_file(&arbo_path, 0o600) // REVIEW - permissions value ?
-                .map_err(|io| PodStopError::ArboSavingFailed { source: io })?;
+                .new_file(&itree_path, 0o600) // REVIEW - permissions value ?
+                .map_err(|io| PodStopError::ITreeSavingFailed { source: io })?;
         }
 
         fs_interface
             .disk
-            .write_file(&WhPath::try_from(ARBO_FILE_FNAME).unwrap(), &arbo_bin, 0)
-            .map_err(|io| PodStopError::ArboSavingFailed { source: io })?;
+            .write_file(&WhPath::try_from(ITREE_FILE_FNAME).unwrap(), &itree_bin, 0)
+            .map_err(|io| PodStopError::ITreeSavingFailed { source: io })?;
 
         let mut fs_interface =
             Arc::try_unwrap(fs_interface).expect("fs_interface not released from every thread");

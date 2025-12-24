@@ -3,7 +3,7 @@ use std::{net::IpAddr, path::PathBuf};
 use crate::{
     cli::config_clap::ConfigCommand,
     ipc::service::SOCKET_DEFAULT_NAME,
-    pods::arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
+    pods::itree::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
 };
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
