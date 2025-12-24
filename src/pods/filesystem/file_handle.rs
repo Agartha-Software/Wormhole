@@ -9,7 +9,7 @@ use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::{
     error::{WhError, WhResult},
-    pods::arbo::{InodeId, LOCK_TIMEOUT},
+    pods::itree::{InodeId, LOCK_TIMEOUT},
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]

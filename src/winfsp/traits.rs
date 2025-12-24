@@ -1,7 +1,6 @@
 use crate::{
     error::WhError,
     pods::{
-        arbo::Metadata,
         filesystem::{
             attrs::SetAttrError,
             file_handle::{AccessMode, OpenFlags},
@@ -13,6 +12,7 @@ use crate::{
             rename::RenameError,
             write::WriteError,
         },
+        itree::Metadata,
         network::pull_file::PullError,
         whpath::{InodeNameError, WhPathError},
     },

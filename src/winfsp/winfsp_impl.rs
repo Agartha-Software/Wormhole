@@ -24,11 +24,11 @@ use winfsp_sys::{FspCleanupDelete, FILE_ACCESS_RIGHTS};
 use crate::{
     error::WhError,
     pods::{
-        arbo::{Arbo, InodeId},
         filesystem::{
             file_handle::{AccessMode, OpenFlags},
             fs_interface::{FsInterface, SimpleFileType},
         },
+        itree::{ITree, InodeId},
         whpath::{ConversionError, InodeName, WhPath, WhPathError},
     },
 };
@@ -83,9 +83,9 @@ impl FSPController {
         context: &WormholeHandle,
         file_info: &mut winfsp::filesystem::FileInfo,
     ) -> winfsp::Result<()> {
-        let arbo = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::get_file_info")?;
+        let itree = ITree::read_lock(&self.fs_interface.itree, "winfsp::get_file_info")?;
 
-        match arbo.get_inode(context.ino) {
+        match itree.get_inode(context.ino) {
             Ok(inode) => {
                 *file_info = (&inode.meta).into();
                 Ok(())
@@ -150,7 +150,7 @@ impl FileSystemContext for FSPController {
         let path = WhPath::from_fake_absolute(file_name)?;
 
         let file_info: FileInfo =
-            (&Arbo::read_lock(&self.fs_interface.arbo, "get_security_by_name")?
+            (&ITree::read_lock(&self.fs_interface.itree, "get_security_by_name")?
                 .get_inode_from_path(&path)
                 .inspect_err(|e| log::trace!("{:?}:{:?}", &path, e))?
                 .meta)
@@ -197,7 +197,7 @@ impl FileSystemContext for FSPController {
         log::trace!("open({display_name})");
 
         let path = WhPath::from_fake_absolute(file_name)?;
-        let inode = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::open")?
+        let inode = ITree::read_lock(&self.fs_interface.itree, "winfsp::open")?
             .get_inode_from_path(&path)
             .inspect_err(|e| log::warn!("open({display_name})::{e};"))
             .cloned();
@@ -253,18 +253,18 @@ impl FileSystemContext for FSPController {
         let path = WhPath::from_fake_absolute(file_name)?;
         let name: InodeName = (&path).into();
 
-        let arbo = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::create")?;
+        let itree = ITree::read_lock(&self.fs_interface.itree, "winfsp::create")?;
 
-        if let Ok(_) = arbo.get_inode_from_path(&path) {
+        if let Ok(_) = itree.get_inode_from_path(&path) {
             return Err(winfsp::FspError::WIN32(ERROR_ALREADY_EXISTS));
         }
 
-        let parent = arbo
+        let parent = itree
             .get_inode_from_path(&path.parent().unwrap_or(WhPath::root()))
             .map_err(|_| STATUS_OBJECT_NAME_NOT_FOUND)?
             .id;
 
-        drop(arbo);
+        drop(itree);
         let (inode, handle) = self
             .fs_interface
             .create(
@@ -439,12 +439,12 @@ impl FileSystemContext for FSPController {
         );
 
         let path = WhPath::from_fake_absolute(file_name)?;
-        let parent = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::rename")?
+        let parent = ITree::read_lock(&self.fs_interface.itree, "winfsp::rename")?
             .get_inode_from_path(&path.parent().unwrap_or(WhPath::root()))?
             .id;
 
         let new_path = WhPath::from_fake_absolute(new_file_name)?;
-        let new_parent = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::rename")?
+        let new_parent = ITree::read_lock(&self.fs_interface.itree, "winfsp::rename")?
             .get_inode_from_path(&new_path.parent().unwrap_or(WhPath::root()))?
             .id;
 
@@ -603,7 +603,7 @@ impl FileSystemContext for FSPController {
             buffer.len(),
             offset
         );
-        let size = Arbo::read_lock(&self.fs_interface.arbo, "winfsp::write")?
+        let size = ITree::read_lock(&self.fs_interface.itree, "winfsp::write")?
             .get_inode(context.ino)?
             .meta
             .size;

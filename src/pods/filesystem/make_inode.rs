@@ -3,8 +3,8 @@ use custom_error::custom_error;
 use crate::{
     error::WhError,
     pods::{
-        arbo::{Arbo, FsEntry, Inode},
         filesystem::permissions::has_write_perm,
+        itree::{FsEntry, ITree, Inode},
         whpath::InodeName,
     },
 };
@@ -71,7 +71,7 @@ impl FsInterface {
             SimpleFileType::Directory => FsEntry::Directory(Vec::new()),
         };
 
-        let special_ino = Arbo::get_special(name.as_ref(), parent_ino);
+        let special_ino = ITree::get_special(name.as_ref(), parent_ino);
         if special_ino.is_some() && kind != SimpleFileType::File {
             return Err(MakeInodeError::ProtectedNameIsFolder);
         }
@@ -82,20 +82,20 @@ impl FsInterface {
         let new_inode = Inode::new(name, parent_ino, new_inode_id, new_entry, permissions);
 
         let new_path = {
-            let arbo = Arbo::n_read_lock(&self.arbo, "make inode")?;
+            let itree = ITree::n_read_lock(&self.itree, "make inode")?;
 
-            let parent = arbo.n_get_inode(parent_ino)?;
+            let parent = itree.n_get_inode(parent_ino)?;
 
             if !has_write_perm(parent.meta.perm) || !has_write_perm(parent.meta.perm) {
                 return Err(MakeInodeError::PermissionDenied);
             }
             //check if already exist
-            match arbo.n_get_inode_child_by_name(&parent, new_inode.name.as_ref()) {
+            match itree.n_get_inode_child_by_name(&parent, new_inode.name.as_ref()) {
                 Ok(_) => return Err(MakeInodeError::AlreadyExist),
                 Err(WhError::InodeNotFound) => {}
                 Err(err) => return Err(MakeInodeError::WhError { source: err }),
             }
-            let mut new_path = arbo.n_get_path_from_inode_id(parent_ino)?;
+            let mut new_path = itree.n_get_path_from_inode_id(parent_ino)?;
             new_path.push((&new_inode.name).into());
             new_path
         };
