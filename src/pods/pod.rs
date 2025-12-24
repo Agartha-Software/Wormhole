@@ -200,6 +200,7 @@ impl Pod {
         global_config: GlobalConfig,
         local_config: LocalConfig,
         mountpoint: &Path,
+        allow_other_users: bool,
         server: Arc<Server>,
     ) -> io::Result<Self> {
         let global_config = global_config;
@@ -242,10 +243,14 @@ impl Pod {
             }
         };
 
-        Self::realize(proto, server).await
+        Self::realize(proto, allow_other_users, server).await
     }
 
-    async fn realize(proto: PodPrototype, server: Arc<Server>) -> io::Result<Self> {
+    async fn realize(
+        proto: PodPrototype,
+        allow_other_users: bool,
+        server: Arc<Server>,
+    ) -> io::Result<Self> {
         let (senders_in, senders_out) = mpsc::unbounded_channel();
 
         let (redundancy_tx, redundancy_rx) = mpsc::unbounded_channel();
@@ -352,7 +357,7 @@ impl Pod {
             mountpoint: proto.mountpoint.clone(),
             peers,
             #[cfg(target_os = "linux")]
-            fuse_handle: mount_fuse(&proto.mountpoint, fs_interface.clone())
+            fuse_handle: mount_fuse(&proto.mountpoint, allow_other_users, fs_interface.clone())
                 .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fuse: {e}")))?,
             #[cfg(target_os = "windows")]
             fsp_host: mount_fsp(&proto.mountpoint, fs_interface.clone())

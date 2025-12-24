@@ -1,0 +1,100 @@
+#!/bin/bash
+#
+# Mount helper for 'fuse.wormhole'
+# Called by /sbin/mount.fuse via the 'subtype=wormhole' option
+#
+set -e
+
+WORMHOLE_CLI="/bin/wormhole"
+LOG_FILE="/tmp/mount_helper.log"
+
+echo "--- mount.fuse.wormhole SCRIPT START ---" >> $LOG_FILE
+echo "Args: $*" >> $LOG_FILE
+
+# --- 1. Initialize the default values ---
+POD_NAME="default_pod"
+PORT="5000"
+MOUNT_POINT="$2" # The mount point is always $2
+OPTIONS_STRING=""
+
+# --- 2. Parse options ---
+# We ignore the first two arguments (dev and mountpoint)
+shift 2
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -o)
+            shift
+            OPTIONS_STRING="$1"
+            ;;
+        -o*)
+            OPTIONS_STRING="${1#-o}"
+            ;;
+        *)
+            ;;
+    esac
+    shift
+done
+
+echo "Parsing options text: $OPTIONS_STRING" >> $LOG_FILE
+
+# Change the separator (IFS) to comma for the loop
+OLD_IFS=$IFS
+IFS=','
+for opt in $OPTIONS_STRING; do
+    # Separate the key and the value
+    key=$(echo "$opt" | cut -d'=' -f1)
+    value=$(echo "$opt" | cut -d'=' -f2)
+
+    case "$key" in
+        pod_name)
+            POD_NAME=$value
+            ;;
+        port)
+            PORT=$value
+            ;;
+        *)
+            ;;
+    esac
+done
+# Restore the old separator
+IFS=$OLD_IFS
+
+echo "Parsed values:" >> $LOG_FILE
+echo "  POD_NAME: $POD_NAME" >> $LOG_FILE
+echo "  PORT: $PORT" >> $LOG_FILE
+echo "  MOUNT_POINT: $MOUNT_POINT" >> $LOG_FILE
+
+# --- 3. Preventive cleanup (FIX "Pod already exist") ---
+# Ask wormhole to remove the pod if it already exists (cleanup from a previous mount)
+echo "Cleaning up potential stale pod: $POD_NAME" >> $LOG_FILE
+$WORMHOLE_CLI remove "$POD_NAME" >> $LOG_FILE 2>&1 || true
+fusermount -u -z "$MOUNT_POINT" 2>/dev/null || true
+# Wait a short moment to ensure the port is freed
+sleep 0.5
+
+cat << EOF > "$MOUNT_POINT/.global_config.toml"
+[general]
+name = "$POD_NAME"
+entrypoints = []
+hosts = []
+
+[redundancy]
+number = 0
+EOF
+echo "Created config with redundancy=1" >> $LOG_FILE
+# --------------------------------------------------------------------
+
+# --- 4. Execute the mount command ---
+echo "Running: $WORMHOLE_CLI new $POD_NAME -p $PORT -m $MOUNT_POINT --allow-other-users" >> $LOG_FILE
+
+# Redirect stderr to stdout so it is captured in the log
+if $WORMHOLE_CLI new "$POD_NAME" -p "$PORT" -m "$MOUNT_POINT" --allow-other-users >> $LOG_FILE 2>&1; then
+    echo "Mount successful." >> $LOG_FILE
+    echo "--- mount.fuse.wormhole SCRIPT SUCCESS ---" >> $LOG_FILE
+    exit 0
+else
+    echo "ERROR: Failed to create/mount pod." >> $LOG_FILE
+    echo "--- mount.fuse.wormhole SCRIPT FAILED ---" >> $LOG_FILE
+    exit 1
+fi
