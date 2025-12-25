@@ -223,9 +223,7 @@ impl Pod {
                     // made to help with tests and debug
                     // choice not to fail should later be supported by the cli
                     log::error!("No peers answered. Stopping.");
-                    return Err(io::Error::other(
-                        "None of the specified peers could answer",
-                    ));
+                    return Err(io::Error::other("None of the specified peers could answer"));
                 }
                 let itree = generate_itree(mountpoint, &local_config.general.hostname)
                     .unwrap_or(ITree::new());
