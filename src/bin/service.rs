@@ -22,7 +22,7 @@ use std::collections::HashMap;
 use std::io::IsTerminal;
 use std::process::ExitCode;
 use tokio::sync::mpsc::{self, UnboundedSender};
-use wormhole::pods::save::load_saved_pods;
+use wormhole::pods::save::{delete_saved_pods, load_saved_pods};
 
 use wormhole::ipc::service::start_commands_listeners;
 use wormhole::pods::pod::Pod;
@@ -40,6 +40,8 @@ struct ServiceArgs {
     pub ip: Option<String>,
     #[arg(short)]
     pub socket: Option<String>,
+    #[arg(short, long)]
+    pub clean: bool,
 }
 
 #[tokio::main]
@@ -61,9 +63,16 @@ async fn main() -> ExitCode {
         }
     }
 
-    if let Err(err) = load_saved_pods(&mut pods).await {
-        eprintln!("Failed to load saved pods: {:?}", err);
-        return ExitCode::FAILURE;
+    if args.clean {
+        if let Err(err) = delete_saved_pods() {
+            eprintln!("Failed to delete saved pods: {:?}", err);
+            return ExitCode::FAILURE;
+        }
+    } else {
+        if let Err(err) = load_saved_pods(&mut pods).await {
+            eprintln!("Failed to load saved pods: {:?}", err);
+            return ExitCode::FAILURE;
+        }
     }
 
     let terminal_handle = if std::io::stdout().is_terminal() || args.nodeamon {

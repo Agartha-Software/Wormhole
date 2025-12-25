@@ -48,6 +48,16 @@ impl Pod {
     }
 }
 
+pub fn delete_saved_pods() -> io::Result<()> {
+    for dir_entry in local_data_path().read_dir()? {
+        let path = dir_entry?.path();
+        if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("bak") {
+            fs::remove_file(path)?;
+        }
+    }
+    Ok(())
+}
+
 pub async fn load_saved_pods(pods: &mut HashMap<String, Pod>) -> io::Result<()> {
     let path = local_data_path();
 
@@ -56,14 +66,15 @@ pub async fn load_saved_pods(pods: &mut HashMap<String, Pod>) -> io::Result<()> 
     }
 
     for dir_entry in path.read_dir()?.filter_map(Result::ok) {
-        log::trace!("Loading pod backup: {dir_entry:?}");
+        let path = dir_entry.path();
 
-        if dir_entry.path().extension().and_then(OsStr::to_str) != Some("bak") {
+        log::trace!("Loading pod backup: {:?}", path.file_stem());
+        if path.extension().and_then(OsStr::to_str) != Some("bak") {
             log::trace!("Wrong extension");
             continue;
         }
 
-        let path = dir_entry.path();
+        let path = path;
         let bytes = match fs::read(&path) {
             Ok(bytes) => bytes,
             Err(err) => {
