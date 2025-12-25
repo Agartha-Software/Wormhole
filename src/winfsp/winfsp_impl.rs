@@ -21,17 +21,16 @@ use winfsp::{
 };
 use winfsp_sys::{FspCleanupDelete, FILE_ACCESS_RIGHTS};
 
+use crate::pods::filesystem::file_handle::{AccessMode, FileHandleManager, OpenFlags};
 use crate::{
     error::WhError,
     pods::{
         filesystem::{
-            file_handle::{AccessMode, OpenFlags},
             fs_interface::{FsInterface, SimpleFileType},
         },
         itree::{ITree, InodeId},
         whpath::{ConversionError, InodeName, WhPath, WhPathError},
     },
-    whpath::{ConversionError, InodeName, WhPath, WhPathError},
 };
 
 #[derive(PartialEq, Debug)]
