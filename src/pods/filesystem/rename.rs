@@ -5,9 +5,9 @@ use custom_error::custom_error;
 use crate::{
     error::{WhError, WhResult},
     pods::{
-        itree::{ITree, InodeId, Metadata},
         filesystem::flush::FlushError,
         filesystem::permissions::has_write_perm,
+        itree::{ITree, InodeId, Metadata},
         whpath::{InodeName, WhPath},
     },
 };

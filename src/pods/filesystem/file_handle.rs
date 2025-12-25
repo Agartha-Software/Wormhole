@@ -10,8 +10,8 @@ use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use crate::{
     error::{WhError, WhResult},
     pods::{
-        itree::{InodeId, LOCK_TIMEOUT},
         filesystem::diffs::Signature,
+        itree::{InodeId, LOCK_TIMEOUT},
     },
 };
 

@@ -2,7 +2,6 @@ use crate::{
     error::WhError,
     network::message::{Address, MessageContent, ToNetworkMessage},
     pods::{
-        itree::{ITree, FsEntry, Ino, Metadata},
         filesystem::{
             attrs::AcknoledgeSetAttrError,
             diffs::{Delta, DiffError, Dlt, Sig, Signature},
@@ -11,6 +10,7 @@ use crate::{
             read::ReadError,
             write::WriteError,
         },
+        itree::{FsEntry, ITree, Ino, Metadata},
         network::pull_file::PullError,
     },
 };

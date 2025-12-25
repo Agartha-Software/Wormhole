@@ -9,8 +9,8 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::{
     error::WhResult,
     pods::{
-        itree::{ITreeIndex, Ino, Inode, InodeId, Metadata},
         filesystem::diffs::{Delta, Signature},
+        itree::{ITreeIndex, Ino, Inode, InodeId, Metadata},
         whpath::InodeName,
     },
 };

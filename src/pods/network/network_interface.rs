@@ -21,8 +21,8 @@ use parking_lot::RwLock;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
-use crate::pods::itree::{FsEntry, Metadata};
 use crate::pods::filesystem::{remove_inode::RemoveInodeError, rename::RenameError};
+use crate::pods::itree::{FsEntry, Metadata};
 
 use crate::pods::{
     filesystem::fs_interface::FsInterface,
