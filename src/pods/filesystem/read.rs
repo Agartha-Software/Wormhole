@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use crate::pods::arbo::{Arbo, FsEntry, Ino};
 use crate::pods::filesystem::file_handle::{AccessMode, FileHandle, FileHandleManager, UUID};
 use crate::pods::filesystem::File;
+use crate::pods::itree::{FsEntry, ITree, Ino};
 use crate::pods::network::pull_file::PullError;
-use crate::{error::WhError, pods::arbo::InodeId};
+use crate::{error::WhError, pods::itree::InodeId};
 use custom_error::custom_error;
 use parking_lot::RwLockReadGuard;
 
@@ -68,7 +68,7 @@ impl FsInterface {
     ) -> Result<usize, ReadError> {
         match self.network_interface.pull_file_sync(ino)? {
             None => Ok(self.disk.read_file(
-                &Arbo::n_read_lock(&self.arbo, "read_file")?.n_get_path_from_inode_id(ino)?,
+                &ITree::n_read_lock(&self.itree, "read_file")?.n_get_path_from_inode_id(ino)?,
                 offset,
                 buf,
             )?),
@@ -104,18 +104,18 @@ impl FsInterface {
     pub fn get_local_file(&self, ino: Ino) -> Result<Option<File>, ReadError> {
         let hostname = self.network_interface.hostname()?;
         let mut buf = Vec::new();
-        let arbo = self.arbo.read();
-        let size = arbo.n_get_inode(ino).and_then(|inode| match &inode.entry {
+        let itree = self.itree.read();
+        let size = itree.n_get_inode(ino).and_then(|inode| match &inode.entry {
             FsEntry::File(hosts) => Ok(hosts
                 .contains(&hostname)
                 .then_some(inode.meta.size as usize)),
             FsEntry::Directory(_) => Err(WhError::InodeIsADirectory),
         })?;
-        drop(arbo);
+        drop(itree);
         if let Some(mut size) = size {
             buf.resize(size, 0);
             size = self.disk.read_file(
-                &Arbo::n_read_lock(&self.arbo, "read_file")?.n_get_path_from_inode_id(ino)?,
+                &ITree::n_read_lock(&self.itree, "read_file")?.n_get_path_from_inode_id(ino)?,
                 0,
                 &mut buf[..],
             )?;

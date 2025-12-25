@@ -2,7 +2,7 @@ use std::{sync::Arc, time::SystemTime};
 
 use crate::{
     error::{WhError, WhResult},
-    pods::arbo::{Arbo, InodeId, Metadata, BLOCK_SIZE},
+    pods::itree::{ITree, InodeId, Metadata, BLOCK_SIZE},
 };
 use custom_error::custom_error;
 use parking_lot::RwLockWriteGuard;
@@ -69,9 +69,9 @@ impl FsInterface {
 
         file_handle.dirty = true;
 
-        let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface.write")?;
-        let path = arbo.n_get_path_from_inode_id(id)?;
-        drop(arbo);
+        let itree = ITree::n_read_lock(&self.itree, "fs_interface.write")?;
+        let path = itree.n_get_path_from_inode_id(id)?;
+        drop(itree);
 
         let new_size = offset + data.len();
         let written = self.disk.write_file(&path, data, offset)?;
@@ -81,8 +81,8 @@ impl FsInterface {
     }
 
     fn affect_write_locally(&self, id: InodeId, new_size: usize) -> WhResult<Metadata> {
-        let mut arbo = Arbo::n_write_lock(&self.arbo, "network_interface.affect_write_locally")?;
-        let inode = arbo.n_get_inode_mut(id)?;
+        let mut itree = ITree::n_write_lock(&self.itree, "network_interface.affect_write_locally")?;
+        let inode = itree.n_get_inode_mut(id)?;
         let new_size = (new_size as u64).max(inode.meta.size);
         inode.meta.size = new_size;
         inode.meta.blocks = new_size.div_ceil(BLOCK_SIZE);

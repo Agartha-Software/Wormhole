@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{cli::ConfigType, ipc::error::IoError, pods::arbo::Hosts};
+use crate::{cli::ConfigType, ipc::error::IoError, pods::itree::Hosts};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum NewAnswer {

@@ -1,7 +1,7 @@
 use std::{path::Path, process::ExitStatus};
 
 use futures_util::io;
-use wormhole::pods::arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME};
+use wormhole::pods::itree::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME};
 
 use crate::functionnal::environment_manager::{
     manager::socket_from_id,

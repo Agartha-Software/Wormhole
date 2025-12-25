@@ -15,7 +15,7 @@ use tokio_tungstenite::{
 use crate::{
     config::{GlobalConfig, LocalConfig},
     error::WhError,
-    pods::{arbo::Arbo, network::network_interface::NetworkInterface},
+    pods::{itree::ITree, network::network_interface::NetworkInterface},
 };
 
 custom_error! {
@@ -125,7 +125,7 @@ pub struct Accept {
     pub config: GlobalConfig,
 
     /// ITree of the network
-    pub arbo: Arbo,
+    pub itree: ITree,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -224,7 +224,7 @@ pub async fn accept(
                     rename,
                     hostname,
                     config: network.global_config.read().clone(),
-                    arbo: (*network.arbo.read()).clone(),
+                    itree: (*network.itree.read()).clone(),
                 };
                 let data = bincode::serialize(&Handshake::Accept(accept))?;
                 sink.send(Message::Binary(data.into())).await?;

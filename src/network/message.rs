@@ -9,7 +9,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::{
     error::WhResult,
     pods::{
-        arbo::{ArboIndex, Ino, Inode, InodeId, Metadata},
+        itree::{ITreeIndex, Ino, Inode, InodeId, Metadata},
         filesystem::diffs::{Delta, Signature},
         whpath::InodeName,
     },
@@ -48,8 +48,8 @@ pub enum MessageContent {
     SetXAttr(InodeId, String, Vec<u8>),
     RemoveXAttr(InodeId, String),
 
-    // (Arbo, peers, global_config)
     RequestFs,
+    // (ITree, peers, global_config)
     FsAnswer(FileSystemSerialized, Vec<Address>, Vec<u8>),
 
     Disconnect,
@@ -94,8 +94,8 @@ impl fmt::Debug for MessageContent {
                 inode.name.as_str(),
                 inode.parent,
                 match inode.entry {
-                    crate::pods::arbo::FsEntry::File(_) => 'f',
-                    crate::pods::arbo::FsEntry::Directory(_) => 'd',
+                    crate::pods::itree::FsEntry::File(_) => 'f',
+                    crate::pods::itree::FsEntry::Directory(_) => 'd',
                 }
             ),
             MessageContent::RedundancyFile(id, _) => write!(f, "RedundancyFile({id}, <bin>)"),
@@ -192,6 +192,6 @@ impl fmt::Display for ToNetworkMessage {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FileSystemSerialized {
-    pub fs_index: ArboIndex,
+    pub fs_index: ITreeIndex,
     pub next_inode: InodeId,
 }

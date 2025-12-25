@@ -37,8 +37,8 @@ pub const GLOBAL_CONFIG_INO: u64 = 2;
 pub const GLOBAL_CONFIG_FNAME: &str = ".global_config.toml";
 pub const LOCAL_CONFIG_INO: u64 = 3;
 pub const LOCAL_CONFIG_FNAME: &str = ".local_config.toml";
-pub const ARBO_FILE_INO: u64 = 4;
-pub const ARBO_FILE_FNAME: &str = ".arbo";
+pub const ITREE_FILE_INO: u64 = 4;
+pub const ITREE_FILE_FNAME: &str = ".itree";
 
 // SECTION types
 
@@ -68,11 +68,11 @@ pub struct Inode {
     pub xattrs: XAttrs,
 }
 
-pub type ArboIndex = HashMap<InodeId, Inode>;
+pub type ITreeIndex = HashMap<InodeId, Inode>;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Arbo {
-    entries: ArboIndex,
+pub struct ITree {
+    entries: ITreeIndex,
     pub next_ino: RangeFrom<Ino>,
 }
 
@@ -140,18 +140,18 @@ impl Inode {
     }
 }
 
-impl Arbo {
+impl ITree {
     pub fn first_ino() -> Ino {
         return 11;
     }
 
     pub fn new() -> Self {
-        let mut arbo: Self = Self {
+        let mut itree: Self = Self {
             entries: HashMap::new(),
             next_ino: Self::first_ino()..,
         };
 
-        arbo.entries.insert(
+        itree.entries.insert(
             ROOT,
             Inode {
                 parent: ROOT,
@@ -178,14 +178,14 @@ impl Arbo {
                 xattrs: HashMap::new(),
             },
         );
-        arbo
+        itree
     }
 
-    pub fn overwrite_self(&mut self, entries: ArboIndex) {
+    pub fn overwrite_self(&mut self, entries: ITreeIndex) {
         self.entries = entries;
     }
 
-    pub fn get_raw_entries(&self) -> ArboIndex {
+    pub fn get_raw_entries(&self) -> ITreeIndex {
         self.entries.clone()
     }
 
@@ -216,52 +216,54 @@ impl Arbo {
 
     #[must_use]
     pub fn read_lock<'a>(
-        arbo: &'a Arc<RwLock<Arbo>>,
+        itree: &'a Arc<RwLock<ITree>>,
         called_from: &'a str,
-    ) -> io::Result<RwLockReadGuard<'a, Arbo>> {
-        if let Some(arbo) = arbo.try_read_for(LOCK_TIMEOUT) {
-            Ok(arbo)
+    ) -> io::Result<RwLockReadGuard<'a, ITree>> {
+        if let Some(itree) = itree.try_read_for(LOCK_TIMEOUT) {
+            Ok(itree)
         } else {
             Err(io::Error::new(
                 io::ErrorKind::WouldBlock,
-                format!("{}: unable to read_lock arbo", called_from),
+                format!("{}: unable to read_lock itree", called_from),
             ))
         }
     }
 
     #[must_use]
     pub fn n_read_lock<'a>(
-        arbo: &'a Arc<RwLock<Arbo>>,
+        itree: &'a Arc<RwLock<ITree>>,
         called_from: &'a str,
-    ) -> WhResult<RwLockReadGuard<'a, Arbo>> {
-        arbo.try_read_for(LOCK_TIMEOUT).ok_or(WhError::WouldBlock {
+    ) -> WhResult<RwLockReadGuard<'a, ITree>> {
+        itree.try_read_for(LOCK_TIMEOUT).ok_or(WhError::WouldBlock {
             called_from: called_from.to_owned(),
         })
     }
 
     #[must_use]
     pub fn write_lock<'a>(
-        arbo: &'a Arc<RwLock<Arbo>>,
+        itree: &'a Arc<RwLock<ITree>>,
         called_from: &'a str,
-    ) -> io::Result<RwLockWriteGuard<'a, Arbo>> {
-        if let Some(arbo) = arbo.try_write_for(LOCK_TIMEOUT) {
-            Ok(arbo)
+    ) -> io::Result<RwLockWriteGuard<'a, ITree>> {
+        if let Some(itree) = itree.try_write_for(LOCK_TIMEOUT) {
+            Ok(itree)
         } else {
             Err(io::Error::new(
                 io::ErrorKind::WouldBlock,
-                format!("{}: unable to write_lock arbo", called_from),
+                format!("{}: unable to write_lock itree", called_from),
             ))
         }
     }
 
     #[must_use]
     pub fn n_write_lock<'a>(
-        arbo: &'a Arc<RwLock<Arbo>>,
+        itree: &'a Arc<RwLock<ITree>>,
         called_from: &'a str,
-    ) -> WhResult<RwLockWriteGuard<'a, Arbo>> {
-        arbo.try_write_for(LOCK_TIMEOUT).ok_or(WhError::WouldBlock {
-            called_from: called_from.to_owned(),
-        })
+    ) -> WhResult<RwLockWriteGuard<'a, ITree>> {
+        itree
+            .try_write_for(LOCK_TIMEOUT)
+            .ok_or(WhError::WouldBlock {
+                called_from: called_from.to_owned(),
+            })
     }
 
     pub fn files_hosted_only_by<'a>(
@@ -282,7 +284,7 @@ impl Arbo {
     }
 
     #[must_use]
-    /// Insert a given [Inode] inside the local arbo
+    /// Insert a given [Inode] inside the local itree
     pub fn add_inode(&mut self, inode: Inode) -> Result<(), MakeInodeError> {
         if self.entries.contains_key(&inode.id) {
             return Err(MakeInodeError::AlreadyExist);
@@ -307,7 +309,7 @@ impl Arbo {
     }
 
     #[must_use]
-    /// Create a new [Inode] from the given parameters and insert it inside the local arbo
+    /// Create a new [Inode] from the given parameters and insert it inside the local itree
     pub fn add_inode_from_parameters(
         &mut self,
         name: InodeName,
@@ -394,7 +396,7 @@ impl Arbo {
     }
 
     #[must_use]
-    /// Remove inode from the [Arbo]
+    /// Remove inode from the [ITree]
     pub fn n_remove_inode(&mut self, id: InodeId) -> Result<Inode, RemoveInodeError> {
         let inode = self.n_get_inode(id)?;
         match &inode.entry {
@@ -452,7 +454,7 @@ impl Arbo {
 
     //REVIEW: This restriction seems execisve, it keep making me write unclear code and make the process tedious,
     //obligate us to create too many one liners while keeping the same "problem" of not propagating the change to the other inode
-    //Performance is very important with this project so we should not force ourself to take a ass-backward way each time we interact with the arbo
+    //Performance is very important with this project so we should not force ourself to take a ass-backward way each time we interact with the itree
     ////REMOVED: not public as the modifications are not automaticly propagated on other related inodes
     #[must_use]
     pub fn n_get_inode_mut(&mut self, ino: InodeId) -> WhResult<&mut Inode> {
@@ -477,7 +479,7 @@ impl Arbo {
     }
 
     #[must_use]
-    /// Recursively traverse the [Arbo] tree from the [Inode] to form a path
+    /// Recursively traverse the [ITree] tree from the [Inode] to form a path
     ///
     /// Possible Errors:
     ///   InodeNotFound: if the inode isn't inside the tree
@@ -670,7 +672,7 @@ impl Arbo {
         self.recurse_tree(ino, 0)
     }
 
-    /// given ino is not checked -> must exist in arbo
+    /// given ino is not checked -> must exist in itree
     fn recurse_tree(&self, ino: InodeId, indentation: u8) -> WhResult<Vec<TreeLine>> {
         let entry = &self.n_get_inode(ino)?.entry;
         let path = self.n_get_path_from_inode_id(ino)?;
@@ -689,16 +691,16 @@ impl Arbo {
 
 // !SECTION
 
-/// If arbo can be read and deserialized from parent_folder/[ARBO_FILE_NAME] returns Some(Arbo)
-fn recover_serialized_arbo(parent_folder: &Path) -> Option<Arbo> {
+/// If itree can be read and deserialized from parent_folder/[ITREE_FILE_NAME] returns Some(ITree)
+fn recover_serialized_itree(parent_folder: &Path) -> Option<ITree> {
     // error handling is silent on purpose as it will be recoded with the new error system
-    // If an error happens, will just proceed like the arbo was not on disk
+    // If an error happens, will just proceed like the itree was not on disk
     // In the future, we should maybe warn and keep a copy, avoiding the user from losing data
-    bincode::deserialize(&fs::read(parent_folder.join(ARBO_FILE_FNAME)).ok()?).ok()
+    bincode::deserialize(&fs::read(parent_folder.join(ITREE_FILE_FNAME)).ok()?).ok()
 }
 
 fn index_folder_recursive(
-    arbo: &mut Arbo,
+    itree: &mut ITree,
     parent: Ino,
     path: &Path,
     host: &String,
@@ -712,7 +714,7 @@ fn index_folder_recursive(
             .map_err(|e: InodeNameError| e.to_io())?;
         let meta = entry.metadata()?;
 
-        let special_ino = Arbo::get_special(fname.as_ref(), parent);
+        let special_ino = ITree::get_special(fname.as_ref(), parent);
 
         let used_ino = match special_ino {
             Some(_) if !ftype.is_file() => {
@@ -722,7 +724,7 @@ fn index_folder_recursive(
                 ))
             }
             Some(ino) => ino,
-            None => arbo
+            None => itree
                 .next_ino
                 .next()
                 .ok_or(io::Error::other("ran out of Inodes"))?,
@@ -733,38 +735,39 @@ fn index_folder_recursive(
         #[cfg(target_os = "windows")]
         let perm_mode = WINDOWS_DEFAULT_PERMS_MODE;
 
-        arbo.add_inode(Inode::new(
-            fname.clone(),
-            parent,
-            used_ino,
-            if ftype.is_file() {
-                FsEntry::File(vec![host.clone()])
-            } else {
-                FsEntry::Directory(Vec::new())
-            },
-            perm_mode,
-        ))
-        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err.to_string()))?;
+        itree
+            .add_inode(Inode::new(
+                fname.clone(),
+                parent,
+                used_ino,
+                if ftype.is_file() {
+                    FsEntry::File(vec![host.clone()])
+                } else {
+                    FsEntry::Directory(Vec::new())
+                },
+                perm_mode,
+            ))
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err.to_string()))?;
         let mut meta: Metadata = meta.try_into()?;
         meta.ino = used_ino;
-        arbo.set_inode_meta(used_ino, meta)?;
+        itree.set_inode_meta(used_ino, meta)?;
 
         if ftype.is_dir() {
-            index_folder_recursive(arbo, used_ino, &path.join(&fname), host)
+            index_folder_recursive(itree, used_ino, &path.join(&fname), host)
                 .expect("error in filesystem indexion (3)");
         };
     }
     Ok(())
 }
 
-pub fn generate_arbo(path: &Path, host: &String) -> io::Result<Arbo> {
-    if let Some(arbo) = recover_serialized_arbo(path) {
-        Ok(arbo)
+pub fn generate_itree(path: &Path, host: &String) -> io::Result<ITree> {
+    if let Some(itree) = recover_serialized_itree(path) {
+        Ok(itree)
     } else {
-        let mut arbo = Arbo::new();
+        let mut itree = ITree::new();
 
-        index_folder_recursive(&mut arbo, ROOT, path, host)?;
-        Ok(arbo)
+        index_folder_recursive(&mut itree, ROOT, path, host)?;
+        Ok(itree)
     }
 }
 

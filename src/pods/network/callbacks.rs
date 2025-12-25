@@ -6,7 +6,7 @@ use tokio::sync::broadcast;
 use crate::{
     error::{WhError, WhResult},
     pods::{
-        arbo::{InodeId, LOCK_TIMEOUT},
+        itree::{InodeId, LOCK_TIMEOUT},
         network::pull_file::PullError,
     },
 };

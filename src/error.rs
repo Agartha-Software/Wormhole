@@ -13,7 +13,7 @@ custom_error! {
     InodeIsADirectory = "Entry is a directory",
     DeadLock = "A DeadLock occured",
     NetworkDied{called_from: String} = "{called_from}: Unable to update modification on the network",
-    WouldBlock{called_from: String} = "{called_from}: Unable to lock arbo",
+    WouldBlock{called_from: String} = "{called_from}: Unable to lock itree",
 }
 
 impl WhError {
