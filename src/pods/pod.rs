@@ -169,7 +169,7 @@ custom_error! {pub PodStopError
 fn create_all_dirs(itree: &ITree, from: InodeId, disk: &dyn DiskManager) -> io::Result<()> {
     let from = itree.n_get_inode(from).map_err(|e| e.into_io())?;
 
-    return match &from.entry {
+    match &from.entry {
         FsEntry::File(_) => Ok(()),
         FsEntry::Directory(children) => {
             let current_path = itree
@@ -192,7 +192,7 @@ fn create_all_dirs(itree: &ITree, from: InodeId, disk: &dyn DiskManager) -> io::
             }
             Ok(())
         }
-    };
+    }
 }
 
 impl Pod {
@@ -218,13 +218,12 @@ impl Pod {
         {
             Ok(proto) => proto,
             Err(receiver_out) => {
-                if global_config.general.entrypoints.len() > 0 {
+                if !global_config.general.entrypoints.is_empty() {
                     // NOTE - temporary fix
                     // made to help with tests and debug
                     // choice not to fail should later be supported by the cli
                     log::error!("No peers answered. Stopping.");
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(io::Error::other(
                         "None of the specified peers could answer",
                     ));
                 }
@@ -560,13 +559,13 @@ impl Pod {
         fs_interface
             .disk
             .stop()
-            .map_err(|e| PodStopError::DiskManagerStopFailed { e: e })?;
+            .map_err(|e| PodStopError::DiskManagerStopFailed { e })?;
 
         Ok(())
     }
 
     pub fn get_mountpoint(&self) -> &PathBuf {
-        return &self.mountpoint;
+        &self.mountpoint
     }
 
     pub fn contains(&self, path: &PathBuf) -> bool {

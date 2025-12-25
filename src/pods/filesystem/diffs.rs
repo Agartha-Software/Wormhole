@@ -62,7 +62,7 @@ impl Sig for RSyncSig {
     type Error = librsync::Error;
 
     fn new(file: &File) -> Result<Self, <Self as Sig>::Error> {
-        Ok(TryFrom::try_from(file)?)
+        TryFrom::try_from(file)
     }
 
     #[allow(refining_impl_trait)]

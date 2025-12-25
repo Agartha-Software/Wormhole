@@ -211,8 +211,8 @@ impl FsInterface {
                 RemoveFileError::LocalDeletionFailed { io } => {
                     RenameError::LocalOverwriteFailed { io }
                 }
-                RemoveFileError::NonEmpty => return RenameError::OverwriteNonEmpty,
-                RemoveFileError::WhError { source } => return RenameError::WhError { source },
+                RemoveFileError::NonEmpty => RenameError::OverwriteNonEmpty,
+                RemoveFileError::WhError { source } => RenameError::WhError { source },
                 RemoveFileError::PermissionDenied => RenameError::PermissionDenied,
             })?;
         }

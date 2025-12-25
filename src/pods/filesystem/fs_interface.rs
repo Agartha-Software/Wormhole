@@ -67,7 +67,7 @@ impl FsInterface {
         self.disk.set_file_size(&path, meta.size as usize)?;
         self.network_interface
             .update_metadata(ino, meta)
-            .map_err(|err| std::io::Error::other(err))
+            .map_err(std::io::Error::other)
     }
 
     // !SECTION

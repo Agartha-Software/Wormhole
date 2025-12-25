@@ -417,7 +417,7 @@ impl Filesystem for FuseController {
                 parent,
                 new_parent,
                 name,
-                newname.into(),
+                newname,
                 flags & libc::RENAME_NOREPLACE == 0,
             )
             .inspect_err(|err| log::error!("rename: {err}"))
