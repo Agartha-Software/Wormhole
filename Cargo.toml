@@ -98,7 +98,6 @@ signal-hook = "0.3.18"
 futures = "0.3"
 gethostname = "1.0.2"
 librsync = "0.2.4"
-# librsync = { path = "../librsync-rs" }
 rand = "0.9.2"
 interprocess = { version = "2.2.3", features = ["tokio"] }
 camino = "1.2.1"
