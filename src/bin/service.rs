@@ -22,7 +22,7 @@ use std::collections::HashMap;
 use std::io::IsTerminal;
 use std::process::ExitCode;
 use tokio::sync::mpsc::{self, UnboundedSender};
-use wormhole::pods::startup::load_saved_pods;
+use wormhole::pods::save::load_saved_pods;
 
 use wormhole::ipc::service::start_commands_listeners;
 use wormhole::pods::pod::Pod;
