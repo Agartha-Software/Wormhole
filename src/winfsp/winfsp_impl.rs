@@ -26,7 +26,7 @@ use crate::{
     error::WhError,
     pods::{
         filesystem::fs_interface::{FsInterface, SimpleFileType},
-        itree::{ITree, InodeId},
+        itree::{ITree, InodeId, WINDOWS_DEFAULT_PERMS_MODE},
         whpath::{ConversionError, InodeName, WhPath, WhPathError},
     },
 };
