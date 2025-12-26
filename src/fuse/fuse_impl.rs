@@ -521,12 +521,6 @@ impl Filesystem for FuseController {
             }
         }
 
-        // TODO - Implement After permission implementation
-        // let attr = self.fs_interface.get_inode_attributes(ino);
-        // if attr.unwrap().perm == valid {
-        //     reply.error(libc::EPERM);
-        // }
-
         match self
             .fs_interface
             .network_interface
