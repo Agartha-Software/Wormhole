@@ -562,13 +562,13 @@ impl NetworkInterface {
                             .expect(&format!("failed to send message to peer {}", address))
                     });
                 }
-                ToNetworkMessage::SpecificMessage((message_content, mut status_tx), origins) => {
+                ToNetworkMessage::SpecificMessage((message_content, status_tx), origins) => {
                     let count = peers_tx
                         .iter()
                         .filter(|&(_, address)| origins.contains(address))
                         .map(|(channel, address)| {
                             channel
-                                .send((message_content.clone(), status_tx.take())) // warning: only the
+                                .send((message_content.clone(), status_tx.clone())) // warning: only the first peer channel can set a status
                                 .expect(&format!("failed to send message to peer {}", address))
                         })
                         .count();
