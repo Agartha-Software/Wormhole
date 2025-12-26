@@ -25,9 +25,7 @@ use crate::pods::filesystem::file_handle::{AccessMode, FileHandleManager, OpenFl
 use crate::{
     error::WhError,
     pods::{
-        filesystem::{
-            fs_interface::{FsInterface, SimpleFileType},
-        },
+        filesystem::fs_interface::{FsInterface, SimpleFileType},
         itree::{ITree, InodeId},
         whpath::{ConversionError, InodeName, WhPath, WhPathError},
     },
