@@ -416,11 +416,6 @@ impl Pod {
 
         // drop(self.fuse_handle); // FIXME - do something like block the filesystem
 
-        let _ = self
-            .save_pod()
-            .await
-            .inspect_err(|err| log::error!("Couldn't save the pod data: {err}"));
-
         let itree = ITree::n_read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
 
         let peers: Vec<Address> = self

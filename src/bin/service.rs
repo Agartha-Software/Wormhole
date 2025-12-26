@@ -30,11 +30,11 @@ use wormhole::signals::handle_signals;
 
 #[tokio::main]
 async fn main() -> ExitCode {
+    env_logger::init();
+
     let (interrupt_tx, interrupt_rx) = mpsc::unbounded_channel::<()>();
     let (signals_tx, signals_rx) = mpsc::unbounded_channel::<()>();
     let args = ServiceArgs::parse();
-
-    env_logger::init();
 
     #[cfg(target_os = "windows")]
     match winfsp_init() {

@@ -27,7 +27,7 @@ custom_error! {pub SavePodError
 }
 
 impl Pod {
-    pub async fn save_pod(&self) -> Result<(), SavePodError> {
+    pub async fn save(&self) -> Result<(), SavePodError> {
         let proto = self
             .try_generate_prototype()
             .ok_or(SavePodError::LockError)?;
