@@ -164,7 +164,6 @@ impl FsInterface {
                     .network_interface
                     .callbacks
                     .resolve(Request::Pull(id), Err(e.into()))
-                    .map_err(|e| e.into_io())
             }
         };
         drop(itree);

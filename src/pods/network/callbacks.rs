@@ -1,10 +1,10 @@
-use std::{collections::HashMap, fmt::Debug, future::Future, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, future::Future, io, sync::Arc};
 
 use parking_lot::RwLock;
 use tokio::sync::broadcast;
 
 use crate::{
-    error::{WhError, WhResult},
+    error::WhError,
     pods::{
         itree::{InodeId, LOCK_TIMEOUT},
         network::pull_file::PullError,
@@ -105,19 +105,17 @@ impl Callbacks {
 
     /// resolve a callback and resume waiting threads
     /// removes the callback from the queue
-    pub fn resolve(&self, call: Request, answer: Shot) -> WhResult<()> {
+    pub fn resolve(&self, call: Request, answer: Shot) -> io::Result<()> {
         if let Some(mut callbacks) = self.callbacks.try_write_for(LOCK_TIMEOUT) {
             if let Some(cb) = callbacks.remove(&call) {
                 // safety: removing the sender before fulfilling it ensures no one subscribes to it after it's been fulfilled
                 let _ = cb.send(answer); // we don't care if the send fails because it only means no one's waiting
                 Ok(())
             } else {
-                Err(WhError::InodeNotFound) // TODO: this is a 'not found' error, not specifically of an inode not found
+                Err(io::ErrorKind::NotFound.into())
             }
         } else {
-            Err(WhError::WouldBlock {
-                called_from: "unable to read_lock callbacks".into(),
-            })
+            return Err(io::Error::new(io::ErrorKind::WouldBlock, "unable to write_lock callbacks"));
         }
     }
 
