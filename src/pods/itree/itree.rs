@@ -43,9 +43,6 @@ pub const ITREE_FILE_INO: u64 = 4;
 pub const ITREE_FILE_FNAME: &str = ".itree";
 
 // SECTION types
-
-pub type Hosts = Vec<Address>;
-
 pub type ITreeIndex = HashMap<Ino, Inode>;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

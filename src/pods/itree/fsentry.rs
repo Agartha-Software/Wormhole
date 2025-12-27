@@ -1,17 +1,39 @@
 use std::io;
 
+use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 
-use crate::pods::{
+use crate::{network::message::Address, pods::{
     filesystem::fs_interface::SimpleFileType,
-    itree::{Hosts, Ino},
-};
+    itree::Ino, whpath::WhPath,
+}};
+
+pub type Hosts = Vec<Address>;
+
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum SymlinkPath {
+    /// Path relative to the symlink file itself
+    SymlinkPathRelative(Utf8PathBuf),
+    /// Path relative to the WH drive. Not really absolute but emulates absolute symlinks within the WH drive
+    SymlinkPathAbsolute(WhPath),
+    /// absolute Path pointing outside the WH drive
+    SymlinkExternal(Utf8PathBuf),
+}
+
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct EntrySymlink {
+    pub target: SymlinkPath,
+}
+
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 /// Should be extended until meeting [fuser::FileType]
 pub enum FsEntry {
     File(Hosts),
     Directory(Vec<Ino>),
+    Symlink(EntrySymlink)
 }
 
 impl FsEntry {

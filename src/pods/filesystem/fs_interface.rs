@@ -31,6 +31,7 @@ pub struct FsInterface {
 pub enum SimpleFileType {
     File,
     Directory,
+    Symlink,
 }
 
 impl From<&FsEntry> for SimpleFileType {
