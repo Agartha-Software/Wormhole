@@ -41,7 +41,7 @@ impl FsInterface {
             .iter()
             .map(|p| p.hostname.clone())
             .collect::<Vec<_>>();
-        let inode = self.itree.read().n_get_inode(ino)?.clone();
+        let inode = self.itree.read().get_inode(ino)?.clone();
         let tracking = match &inode.entry {
             FsEntry::File(tracking) => tracking,
             FsEntry::Directory(_) => return Err(WhError::InodeIsADirectory.into()),
@@ -136,8 +136,8 @@ impl FsInterface {
                 String::from_utf8_lossy(&patched.0)
             );
 
-            let itree = ITree::n_read_lock(&self.itree, "fs_interface.write")?;
-            let path = itree.n_get_path_from_inode_id(ino)?;
+            let itree = ITree::read_lock(&self.itree, "fs_interface.write")?;
+            let path = itree.get_path_from_inode_id(ino)?;
             drop(itree);
 
             self.disk
@@ -195,7 +195,7 @@ impl FsInterface {
         let file = self.get_local_file(ino)?.ok_or(WhError::InodeNotFound)?;
         let delta = sig.diff(&file)?;
 
-        let inode = self.itree.read().n_get_inode(ino)?.clone();
+        let inode = self.itree.read().get_inode(ino)?.clone();
 
         self.network_interface
             .to_network_message_tx
