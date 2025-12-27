@@ -2,7 +2,10 @@ use crate::{
     data::tree_hosts::TreeLine,
     error::WhResult,
     network::message::Address,
-    pods::whpath::{InodeName, InodeNameError, WhPath},
+    pods::{
+        itree::inode::{Ino, Inode, Metadata},
+        whpath::{InodeName, InodeNameError, WhPath},
+    },
 };
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Serialize};
@@ -16,7 +19,7 @@ use std::{
 };
 
 #[cfg(target_os = "linux")]
-use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::os::unix::fs::PermissionsExt;
 
 use crate::error::WhError;
 use crate::pods::filesystem::fs_interface::SimpleFileType;
@@ -47,25 +50,12 @@ pub type Hosts = Vec<Address>;
 /// todo: replace usage of InodeId with Ino when no parallel merges are likely to be conflicting
 /// InodeId is represented by an u64
 pub type InodeId = u64;
-pub type Ino = u64;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 /// Should be extended until meeting [fuser::FileType]
 pub enum FsEntry {
     File(Hosts),
     Directory(Vec<InodeId>),
-}
-
-pub type XAttrs = HashMap<String, Vec<u8>>;
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct Inode {
-    pub parent: InodeId,
-    pub id: InodeId,
-    pub name: InodeName,
-    pub entry: FsEntry,
-    pub meta: Metadata,
-    pub xattrs: XAttrs,
 }
 
 pub type ITreeIndex = HashMap<InodeId, Inode>;
@@ -97,45 +87,6 @@ impl FsEntry {
                 "entry is not a directory",
             )),
             FsEntry::Directory(children) => Ok(children),
-        }
-    }
-}
-
-impl Inode {
-    pub fn new(
-        name: InodeName,
-        parent_ino: InodeId,
-        id: InodeId,
-        entry: FsEntry,
-        perm: u16,
-    ) -> Self {
-        let meta = Metadata {
-            ino: id,
-            size: 0,
-            blocks: 0,
-            atime: SystemTime::now(),
-            mtime: SystemTime::now(),
-            ctime: SystemTime::now(),
-            crtime: SystemTime::now(),
-            kind: entry.get_filetype(),
-            perm,
-            nlink: 1 + matches!(entry, FsEntry::Directory(_)) as u32,
-            uid: 0,
-            gid: 0,
-            rdev: 0,
-            blksize: BLOCK_SIZE as u32,
-            flags: 0,
-        };
-
-        let xattrs = HashMap::new();
-
-        Self {
-            parent: parent_ino,
-            id: id,
-            name: name,
-            entry: entry,
-            meta,
-            xattrs,
         }
     }
 }
@@ -768,106 +719,5 @@ pub fn generate_itree(path: &Path, host: &String) -> io::Result<ITree> {
 
         index_folder_recursive(&mut itree, ROOT, path, host)?;
         Ok(itree)
-    }
-}
-
-#[cfg(target_os = "windows")]
-pub const WINDOWS_DEFAULT_PERMS_MODE: u16 = 0o660;
-
-/* NOTE
- * is currently made with fuse in sight. Will probably need to be edited to be windows compatible
- */
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct Metadata {
-    /// Inode number
-    pub ino: u64,
-    /// Size in bytes
-    pub size: u64,
-    /// Size in blocks
-    pub blocks: u64,
-    /// Time of last access
-    pub atime: SystemTime,
-    /// Time of last modification
-    pub mtime: SystemTime,
-    /// Time of last change
-    pub ctime: SystemTime,
-    /// Time of creation (macOS only)
-    pub crtime: SystemTime,
-    /// Kind of file (directory, file, pipe, etc)
-    pub kind: SimpleFileType,
-    /// Permissions
-    pub perm: u16,
-    /// Number of hard links
-    pub nlink: u32,
-    /// User id
-    pub uid: u32,
-    /// Group id
-    pub gid: u32,
-    /// Rdev
-    pub rdev: u32,
-    /// Block size
-    pub blksize: u32,
-    /// Flags (macOS only, see chflags(2))
-    pub flags: u32,
-}
-
-#[cfg(target_os = "linux")]
-impl TryInto<Metadata> for fs::Metadata {
-    type Error = std::io::Error;
-    fn try_into(self) -> Result<Metadata, std::io::Error> {
-        Ok(Metadata {
-            ino: 0, // TODO: unsafe default
-            size: self.len(),
-            blocks: 0,
-            atime: self.accessed()?,
-            mtime: self.modified()?,
-            ctime: self.modified()?,
-            crtime: self.created()?,
-            kind: if self.is_file() {
-                SimpleFileType::File
-            } else {
-                SimpleFileType::Directory
-            },
-            perm: self.permissions().mode() as u16,
-            nlink: self.nlink() as u32,
-            uid: self.uid(),
-            gid: self.gid(),
-            rdev: self.rdev() as u32,
-            blksize: self.blksize() as u32,
-            flags: 0,
-        })
-    }
-}
-
-#[cfg(target_os = "windows")]
-impl TryInto<Metadata> for fs::Metadata {
-    type Error = std::io::Error;
-    fn try_into(self) -> Result<Metadata, std::io::Error> {
-        let perm = if self.is_file() {
-            WINDOWS_DEFAULT_PERMS_MODE
-        } else {
-            WINDOWS_DEFAULT_PERMS_MODE | 0o110
-        };
-        Ok(Metadata {
-            ino: 0, // TODO: unsafe default
-            size: self.len(),
-            blocks: 0,
-            atime: self.accessed()?,
-            mtime: self.modified()?,
-            ctime: self.modified()?,
-            crtime: self.created()?,
-            kind: if self.is_file() {
-                SimpleFileType::File
-            } else {
-                SimpleFileType::Directory
-            },
-            perm,
-            nlink: 0 as u32,
-            uid: 0,
-            gid: 0,
-            rdev: 0 as u32,
-            blksize: 0 as u32,
-            flags: 0,
-        })
     }
 }
