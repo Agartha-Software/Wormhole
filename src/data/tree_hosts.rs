@@ -2,10 +2,10 @@ use std::fmt;
 
 use crate::{
     network::message::Address,
-    pods::{itree::InodeId, whpath::WhPath},
+    pods::{itree::Ino, whpath::WhPath},
 };
 
-pub type TreeLine = (u8, InodeId, WhPath, Vec<Address>); // (indentation_level, ino, path, hosts)
+pub type TreeLine = (u8, Ino, WhPath, Vec<Address>); // (indentation_level, ino, path, hosts)
 pub struct CliHostTree {
     pub lines: Vec<TreeLine>,
 }

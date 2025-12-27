@@ -37,7 +37,7 @@ use crate::pods::{
     network::network_interface::NetworkInterface,
 };
 
-use super::itree::{InodeId, GLOBAL_CONFIG_INO, ITREE_FILE_FNAME, ITREE_FILE_INO};
+use super::itree::{Ino, GLOBAL_CONFIG_INO, ITREE_FILE_FNAME, ITREE_FILE_INO};
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -154,8 +154,8 @@ custom_error! {pub PodStopError
     WhError{source: WhError} = "{source}",
     ITreeSavingFailed{source: io::Error} = "Could not write itree to disk: {source}",
     PodNotRunning = "No pod with this name was found running.",
-    FileNotReadable{file: InodeId, reason: String} = "Could not read file from disk: ({file}) {reason}",
-    FileNotSent{file: InodeId} = "No pod was able to receive this file before stopping: ({file})",
+    FileNotReadable{file: Ino, reason: String} = "Could not read file from disk: ({file}) {reason}",
+    FileNotSent{file: Ino} = "No pod was able to receive this file before stopping: ({file})",
     #[cfg(target_os = "linux")]
     DiskManagerStopFailed{e: io::Error} = "Unable to stop the disk manager properly. Should not be an error on your platform {e}",
     #[cfg(target_os = "windows")]
@@ -166,7 +166,7 @@ custom_error! {pub PodStopError
 ///
 /// Required at setup to resolve issue #179
 /// (files pulling need the parent folder to be already present)
-fn create_all_dirs(itree: &ITree, from: InodeId, disk: &dyn DiskManager) -> io::Result<()> {
+fn create_all_dirs(itree: &ITree, from: Ino, disk: &dyn DiskManager) -> io::Result<()> {
     let from = itree.n_get_inode(from).map_err(|e| e.into_io())?;
 
     match &from.entry {
@@ -397,7 +397,7 @@ impl Pod {
     async fn send_file_to_possible_hosts(
         &self,
         possible_hosts: &Vec<Address>,
-        ino: InodeId,
+        ino: Ino,
     ) -> Result<(), PodStopError> {
         let file_content =
             self.fs_interface

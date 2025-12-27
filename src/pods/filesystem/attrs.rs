@@ -10,7 +10,7 @@ use crate::{
             fs_interface::FsInterface,
             permissions::has_write_perm,
         },
-        itree::{FsEntry, ITree, InodeId, Metadata, BLOCK_SIZE},
+        itree::{FsEntry, ITree, Ino, Metadata, BLOCK_SIZE},
     },
 };
 
@@ -28,11 +28,11 @@ custom_error! {pub AcknoledgeSetAttrError
 }
 
 impl FsInterface {
-    //fn get_inode_attributes(&self, ino: InodeId) -> WhResult<&Metadata> {}
+    //fn get_inode_attributes(&self, ino: Ino) -> WhResult<&Metadata> {}
 
     pub fn acknowledge_metadata(
         &self,
-        ino: InodeId,
+        ino: Ino,
         meta: Metadata,
     ) -> Result<(), AcknoledgeSetAttrError> {
         let mut itree = ITree::n_write_lock(&self.itree, "acknowledge_metadata")?;
@@ -93,7 +93,7 @@ impl FsInterface {
     #[allow(clippy::too_many_arguments)]
     pub fn setattr(
         &self,
-        ino: InodeId,
+        ino: Ino,
         mode: Option<u32>,
         uid: Option<u32>,
         gid: Option<u32>,

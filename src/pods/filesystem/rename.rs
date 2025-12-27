@@ -7,7 +7,7 @@ use crate::{
     pods::{
         filesystem::flush::FlushError,
         filesystem::permissions::has_write_perm,
-        itree::{ITree, InodeId, Metadata},
+        itree::{ITree, Ino, Metadata},
         whpath::{InodeName, WhPath},
     },
 };
@@ -37,7 +37,7 @@ custom_error! {
 }
 
 impl FsInterface {
-    fn construct_file_path(&self, parent: InodeId, name: &InodeName) -> WhResult<WhPath> {
+    fn construct_file_path(&self, parent: Ino, name: &InodeName) -> WhResult<WhPath> {
         let itree = ITree::n_read_lock(&self.itree, "fs_interface.rename.construct_file_path")?;
         let mut parent_path = itree.n_get_path_from_inode_id(parent)?;
 
@@ -47,8 +47,8 @@ impl FsInterface {
 
     fn rename_locally(
         &self,
-        parent: InodeId,
-        new_parent: InodeId,
+        parent: Ino,
+        new_parent: Ino,
         name: &InodeName,
         new_name: &InodeName,
     ) -> Result<(), RenameError> {
@@ -64,7 +64,7 @@ impl FsInterface {
         }
     }
 
-    pub fn set_meta_size(&self, ino: InodeId, meta: Metadata) -> Result<(), RenameError> {
+    pub fn set_meta_size(&self, ino: Ino, meta: Metadata) -> Result<(), RenameError> {
         let path = ITree::n_read_lock(&self.itree, "rename")?.n_get_path_from_inode_id(ino)?;
 
         self.disk
@@ -82,7 +82,7 @@ impl FsInterface {
     ////
     fn rename_special(
         &self,
-        new_parent: InodeId,
+        new_parent: Ino,
         new_name: InodeName,
         source_ino: u64,
         dest_ino: Option<u64>,
@@ -159,8 +159,8 @@ impl FsInterface {
     /// Immediately replicated to other peers
     pub fn rename(
         &self,
-        parent: InodeId,
-        new_parent: InodeId,
+        parent: Ino,
+        new_parent: Ino,
         name: InodeName,
         new_name: InodeName,
         overwrite: bool,
@@ -225,8 +225,8 @@ impl FsInterface {
 
     pub fn recept_rename(
         &self,
-        parent: InodeId,
-        new_parent: InodeId,
+        parent: Ino,
+        new_parent: Ino,
         name: InodeName,
         new_name: InodeName,
         overwrite: bool,

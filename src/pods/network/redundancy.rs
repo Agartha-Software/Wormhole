@@ -4,7 +4,7 @@ use crate::{
     network::message::{Address, MessageContent, RedundancyMessage, ToNetworkMessage},
     pods::{
         filesystem::fs_interface::FsInterface,
-        itree::{FsEntry, ITree, Ino, InodeId},
+        itree::{FsEntry, ITree, Ino},
     },
 };
 use futures_util::future::join_all;
@@ -66,12 +66,12 @@ pub async fn redundancy_worker(
 ///
 /// Intended for use in the check_intergrity function
 fn eligible_to_apply(
-    ino: InodeId,
+    ino: Ino,
     entry: &FsEntry,
     target_redundancy: u64,
     available_peers: usize,
     self_addr: &Address,
-) -> Option<InodeId> {
+) -> Option<Ino> {
     if ITree::is_local_only(ino) {
         return None;
     }
@@ -172,7 +172,7 @@ async fn apply_to(
 async fn push_redundancy(
     nw_interface: &Arc<NetworkInterface>,
     all_peers: &Vec<String>,
-    ino: InodeId,
+    ino: Ino,
     file_binary: Arc<Vec<u8>>,
     target_redundancy: usize,
 ) -> Vec<Address> {
@@ -224,7 +224,7 @@ async fn push_redundancy(
 impl NetworkInterface {
     pub async fn send_file_redundancy(
         &self,
-        inode: InodeId,
+        inode: Ino,
         data: Arc<Vec<u8>>,
         to: Address,
     ) -> WhResult<Address> {

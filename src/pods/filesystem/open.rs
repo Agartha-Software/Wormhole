@@ -5,7 +5,7 @@ use crate::pods::{
         fs_interface::SimpleFileType,
         permissions::{has_execute_perm, has_read_perm, has_write_perm},
     },
-    itree::{ITree, InodeId},
+    itree::{ITree, Ino},
 };
 
 use crate::error::WhError;
@@ -91,12 +91,7 @@ pub fn check_permissions(
 }
 
 impl FsInterface {
-    pub fn open(
-        &self,
-        ino: InodeId,
-        flags: OpenFlags,
-        access: AccessMode,
-    ) -> Result<UUID, OpenError> {
+    pub fn open(&self, ino: Ino, flags: OpenFlags, access: AccessMode) -> Result<UUID, OpenError> {
         let meta = ITree::n_read_lock(&self.itree, "open")?
             .n_get_inode(ino)?
             .meta

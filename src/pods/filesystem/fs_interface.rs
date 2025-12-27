@@ -4,7 +4,7 @@ use crate::pods::disk_managers::DiskManager;
 use crate::pods::filesystem::attrs::AcknoledgeSetAttrError;
 use crate::pods::filesystem::permissions::has_execute_perm;
 use crate::pods::itree::{
-    FsEntry, ITree, Inode, InodeId, Metadata, GLOBAL_CONFIG_FNAME, GLOBAL_CONFIG_INO,
+    FsEntry, ITree, Ino, Inode, Metadata, GLOBAL_CONFIG_FNAME, GLOBAL_CONFIG_INO,
 };
 use crate::pods::network::callbacks::Request;
 use crate::pods::network::network_interface::NetworkInterface;
@@ -60,7 +60,7 @@ impl FsInterface {
 
     // SECTION - local -> write
     #[deprecated]
-    pub fn set_inode_meta(&self, ino: InodeId, meta: Metadata) -> io::Result<()> {
+    pub fn set_inode_meta(&self, ino: Ino, meta: Metadata) -> io::Result<()> {
         let path = ITree::read_lock(&self.itree, "fs_interface::set_inode_meta")?
             .get_path_from_inode_id(ino)?;
 
@@ -76,7 +76,7 @@ impl FsInterface {
 
     /// get an entry
     /// return Ok(None) if no permissions to access entries
-    pub fn get_entry_from_name(&self, parent: InodeId, name: &str) -> WhResult<Option<Inode>> {
+    pub fn get_entry_from_name(&self, parent: Ino, name: &str) -> WhResult<Option<Inode>> {
         let itree = ITree::n_read_lock(&self.itree, "fs_interface.get_entry_from_name")?;
         let p_inode = itree.n_get_inode(parent)?;
         if !has_execute_perm(p_inode.meta.perm) {
@@ -87,13 +87,13 @@ impl FsInterface {
         ))
     }
 
-    pub fn get_inode_attributes(&self, ino: InodeId) -> io::Result<Metadata> {
+    pub fn get_inode_attributes(&self, ino: Ino) -> io::Result<Metadata> {
         let itree = ITree::read_lock(&self.itree, "fs_interface::get_inode_attributes")?;
 
         Ok(itree.get_inode(ino)?.meta.clone())
     }
 
-    pub fn n_get_inode_attributes(&self, ino: InodeId) -> WhResult<Metadata> {
+    pub fn n_get_inode_attributes(&self, ino: Ino) -> WhResult<Metadata> {
         let itree = ITree::n_read_lock(&self.itree, "fs_interface::get_inode_attributes")?;
 
         Ok(itree.n_get_inode(ino)?.meta.clone())
@@ -129,7 +129,7 @@ impl FsInterface {
         }
     }
 
-    pub fn recept_redundancy(&self, id: InodeId, binary: Arc<Vec<u8>>) -> WhResult<()> {
+    pub fn recept_redundancy(&self, id: Ino, binary: Arc<Vec<u8>>) -> WhResult<()> {
         let itree = ITree::write_lock(&self.itree, "recept_binary")
             .expect("recept_binary: can't read lock itree");
         let (path, perms) = itree
@@ -151,7 +151,7 @@ impl FsInterface {
             })
     }
 
-    pub fn recept_binary(&self, id: InodeId, binary: Vec<u8>) -> io::Result<()> {
+    pub fn recept_binary(&self, id: Ino, binary: Vec<u8>) -> io::Result<()> {
         let itree = ITree::read_lock(&self.itree, "recept_binary")
             .expect("recept_binary: can't read lock itree");
         let (path, perms) = match itree
@@ -194,7 +194,7 @@ impl FsInterface {
         Ok(())
     }
 
-    pub fn recept_edit_hosts(&self, id: InodeId, hosts: Vec<Address>) -> WhResult<()> {
+    pub fn recept_edit_hosts(&self, id: Ino, hosts: Vec<Address>) -> WhResult<()> {
         if !hosts.contains(&self.network_interface.hostname()?) {
             let path = ITree::n_read_lock(&self.itree, "recept_edit_hosts")?
                 .n_get_path_from_inode_id(id)?;
@@ -207,7 +207,7 @@ impl FsInterface {
 
     pub fn recept_revoke_hosts(
         &self,
-        id: InodeId,
+        id: Ino,
         host: String,
         meta: Metadata,
     ) -> Result<(), AcknoledgeSetAttrError> {
@@ -228,11 +228,11 @@ impl FsInterface {
         Ok(())
     }
 
-    pub fn recept_add_hosts(&self, id: InodeId, hosts: Vec<Address>) -> io::Result<()> {
+    pub fn recept_add_hosts(&self, id: Ino, hosts: Vec<Address>) -> io::Result<()> {
         self.network_interface.aknowledge_new_hosts(id, hosts)
     }
 
-    pub fn recept_remove_hosts(&self, id: InodeId, hosts: Vec<Address>) -> io::Result<()> {
+    pub fn recept_remove_hosts(&self, id: Ino, hosts: Vec<Address>) -> io::Result<()> {
         if hosts.contains(
             &self
                 .network_interface
@@ -281,7 +281,7 @@ impl FsInterface {
         self.network_interface.send_itree(to, global_config_bytes)
     }
 
-    pub fn send_file(&self, inode: InodeId, to: Address) -> io::Result<()> {
+    pub fn send_file(&self, inode: Ino, to: Address) -> io::Result<()> {
         let itree = ITree::read_lock(&self.itree, "send_itree")?;
         let path = itree.get_path_from_inode_id(inode)?;
         let mut size = itree.get_inode(inode)?.meta.size as usize;
@@ -291,7 +291,7 @@ impl FsInterface {
         self.network_interface.send_file(inode, data, to)
     }
 
-    pub fn read_local_file(&self, inode: InodeId) -> WhResult<Vec<u8>> {
+    pub fn read_local_file(&self, inode: Ino) -> WhResult<Vec<u8>> {
         let itree = ITree::n_read_lock(&self.itree, "send_itree")?;
         let path = itree
             .get_path_from_inode_id(inode)

@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
+use crate::error::WhError;
 use crate::pods::filesystem::file_handle::{AccessMode, FileHandle, FileHandleManager, UUID};
 use crate::pods::filesystem::File;
 use crate::pods::itree::{FsEntry, ITree, Ino};
 use crate::pods::network::pull_file::PullError;
-use crate::{error::WhError, pods::itree::InodeId};
 use custom_error::custom_error;
 use parking_lot::RwLockReadGuard;
 
@@ -130,7 +130,7 @@ impl FsInterface {
 
     pub fn read_file(
         &self,
-        file: InodeId,
+        file: Ino,
         offset: usize,
         buf: &mut [u8],
         file_handle: UUID,

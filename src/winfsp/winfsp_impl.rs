@@ -26,14 +26,14 @@ use crate::{
     error::WhError,
     pods::{
         filesystem::fs_interface::{FsInterface, SimpleFileType},
-        itree::{ITree, InodeId, WINDOWS_DEFAULT_PERMS_MODE},
+        itree::{ITree, Ino, WINDOWS_DEFAULT_PERMS_MODE},
         whpath::{ConversionError, InodeName, WhPath, WhPathError},
     },
 };
 
 #[derive(PartialEq, Debug)]
 pub struct WormholeHandle {
-    pub ino: InodeId,
+    pub ino: Ino,
     pub handle: u64,
 }
 
