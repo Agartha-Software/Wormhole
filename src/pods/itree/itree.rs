@@ -3,7 +3,10 @@ use crate::{
     error::WhResult,
     network::message::Address,
     pods::{
-        itree::inode::{Ino, Inode, Metadata},
+        itree::{
+            inode::{Ino, Inode, Metadata},
+            FsEntry,
+        },
         whpath::{InodeName, InodeNameError, WhPath},
     },
 };
@@ -51,13 +54,6 @@ pub type Hosts = Vec<Address>;
 /// InodeId is represented by an u64
 pub type InodeId = u64;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-/// Should be extended until meeting [fuser::FileType]
-pub enum FsEntry {
-    File(Hosts),
-    Directory(Vec<InodeId>),
-}
-
 pub type ITreeIndex = HashMap<InodeId, Inode>;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -69,27 +65,6 @@ pub struct ITree {
 pub const BLOCK_SIZE: u64 = 512;
 
 // !SECTION
-
-// SECTION implementations
-
-impl FsEntry {
-    pub fn get_filetype(&self) -> SimpleFileType {
-        match self {
-            FsEntry::File(_) => SimpleFileType::File,
-            FsEntry::Directory(_) => SimpleFileType::Directory,
-        }
-    }
-
-    pub fn get_children(&self) -> io::Result<&Vec<InodeId>> {
-        match self {
-            FsEntry::File(_) => Err(io::Error::new(
-                io::ErrorKind::Other,
-                "entry is not a directory",
-            )),
-            FsEntry::Directory(children) => Ok(children),
-        }
-    }
-}
 
 impl ITree {
     pub fn first_ino() -> Ino {
