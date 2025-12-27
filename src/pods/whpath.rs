@@ -66,14 +66,9 @@ impl WhPathError {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct WhPath {
     inner: Utf8PathBuf,
-}
-
-impl PartialEq for WhPath {
-    fn eq(&self, other: &Self) -> bool {
-        self.inner == other.inner
-    }
 }
 
 impl TryFrom<PathBuf> for WhPath {
@@ -192,17 +187,9 @@ impl<'a> AsPath for &'a WhPath {
     }
 }
 
-impl Debug for WhPath {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("WhPath")
-            .field("inner", &self.inner)
-            .finish()
-    }
-}
-
 impl Display for WhPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(&*self.inner, f)
+        std::fmt::Display::fmt(self.inner.as_str(), f)
     }
 }
 
