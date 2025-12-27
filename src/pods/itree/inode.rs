@@ -12,9 +12,12 @@ use crate::pods::{
     whpath::InodeName,
 };
 
-/// Ino is short for an Inode's id. I can be thought as i-number (ino)
+/// Ino is short for an Inode's id number. I can be thought as i-number (ino)
 /// This is the conventional name for inode's number across unix systems
 pub type Ino = u64;
+
+// root ino is always 1. Other ino are dynamically assigned
+pub const ROOT: Ino = 1;
 
 pub type XAttrs = HashMap<String, Vec<u8>>;
 

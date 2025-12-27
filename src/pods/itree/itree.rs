@@ -4,7 +4,7 @@ use crate::{
     network::message::Address,
     pods::{
         itree::{
-            inode::{Ino, Inode, Metadata},
+            inode::{Ino, Inode, Metadata, ROOT},
             FsEntry,
         },
         whpath::{InodeName, InodeNameError, WhPath},
@@ -31,10 +31,6 @@ use crate::pods::filesystem::{make_inode::MakeInodeError, remove_inode::RemoveIn
 
 // SECTION consts
 
-/*  NOTE - fuse root folder inode is 1.
-    other inodes can start wherever we want
-*/
-pub const ROOT: InodeId = 1;
 pub const LOCK_TIMEOUT: Duration = Duration::new(5, 0);
 
 // !SECTION
