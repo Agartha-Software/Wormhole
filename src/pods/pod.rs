@@ -1,5 +1,5 @@
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{io, sync::Arc};
 
 use crate::config::local_file::{GeneralLocalConfig, LocalConfigFile};
@@ -95,12 +95,14 @@ async fn try_to_connect_prototype(
                 Err(e) => log::error!("{first_contact}: {e}"),
                 Ok((ipc, accept)) => {
                     if let Some(urls) =
-                        accept.urls.into_iter().skip(1).fold(Some(vec![]), |a, b| {
-                            a.and_then(|mut a| {
+                        accept
+                            .urls
+                            .into_iter()
+                            .skip(1)
+                            .try_fold(Vec::new(), |mut a, b| {
                                 a.push(b?);
                                 Some(a)
                             })
-                        })
                     {
                         let new_hostname = accept.rename.unwrap_or(protoype.hostname.clone());
 
@@ -129,10 +131,7 @@ async fn try_to_connect_prototype(
         }
         if fail_on_network {
             log::error!("None of the specified peers could answer. Stopping.");
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "None of the specified peers could answer",
-            ));
+            return Err(io::Error::other("None of the specified peers could answer"));
         }
     }
     Ok((
@@ -502,7 +501,7 @@ impl Pod {
         &self.mountpoint
     }
 
-    pub fn contains(&self, path: &PathBuf) -> bool {
+    pub fn contains(&self, path: &Path) -> bool {
         path.starts_with(&self.mountpoint)
     }
 
@@ -514,7 +513,7 @@ impl Pod {
             name: self.name.clone(),
             hostname: self.network_interface.hostname.clone(),
             public_url: self.network_interface.public_url.clone(),
-            bound_socket: self.network_interface.bound_socket.clone(),
+            bound_socket: self.network_interface.bound_socket,
             mountpoint: self.mountpoint.clone(),
         })
     }
@@ -543,7 +542,7 @@ impl Pod {
 
         InspectInfo {
             public_url: self.network_interface.public_url.clone(),
-            bound_socket: self.network_interface.bound_socket.clone(),
+            bound_socket: self.network_interface.bound_socket,
             hostname: self.network_interface.hostname.clone(),
             name: self.name.clone(),
             connected_peers: peers_data,

@@ -79,7 +79,6 @@ pub async fn load_saved_pods(
             continue;
         }
 
-        let path = path;
         let bytes = match fs::read(&path) {
             Ok(bytes) => bytes,
             Err(err) => {

@@ -1,6 +1,7 @@
 use interprocess::local_socket::tokio::Listener;
 use interprocess::local_socket::{GenericFilePath, Name, NameType, ToFsName, ToNsName};
 use interprocess::local_socket::{GenericNamespaced, ListenerOptions};
+use std::io;
 
 use crate::ipc::error::SocketListenerError;
 
@@ -21,11 +22,11 @@ pub fn new_socket_listener(
     let name = specific_socket.unwrap_or(SOCKET_DEFAULT_NAME.to_string());
     let ns_name = name_from_string(&name)?;
     let listener = match ListenerOptions::new().name(ns_name).create_tokio() {
-        Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+        Err(e) if e.kind() == io::ErrorKind::AddrInUse => {
             return Err(SocketListenerError::AddrInUse { name })
         }
         #[cfg(windows)]
-        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+        Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
             return Err(SocketListenerError::AddrInUse { name })
         }
         Err(e) => panic!("Unhandled socket error during listener creation: {e}"),

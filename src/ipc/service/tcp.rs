@@ -19,7 +19,7 @@ pub async fn new_tcp_listener(
         ),
         None => free_tcp_listener().await?,
     };
-    println!("Started Tcp Listener at '{}'", ip.to_string());
+    println!("Started Tcp Listener at '{ip}'");
     Ok(tcp_listener)
 }
 

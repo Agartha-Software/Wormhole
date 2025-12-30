@@ -199,11 +199,9 @@ impl PeerIPC {
         )
         .await
         .into_iter()
-        .fold(Ok(vec![]), |acc, b: Result<_, _>| {
-            acc.and_then(|mut acc| {
-                acc.push(b?.0);
-                Ok(acc)
-            })
+        .try_fold(Vec::new(), |mut acc, b: Result<_, _>| {
+            acc.push(b?.0);
+            Ok(acc)
         })
     }
 }

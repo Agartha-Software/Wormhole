@@ -78,13 +78,10 @@ pub async fn terminal_watchdog(tx: UnboundedSender<()>) {
     let mut buf = vec![0; 1024];
 
     while let Ok(read) = tokio::io::AsyncReadExt::read(&mut stdin, &mut buf).await {
-        // NOTE -  on ctrl-D -> quit
-        match read {
-            0 => {
-                let _ = tx.send(());
-                return;
-            }
-            _ => (),
+        // Quit on ctrl-D
+        if read == 0 {
+            let _ = tx.send(());
+            return;
         };
     }
 }
