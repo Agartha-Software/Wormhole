@@ -50,6 +50,16 @@ impl Pod {
     }
 }
 
+pub fn delete_saved_pod(socket_address: &String, name: &String) -> io::Result<()> {
+    let mut path = local_data_path(socket_address);
+    path.push(format!("{name}.bak"));
+
+    if path.exists() && path.is_file() {
+        fs::remove_file(path)?;
+    }
+    Ok(())
+}
+
 pub fn delete_saved_pods(socket_address: &String) -> io::Result<()> {
     for dir_entry in local_data_path(socket_address).read_dir()? {
         let path = dir_entry?.path();

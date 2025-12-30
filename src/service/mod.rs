@@ -9,13 +9,13 @@ use std::collections::HashMap;
 use std::process::ExitCode;
 
 pub struct Service {
-    pods: HashMap<String, Pod>,
-    socket: String,
+    pub pods: HashMap<String, Pod>,
+    pub socket: String,
     tcp_listener: TcpListener,
     socket_listener: Listener,
 }
 
-use crate::ipc::{error::ListenerError, service::connection::handle_connection};
+use crate::ipc::error::ListenerError;
 use interprocess::local_socket::tokio::Listener;
 use interprocess::local_socket::traits::tokio::Listener as TokioListenerExt;
 use tokio::net::TcpListener;
@@ -79,8 +79,8 @@ impl Service {
 
         loop {
             if tokio::select! {
-                Ok((stream, _)) = self.tcp_listener.accept() => handle_connection(&mut self.pods, stream).await,
-                Ok(stream) = self.socket_listener.accept() => handle_connection(&mut self.pods, stream).await,
+                Ok((stream, _)) = self.tcp_listener.accept() => self.handle_connection(stream).await,
+                Ok(stream) = self.socket_listener.accept() => self.handle_connection(stream).await,
                 _ = signals_rx.recv() => true,
             } {
                 return Ok(());
