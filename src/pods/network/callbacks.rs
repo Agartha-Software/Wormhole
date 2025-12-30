@@ -115,10 +115,10 @@ impl Callbacks {
                 Err(io::ErrorKind::NotFound.into())
             }
         } else {
-            return Err(io::Error::new(
+            Err(io::Error::new(
                 io::ErrorKind::WouldBlock,
                 "unable to write_lock callbacks",
-            ));
+            ))
         }
     }
 
