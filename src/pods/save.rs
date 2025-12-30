@@ -14,11 +14,13 @@ use crate::{
     pods::pod::{Pod, PodPrototype},
 };
 
-pub fn local_data_path() -> PathBuf {
-    ProjectDirs::from("", "Agartha-Software", "Wormhole")
+pub fn local_data_path(socket_address: &String) -> PathBuf {
+    let mut path = ProjectDirs::from("", "Agartha-Software", "Wormhole")
         .expect("Unsupported operating system, couldn't create the local data directory.")
         .data_local_dir()
-        .to_path_buf()
+        .to_path_buf();
+    path.push(socket_address);
+    path
 }
 
 custom_error! {pub SavePodError
@@ -27,12 +29,12 @@ custom_error! {pub SavePodError
 }
 
 impl Pod {
-    pub async fn save(&self) -> Result<(), SavePodError> {
+    pub async fn save(&self, socket_address: &String) -> Result<(), SavePodError> {
         let proto = self
             .try_generate_prototype()
             .ok_or(SavePodError::LockError)?;
 
-        let mut path = local_data_path();
+        let mut path = local_data_path(socket_address);
 
         if !path.exists() {
             fs::create_dir_all(&path).map_err(|io| SavePodError::WriteError { io })?;
@@ -48,8 +50,8 @@ impl Pod {
     }
 }
 
-pub fn delete_saved_pods() -> io::Result<()> {
-    for dir_entry in local_data_path().read_dir()? {
+pub fn delete_saved_pods(socket_address: &String) -> io::Result<()> {
+    for dir_entry in local_data_path(socket_address).read_dir()? {
         let path = dir_entry?.path();
         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("bak") {
             fs::remove_file(path)?;
@@ -58,8 +60,11 @@ pub fn delete_saved_pods() -> io::Result<()> {
     Ok(())
 }
 
-pub async fn load_saved_pods(pods: &mut HashMap<String, Pod>) -> io::Result<()> {
-    let path = local_data_path();
+pub async fn load_saved_pods(
+    pods: &mut HashMap<String, Pod>,
+    socket_address: &String,
+) -> io::Result<()> {
+    let path = local_data_path(socket_address);
 
     if !path.exists() {
         fs::create_dir_all(&path)?;

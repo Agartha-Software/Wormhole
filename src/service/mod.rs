@@ -33,11 +33,11 @@ impl Service {
         let mut pods = HashMap::new();
 
         if args.clean {
-            delete_saved_pods()
+            delete_saved_pods(&socket)
                 .inspect_err(|err| eprintln!("Failed to delete saved pods: {:?}", err))
                 .ok()?;
         } else {
-            load_saved_pods(&mut pods)
+            load_saved_pods(&mut pods, &socket)
                 .await
                 .inspect_err(|err| eprintln!("Failed to load saved pods: {:?}", err))
                 .ok()?;
@@ -55,7 +55,7 @@ impl Service {
         let mut status = ExitCode::SUCCESS;
         for (name, pod) in self.pods.into_iter() {
             let _ = pod
-                .save()
+                .save(&self.socket)
                 .await
                 .inspect_err(|err| log::error!("Couldn't save the pod data: {err}"));
 
