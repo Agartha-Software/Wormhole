@@ -68,7 +68,7 @@ impl FsInterface {
     ) -> Result<usize, ReadError> {
         match self.network_interface.pull_file_sync(ino)? {
             None => Ok(self.disk.read_file(
-                &ITree::n_read_lock(&self.itree, "read_file")?.n_get_path_from_inode_id(ino)?,
+                &ITree::read_lock(&self.itree, "read_file")?.get_path_from_inode_id(ino)?,
                 offset,
                 buf,
             )?),
@@ -106,7 +106,7 @@ impl FsInterface {
         let mut buf = Vec::new();
         let itree = self.itree.read();
         let size = itree
-            .n_get_inode(ino)
+            .get_inode(ino)
             .and_then(|inode| match &inode.entry {
                 FsEntry::File(hosts) => Ok(hosts
                     .contains(&hostname)
@@ -117,7 +117,7 @@ impl FsInterface {
         if let Some(mut size) = size {
             buf.resize(size, 0);
             size = self.disk.read_file(
-                &ITree::n_read_lock(&self.itree, "read_file")?.n_get_path_from_inode_id(ino)?,
+                &ITree::read_lock(&self.itree, "read_file")?.get_path_from_inode_id(ino)?,
                 0,
                 &mut buf[..],
             )?;

@@ -87,25 +87,25 @@ impl FsInterface {
         }
         let new_inode_id = special_ino
             .ok_or(())
-            .or_else(|_| self.network_interface.n_get_next_inode())?;
+            .or_else(|_| self.network_interface.get_next_inode())?;
 
         let new_inode = Inode::new(name, parent_ino, new_inode_id, new_entry, permissions);
 
         let new_path = {
-            let itree = ITree::n_read_lock(&self.itree, "make inode")?;
+            let itree = ITree::read_lock(&self.itree, "make inode")?;
 
-            let parent = itree.n_get_inode(parent_ino)?;
+            let parent = itree.get_inode(parent_ino)?;
 
             if !has_write_perm(parent.meta.perm) || !has_write_perm(parent.meta.perm) {
                 return Err(MakeInodeError::PermissionDenied);
             }
             //check if already exist
-            match itree.n_get_inode_child_by_name(&parent, new_inode.name.as_ref()) {
+            match itree.get_inode_child_by_name(&parent, new_inode.name.as_ref()) {
                 Ok(_) => return Err(MakeInodeError::AlreadyExist),
                 Err(WhError::InodeNotFound) => {}
                 Err(err) => return Err(MakeInodeError::WhError { source: err }),
             }
-            let mut new_path = itree.n_get_path_from_inode_id(parent_ino)?;
+            let mut new_path = itree.get_path_from_inode_id(parent_ino)?;
             new_path.push((&new_inode.name).into());
             new_path
         };
