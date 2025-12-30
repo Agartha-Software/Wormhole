@@ -2,7 +2,6 @@ use crate::{ipc::error::TCPListenerError, network::ip::IpP};
 use tokio::net::TcpListener;
 
 const MAX_TRY_PORTS: u16 = 10;
-const MAX_PORT: u16 = 65535;
 const DEFAULT_ADDRESS: &str = "127.0.0.1:8081";
 
 pub async fn new_tcp_listener(
@@ -32,8 +31,8 @@ async fn free_tcp_listener() -> Result<(TcpListener, String), TCPListenerError> 
         match TcpListener::bind(&ip.to_string()).await {
             Ok(listener) => break Ok((listener, ip.to_string())),
             Err(err) => {
-                if ip.port >= MAX_PORT {
-                    break Err(TCPListenerError::AboveMainPort { max_port: MAX_PORT });
+                if ip.port == u16::MAX {
+                    break Err(TCPListenerError::AboveMainPort { max_port: u16::MAX });
                 }
                 if port_tries_count > MAX_TRY_PORTS {
                     break Err(TCPListenerError::AboveMaxTry {
