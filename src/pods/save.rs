@@ -61,8 +61,14 @@ pub fn delete_saved_pod(socket_address: &String, name: &String) -> io::Result<()
 }
 
 pub fn delete_saved_pods(socket_address: &String) -> io::Result<()> {
-    for dir_entry in local_data_path(socket_address).read_dir()? {
+    let folder = local_data_path(socket_address);
+
+    if !folder.exists() {
+        return Ok(());
+    }
+    for dir_entry in folder.read_dir()? {
         let path = dir_entry?.path();
+        log::trace!("{path:?}");
         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("bak") {
             fs::remove_file(path)?;
         }
