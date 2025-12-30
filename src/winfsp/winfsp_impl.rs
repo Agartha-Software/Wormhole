@@ -21,14 +21,12 @@ use winfsp::{
 };
 use winfsp_sys::{FspCleanupDelete, FILE_ACCESS_RIGHTS};
 
+use crate::pods::filesystem::file_handle::{AccessMode, FileHandleManager, OpenFlags};
 use crate::{
     error::WhError,
     pods::{
-        filesystem::{
-            file_handle::{AccessMode, OpenFlags},
-            fs_interface::{FsInterface, SimpleFileType},
-        },
-        itree::{ITree, InodeId},
+        filesystem::fs_interface::{FsInterface, SimpleFileType},
+        itree::{ITree, InodeId, WINDOWS_DEFAULT_PERMS_MODE},
         whpath::{ConversionError, InodeName, WhPath, WhPathError},
     },
 };
@@ -46,7 +44,7 @@ pub struct FSPController {
     // pub provider: Arc<RwLock<Provider<WindowsFolderHandle>>>,
 }
 
-#[allow(dead_code)] // NOTE - the value is used for the lifetime of winfsp, but rust emmit a dead_code warning for it
+#[allow(unused)] // unused: field `0` is used through ffi
 pub struct WinfspHost(FileSystemHost<FSPController>);
 
 impl std::fmt::Debug for WinfspHost {
@@ -273,7 +271,7 @@ impl FileSystemContext for FSPController {
                 kind,
                 OpenFlags::from_win_u32(granted_access),
                 AccessMode::from_win_u32(granted_access),
-                0o777, // TODO
+                WINDOWS_DEFAULT_PERMS_MODE,
             )
             .inspect_err(|e| log::error!("create::{e};"))?;
         *file_info.as_mut() = (&inode.meta).into();
@@ -326,12 +324,19 @@ impl FileSystemContext for FSPController {
 
     fn flush(
         &self,
-        _context: Option<&Self::FileContext>,
-        _file_info: &mut winfsp::filesystem::FileInfo,
+        context: Option<&Self::FileContext>,
+        file_info: &mut winfsp::filesystem::FileInfo,
     ) -> winfsp::Result<()> {
-        log::trace!("flush");
+        log::trace!("flush({:?})", &context.map(|c| c.ino));
+        if let Some(context) = context {
+            let mut file_handles =
+                FileHandleManager::write_lock(&self.fs_interface.file_handles, "release")?;
+
+            let handle = file_handles.handles.get_mut(&context.handle);
+            self.fs_interface.flush(context.ino, handle)?;
+            self.get_file_info_internal(context, file_info)?;
+        }
         Ok(())
-        //         Err(NTSTATUS(STATUS_INVALID_DEVICE_REQUEST).into())
     }
 
     fn get_file_info(

@@ -109,13 +109,13 @@ impl PeerIPC {
                 let accept =
                     handshake::connect(&mut stream, &mut sink, hostname, public_url).await?;
                 (
-                    accept,
+                    accept.clone(),
                     tokio::spawn(Self::work(
                         sink,
                         stream,
                         receiver_in.clone(),
                         sender_out,
-                        url.clone(),
+                        accept.hostname,
                     )),
                 )
             }

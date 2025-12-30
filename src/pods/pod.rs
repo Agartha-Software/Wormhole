@@ -81,7 +81,7 @@ async fn try_to_connect_prototype(
     fail_on_network: bool,
     receiver_in: &UnboundedSender<FromNetworkMessage>,
 ) -> Result<ConnectionInfo, io::Error> {
-    if protoype.global_config.general.entrypoints.len() >= 1 {
+    if !protoype.global_config.general.entrypoints.is_empty() {
         for first_contact in &protoype.global_config.general.entrypoints {
             match PeerIPC::connect(
                 first_contact.to_owned(),
@@ -160,7 +160,7 @@ custom_error! {pub PodStopError
 fn create_all_dirs(itree: &ITree, from: InodeId, disk: &dyn DiskManager) -> io::Result<()> {
     let from = itree.n_get_inode(from).map_err(|e| e.into_io())?;
 
-    return match &from.entry {
+    match &from.entry {
         FsEntry::File(_) => Ok(()),
         FsEntry::Directory(children) => {
             let current_path = itree
@@ -183,7 +183,7 @@ fn create_all_dirs(itree: &ITree, from: InodeId, disk: &dyn DiskManager) -> io::
             }
             Ok(())
         }
-    };
+    }
 }
 
 impl Pod {
@@ -432,7 +432,7 @@ impl Pod {
         self.network_interface
             .to_network_message_tx
             .send(ToNetworkMessage::BroadcastMessage(
-                MessageContent::Disconnect(self.network_interface.hostname.clone()),
+                MessageContent::Disconnect,
             ))
             .expect("to_network_message_tx closed.");
 
@@ -493,13 +493,13 @@ impl Pod {
         fs_interface
             .disk
             .stop()
-            .map_err(|e| PodStopError::DiskManagerStopFailed { e: e })?;
+            .map_err(|e| PodStopError::DiskManagerStopFailed { e })?;
 
         Ok(())
     }
 
     pub fn get_mountpoint(&self) -> &PathBuf {
-        return &self.mountpoint;
+        &self.mountpoint
     }
 
     pub fn contains(&self, path: &PathBuf) -> bool {
