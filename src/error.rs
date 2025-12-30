@@ -5,7 +5,9 @@ use crate::pods::pod::PodInfoError;
 use crate::pods::pod::PodStopError;
 use bincode;
 
-custom_error! {pub WhError
+custom_error! {
+    #[derive(Clone)]
+    pub WhError
     InodeNotFound = "Entry not found",
     InodeIsNotADirectory = "Entry is not a directory",
     InodeIsADirectory = "Entry is a directory",
