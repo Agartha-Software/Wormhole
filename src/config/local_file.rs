@@ -10,4 +10,5 @@ pub struct GeneralLocalConfig {
     pub name: Option<String>,
     pub hostname: Option<String>,
     pub public_url: Option<String>,
+    pub restart: Option<bool>,
 }

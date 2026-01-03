@@ -83,6 +83,7 @@ where
         public_url,
         bound_socket,
         mountpoint: args.mountpoint,
+        should_restart: local_config.general.restart.unwrap_or(true),
     };
 
     let answer = match Pod::new(prototype, server).await {
