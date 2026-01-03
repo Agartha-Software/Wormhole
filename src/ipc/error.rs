@@ -1,6 +1,6 @@
 use custom_error::custom_error;
 use serde::{Deserialize, Serialize};
-use std::io::ErrorKind;
+use std::io::{self, ErrorKind};
 
 custom_error! {pub ListenerError
     TCPListenerError { source: TCPListenerError } = "{source}",
@@ -14,7 +14,8 @@ custom_error! {pub TCPListenerError
 }
 
 custom_error! {pub SocketListenerError
-    AddrInUse { name: String } = "Could not start the server because the socket file is occupied. Please check\nif {name} is in use by another process and try again."
+    AddrInUse { name: String } = "Could not start the server because the socket file is occupied. Please check\nif {name} is in use by another process and try again.",
+    InvalidAddr { io: io::Error } = "The given socket address is invalid: {io}"
 }
 
 fn serialize<S>(kind: &ErrorKind, serializer: S) -> Result<S::Ok, S::Error>

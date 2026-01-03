@@ -6,11 +6,12 @@ use crate::{
         commands::RemoveRequest,
         service::{commands::find_pod, connection::send_answer},
     },
-    pods::pod::Pod,
+    pods::{pod::Pod, save::delete_saved_pod},
 };
 
 pub async fn remove<Stream>(
     args: RemoveRequest,
+    socket_address: &String,
     pods: &mut HashMap<String, Pod>,
     stream: &mut Stream,
 ) -> std::io::Result<bool>
@@ -27,8 +28,11 @@ where
 
     let answer = if let Some(pod) = pods.remove(&name) {
         match pod.stop().await {
-            Ok(()) => RemoveAnswer::Success,
-            Err(e) => RemoveAnswer::PodStopFailed(e.to_string()),
+            Ok(()) => match delete_saved_pod(socket_address, &name) {
+                Ok(()) => RemoveAnswer::Success,
+                Err(err) => RemoveAnswer::PodStopFailed(err.to_string()),
+            },
+            Err(err) => RemoveAnswer::PodStopFailed(err.to_string()),
         }
     } else {
         RemoveAnswer::PodNotFound

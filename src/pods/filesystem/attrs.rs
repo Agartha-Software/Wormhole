@@ -54,11 +54,10 @@ impl FsInterface {
                     }
                 }
                 FsEntry::File(hosts) => {
-                    let hostname = self.network_interface.hostname()?;
-                    if hosts.contains(&hostname) {
+                    if hosts.contains(&self.network_interface.hostname) {
                         let created = match &inode.entry {
                             FsEntry::File(old_hosts) => {
-                                !old_hosts.contains(&self.network_interface.hostname()?)
+                                !old_hosts.contains(&self.network_interface.hostname)
                             }
                             _ => false,
                         };

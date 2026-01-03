@@ -2,8 +2,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::cli::ConfigType;
+use crate::config::local_file::LocalConfigFile;
 use crate::config::types::Config;
-use crate::config::{GlobalConfig, LocalConfig};
+use crate::config::GlobalConfig;
 use crate::ipc::service::commands::find_pod;
 use crate::ipc::{
     answers::GenerateConfigAnswer, commands::PodId, service::connection::send_answer,
@@ -22,7 +23,7 @@ fn write_defaults(
         if !overwrite && local_path.exists() {
             return Err(GenerateConfigAnswer::CantOverwrite(ConfigType::Local));
         }
-        LocalConfig::default()
+        LocalConfigFile::default()
             .write(local_path)
             .map_err(|err| GenerateConfigAnswer::WriteFailed(err.to_string(), ConfigType::Local))?;
     }
@@ -50,29 +51,24 @@ async fn write_local_config<Stream>(
 where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
 {
-    if let Ok(config) = LocalConfig::read_lock(&pod.local_config, "Write local config command") {
-        let mut local_path = pod.get_mountpoint().clone();
-        local_path.push(".local_config.toml");
+    let mut local_path = pod.get_mountpoint().clone();
+    local_path.push(".local_config.toml");
 
-        if !overwrite && local_path.exists() {
-            send_answer(
-                GenerateConfigAnswer::CantOverwrite(ConfigType::Local),
-                stream,
-            )
-            .await?;
-            return Ok(false);
-        }
+    if !overwrite && local_path.exists() {
+        send_answer(
+            GenerateConfigAnswer::CantOverwrite(ConfigType::Local),
+            stream,
+        )
+        .await?;
+        return Ok(false);
+    }
 
-        if let Err(err) = config.write(local_path) {
-            send_answer(
-                GenerateConfigAnswer::WriteFailed(err.to_string(), ConfigType::Local),
-                stream,
-            )
-            .await?;
-            return Ok(false);
-        };
-    } else {
-        send_answer(GenerateConfigAnswer::ConfigBlock, stream).await?;
+    if let Err(err) = pod.generate_local_config().write(local_path) {
+        send_answer(
+            GenerateConfigAnswer::WriteFailed(err.to_string(), ConfigType::Local),
+            stream,
+        )
+        .await?;
         return Ok(false);
     };
     Ok(true)

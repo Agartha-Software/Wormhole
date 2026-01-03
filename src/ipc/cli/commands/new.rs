@@ -19,28 +19,30 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<String> {
 
     let NewArgs {
         name,
-        port,
         url,
         hostname,
-        listen_url,
         additional_hosts,
+        listen_url,
+        ip_address,
+        port,
         ..
     } = args;
 
     let request = NewRequest {
         mountpoint: mountpoint.clone(),
         name: name.clone(),
+        ip_address,
         port,
+        public_url: listen_url,
         url,
         hostname,
-        listen_url,
         additional_hosts,
     };
     send_command(Command::New(request), &mut stream).await?;
 
     match recieve_answer::<NewAnswer>(&mut stream).await? {
-        NewAnswer::Success(new_port) => Ok(format!(
-            "Pod '{name}' created with success with port '{new_port}'."
+        NewAnswer::Success(listen_url) => Ok(format!(
+            "Pod '{name}' created with success, listening to '{listen_url}'."
         )),
         NewAnswer::AlreadyExist => Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
@@ -65,6 +67,10 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<String> {
         NewAnswer::InvalidUrlIp => Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "The given Url to connect to is invalid.",
+        )),
+        NewAnswer::ConflictWithConfig(field) => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("The field '{field}' have a conflicting value between args and configuration files."),
         )),
     }
 }

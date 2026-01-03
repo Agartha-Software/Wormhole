@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{net::IpAddr, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -39,11 +39,12 @@ impl From<IdentifyNewPodGroup> for PodId {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NewRequest {
     pub name: String,
-    pub port: Option<u16>,
     pub mountpoint: PathBuf,
     pub url: Option<String>,
+    pub public_url: Option<String>,
+    pub ip_address: Option<IpAddr>,
+    pub port: Option<u16>,
     pub hostname: Option<String>,
-    pub listen_url: Option<String>,
     pub additional_hosts: Vec<String>,
 }
 

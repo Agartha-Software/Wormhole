@@ -61,7 +61,7 @@ impl FsInterface {
         drop(itree);
 
         match entry {
-            FsEntry::File(hosts) if hosts.contains(&self.network_interface.hostname()?) => self
+            FsEntry::File(hosts) if hosts.contains(&self.network_interface.hostname) => self
                 .disk
                 .remove_file(&to_remove_path)
                 .map_err(|io| RemoveFileError::LocalDeletionFailed { io })?,

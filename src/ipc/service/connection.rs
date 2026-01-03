@@ -8,38 +8,41 @@ use crate::{
         },
     },
     pods::pod::Pod,
+    service::Service,
 };
 use serde::Serialize;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 
-pub async fn handle_connection<Stream>(pods: &mut HashMap<String, Pod>, mut stream: Stream) -> bool
-where
-    Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
-{
-    log::trace!("Connection from CLI recieved!");
+impl Service {
+    pub async fn handle_connection<Stream>(&mut self, mut stream: Stream) -> bool
+    where
+        Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
+    {
+        log::trace!("Connection from CLI recieved!");
 
-    let size = stream
-        .read_u32()
-        .await
-        .expect("Failed to read recieved command, shouldn't be possible!");
-    let mut buffer: Vec<u8> = Vec::with_capacity(size as usize);
-    let _size = stream
-        .read_buf(&mut buffer)
-        .await
-        .expect("Failed to read recieved command, shouldn't be possible!");
-
-    match bincode::deserialize::<Command>(&buffer) {
-        Ok(command) => handle_command(command, pods, stream)
+        let size = stream
+            .read_u32()
             .await
-            .unwrap_or_else(|e| {
-                log::error!("Network Error: {e:?}"); // TODO verify relevance
+            .expect("Failed to read recieved command, shouldn't be possible!");
+        let mut buffer: Vec<u8> = Vec::with_capacity(size as usize);
+        let _size = stream
+            .read_buf(&mut buffer)
+            .await
+            .expect("Failed to read recieved command, shouldn't be possible!");
+
+        match bincode::deserialize::<Command>(&buffer) {
+            Ok(command) => handle_command(command, &mut self.pods, &self.socket, stream)
+                .await
+                .unwrap_or_else(|e| {
+                    log::error!("Network Error: {e:?}"); // TODO verify relevance
+                    false
+                }),
+            Err(err) => {
+                log::error!("Command recieved not recognized by the service: {err:?}");
+                eprintln!("Command recieved not recognized by the service.");
                 false
-            }),
-        Err(err) => {
-            log::error!("Command recieved not recognized by the service: {err:?}");
-            eprintln!("Command recieved not recognized by the service.");
-            false
+            }
         }
     }
 }
@@ -59,6 +62,7 @@ where
 async fn handle_command<Stream>(
     command: Command,
     pods: &mut HashMap<String, Pod>,
+    socket_address: &String,
     mut stream: Stream,
 ) -> std::io::Result<bool>
 where
@@ -72,7 +76,7 @@ where
         Command::New(request) => new(request, pods, stream).await,
         Command::GetHosts(request) => gethosts(request, pods, stream).await,
         Command::Inspect(pod_id) => inspect(pod_id, pods, stream).await,
-        Command::Remove(request) => remove(request, pods, stream).await,
+        Command::Remove(request) => remove(request, socket_address, pods, stream).await,
         Command::Status => status(stream).await,
         Command::Tree(pod_id) => tree(pod_id, pods, stream).await,
         Command::GenerateConfig(pod_id, overwrite, config_type) => {
