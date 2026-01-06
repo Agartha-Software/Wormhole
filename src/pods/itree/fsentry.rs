@@ -1,3 +1,5 @@
+use std::{fmt::Display, path::{Path, PathBuf}};
+
 use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +19,27 @@ pub enum SymlinkPath {
     SymlinkPathAbsolute(WhPath),
     /// absolute Path pointing outside the WH drive
     SymlinkExternal(Utf8PathBuf),
+}
+
+impl SymlinkPath {
+    pub fn realize(&self, from: &Path) -> PathBuf {
+        return match self {
+            SymlinkPath::SymlinkPathRelative(path) => path.into(),
+            SymlinkPath::SymlinkPathAbsolute(path) => from.join(path),
+            SymlinkPath::SymlinkExternal(path) => path.into(),
+        }
+    }
+}
+
+
+impl Display for SymlinkPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SymlinkPath::SymlinkPathRelative(path) => f.write_str(path.as_str()),
+            SymlinkPath::SymlinkPathAbsolute(path) =>  write!(f, "//{}", path.as_str()),
+            SymlinkPath::SymlinkExternal(path) => f.write_str(path.as_str()),
+        }
+    }
 }
 
 

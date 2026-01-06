@@ -107,14 +107,18 @@ impl FsInterface {
             new_path
         };
 
-        match kind {
-            SimpleFileType::File => self
+        match &new_inode.entry {
+            FsEntry::File(_) => self
                 .disk
                 .new_file(&new_path, new_inode.meta.perm)
                 .map_err(|io| MakeInodeError::LocalCreationFailed { io }),
-            SimpleFileType::Directory => self
+            FsEntry::Directory(_) => self
                 .disk
                 .new_dir(&new_path, new_inode.meta.perm)
+                .map_err(|io| MakeInodeError::LocalCreationFailed { io }),
+            FsEntry::Symlink(link) => self
+                .disk
+                .new_symlink(&new_path, new_inode.meta.perm, &link.target)
                 .map_err(|io| MakeInodeError::LocalCreationFailed { io }),
         }?;
         self.network_interface

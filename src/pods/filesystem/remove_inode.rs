@@ -76,6 +76,10 @@ impl FsInterface {
             FsEntry::Directory(children) => {
                 children.iter().try_for_each(|c| self.remove_inode(*c))?
             }
+            FsEntry::Symlink(_) => self
+                .disk
+                .remove_symlink(&to_remove_path)
+                .map_err(|io| RemoveFileError::LocalDeletionFailed { io })?,
         };
         Ok(())
     }

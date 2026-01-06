@@ -5,19 +5,20 @@ use std::{
         fd::{AsRawFd, RawFd},
         unix::fs::FileExt,
     },
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use openat::Dir;
 use tokio::io;
 
-use crate::pods::whpath::WhPath;
+use crate::pods::{itree::SymlinkPath, whpath::WhPath};
 
 use super::DiskManager;
 
 #[derive(Debug)]
 pub struct UnixDiskManager {
     handle: Dir,
+    path: PathBuf,
 }
 
 impl UnixDiskManager {
@@ -38,6 +39,7 @@ impl UnixDiskManager {
 
         Ok(Self {
             handle: Dir::open(mount_point)?,
+            path: mount_point.into(),
         })
     }
 }
@@ -121,6 +123,16 @@ impl DiskManager for UnixDiskManager {
 
     fn file_exists(&self, path: &WhPath) -> bool {
         self.handle.open_file(path).is_ok()
+    }
+
+fn new_symlink(&self, path: &WhPath, permissions: u16, target: &SymlinkPath) -> std::io::Result<()> {
+        let target = target.realize(&self.path);
+        self.handle.symlink(path, &target)?;
+        self.set_permisions(path, permissions)
+    }
+
+    fn remove_symlink(&self, path: &WhPath) -> std::io::Result<()> {
+        self.handle.remove_file(path)
     }
 }
 

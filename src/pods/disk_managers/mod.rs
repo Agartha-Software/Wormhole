@@ -2,6 +2,7 @@ use std::io;
 
 use std::fmt::Debug;
 
+use crate::pods::itree::SymlinkPath;
 use crate::pods::whpath::WhPath;
 #[cfg(target_os = "linux")]
 pub mod unix_disk_manager;
@@ -37,4 +38,8 @@ pub trait DiskManager: Send + Sync + Debug {
     fn file_exists(&self, path: &WhPath) -> bool;
 
     fn stop(&mut self) -> io::Result<()>;
+
+    fn new_symlink(&self, path: &WhPath, permissions: u16, target: &SymlinkPath) -> io::Result<()>;
+
+    fn remove_symlink(&self, path: &WhPath) -> io::Result<()>;
 }

@@ -46,13 +46,6 @@ impl FsInterface {
                         source: WhError::InodeIsADirectory,
                     });
                 }
-                FsEntry::Directory(_) => {
-                    if meta.perm != inode.meta.perm {
-                        self.disk
-                            .set_permisions(&path, meta.perm)
-                            .map_err(|io| AcknoledgeSetAttrError::SetFileSizeIoError { io })?;
-                    }
-                }
                 FsEntry::File(hosts) => {
                     let hostname = self.network_interface.hostname()?;
                     if hosts.contains(&hostname) {
@@ -81,6 +74,13 @@ impl FsInterface {
                                 .set_permisions(&path, meta.perm)
                                 .map_err(|io| AcknoledgeSetAttrError::SetFileSizeIoError { io })?;
                         }
+                    }
+                }
+                _ => {
+                    if meta.perm != inode.meta.perm {
+                        self.disk
+                            .set_permisions(&path, meta.perm)
+                            .map_err(|io| AcknoledgeSetAttrError::SetFileSizeIoError { io })?;
                     }
                 }
             }

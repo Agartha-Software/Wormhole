@@ -92,7 +92,7 @@ impl FsInterface {
             itree.get_path_from_inode_id(inode.id)?
         };
 
-        match inode.entry {
+        match &inode.entry {
             // REVIEW - is it still useful to create an empty file in this case ?
             FsEntry::File(hosts) if hosts.contains(&self.network_interface.hostname()?) => self
                 .disk
@@ -103,6 +103,10 @@ impl FsInterface {
             FsEntry::Directory(_) => self
                 .disk
                 .new_dir(&new_path, inode.meta.perm)
+                .map_err(|io| MakeInodeError::LocalCreationFailed { io }),
+            FsEntry::Symlink(symlink) => self
+                .disk
+                .new_symlink(&new_path, inode.meta.perm, &symlink.target)
                 .map_err(|io| MakeInodeError::LocalCreationFailed { io }),
             // TODO - remove when merge is handled because new file should create folder
             // FsEntry::Directory(_) => {}

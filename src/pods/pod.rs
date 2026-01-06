@@ -171,6 +171,18 @@ fn create_all_shared(itree: &ITree, from: Ino, disk: &dyn DiskManager) -> io::Re
 
     match &from.entry {
         FsEntry::File(_) => Ok(()),
+        FsEntry::Symlink(symlink) => {
+            let current_path = itree
+                .get_path_from_inode_id(from.id)
+                .map_err(|e| e.into_io())?;
+            disk.new_symlink(&current_path, from.meta.perm, &symlink.target).or_else(|e| {
+                if e.kind() == io::ErrorKind::AlreadyExists {
+                    Ok(())
+                } else {
+                    Err(e)
+                }
+            })
+        }
         FsEntry::Directory(children) => {
             let current_path = itree
                 .get_path_from_inode_id(from.id)
