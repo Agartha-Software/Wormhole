@@ -31,6 +31,11 @@ impl SymlinkPath {
     }
 }
 
+impl Default for SymlinkPath {
+    fn default() -> Self {
+        Self::SymlinkPathRelative("".into())
+    }
+}
 
 impl Display for SymlinkPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -43,17 +48,9 @@ impl Display for SymlinkPath {
 }
 
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct EntrySymlink {
     pub target: SymlinkPath,
-}
-
-impl Default for EntrySymlink {
-    fn default() -> Self {
-        Self {
-            target: SymlinkPath::SymlinkPathRelative("".into())
-        }
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
