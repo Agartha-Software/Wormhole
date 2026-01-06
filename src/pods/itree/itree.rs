@@ -246,7 +246,7 @@ impl ITree {
         })
     }
 
-    pub fn get_inode(&self, ino: InodeId) -> WhResult<&Inode> {
+    pub fn get_inode(&self, ino: Ino) -> WhResult<&Inode> {
         self.entries.get(&ino).ok_or(WhError::InodeNotFound)
     }
 
