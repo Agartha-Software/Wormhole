@@ -155,7 +155,6 @@ impl ITree {
     ) -> impl Iterator<Item = &'a Inode> + use<'a> {
         self.iter()
             .filter_map(move |(_, inode)| match &inode.entry {
-                FsEntry::Directory(_) => None,
                 FsEntry::File(hosts) => {
                     if hosts.len() == 1 && hosts.contains(&host) {
                         Some(inode)
@@ -163,6 +162,7 @@ impl ITree {
                         None
                     }
                 }
+                _ => None,
             })
     }
 
@@ -210,8 +210,8 @@ impl ITree {
         let parent = self.get_inode_mut(parent)?;
 
         let children = match &mut parent.entry {
-            FsEntry::File(_) => return Err(WhError::InodeIsNotADirectory),
             FsEntry::Directory(children) => children,
+            _ => return Err(WhError::InodeIsNotADirectory),
         };
 
         children.retain(|parent_child| *parent_child != child);
@@ -222,8 +222,8 @@ impl ITree {
         let parent = self.get_inode_mut(parent)?;
 
         let children = match &mut parent.entry {
-            FsEntry::File(_) => Err(WhError::InodeIsNotADirectory),
             FsEntry::Directory(children) => Ok(children),
+            _ => Err(WhError::InodeIsNotADirectory),
         }?;
 
         children.push(child);
@@ -234,9 +234,8 @@ impl ITree {
     pub fn remove_inode(&mut self, id: Ino) -> Result<Inode, RemoveInodeError> {
         let inode = self.get_inode(id)?;
         match &inode.entry {
-            FsEntry::File(_) => {}
-            FsEntry::Directory(children) if children.len() == 0 => {}
-            FsEntry::Directory(_) => return Err(RemoveInodeError::NonEmpty),
+            FsEntry::Directory(children) if children.len() > 0 => return Err(RemoveInodeError::NonEmpty),
+            _ => {}
         }
 
         self.remove_child(inode.parent, inode.id)?;

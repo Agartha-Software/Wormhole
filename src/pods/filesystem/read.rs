@@ -111,7 +111,7 @@ impl FsInterface {
                 FsEntry::File(hosts) => Ok(hosts
                     .contains(&hostname)
                     .then_some(inode.meta.size as usize)),
-                FsEntry::Directory(_) => Err(WhError::InodeIsADirectory),
+                _ => Err(WhError::InodeIsADirectory),
             })?;
         drop(itree);
         if let Some(mut size) = size {

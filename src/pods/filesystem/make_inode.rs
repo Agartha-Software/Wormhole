@@ -3,12 +3,8 @@ use custom_error::custom_error;
 use crate::{
     error::WhError,
     pods::{
-        filesystem::permissions::has_write_perm,
-        filesystem::{
-            diffs::{Sig, Signature},
-            File,
-        },
-        itree::{FsEntry, ITree, Inode},
+        filesystem::{File, diffs::{Sig, Signature}, permissions::has_write_perm},
+        itree::{EntrySymlink, FsEntry, ITree, Inode},
         whpath::InodeName,
     },
 };
@@ -79,6 +75,7 @@ impl FsInterface {
         let new_entry = match kind {
             SimpleFileType::File => FsEntry::File(vec![self.network_interface.hostname()?.clone()]),
             SimpleFileType::Directory => FsEntry::Directory(Vec::new()),
+            SimpleFileType::Symlink => FsEntry::Symlink(EntrySymlink::default()),
         };
 
         let special_ino = ITree::get_special(name.as_ref(), parent_ino);

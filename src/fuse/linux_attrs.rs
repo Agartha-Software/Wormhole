@@ -9,6 +9,7 @@ impl Into<FileType> for SimpleFileType {
         match self {
             SimpleFileType::File => FileType::RegularFile,
             SimpleFileType::Directory => FileType::Directory,
+            SimpleFileType::Symlink => FileType::Symlink,
         }
     }
 }
@@ -18,6 +19,7 @@ impl Into<FileType> for &SimpleFileType {
         match self {
             SimpleFileType::File => FileType::RegularFile,
             SimpleFileType::Directory => FileType::Directory,
+            SimpleFileType::Symlink => FileType::Symlink,
         }
     }
 }
@@ -27,10 +29,10 @@ impl Into<SimpleFileType> for FileType {
         match self {
             FileType::RegularFile => SimpleFileType::File,
             FileType::Directory => SimpleFileType::Directory,
+            FileType::Symlink => SimpleFileType::Symlink,
             FileType::NamedPipe => todo!("file type not supported"),
             FileType::CharDevice => todo!("file type not supported"),
             FileType::BlockDevice => todo!("file type not supported"),
-            FileType::Symlink => todo!("file type not supported"),
             FileType::Socket => todo!("file type not supported"),
         }
     }

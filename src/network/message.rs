@@ -96,6 +96,7 @@ impl fmt::Debug for MessageContent {
                 match inode.entry {
                     crate::pods::itree::FsEntry::File(_) => 'f',
                     crate::pods::itree::FsEntry::Directory(_) => 'd',
+                    crate::pods::itree::FsEntry::Symlink(_) => 'l',
                 }
             ),
             MessageContent::RedundancyFile(id, _) => write!(f, "RedundancyFile({id}, <bin>)"),

@@ -1,9 +1,7 @@
-use std::io;
-
 use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 
-use crate::{network::message::Address, pods::{
+use crate::{error::{WhError, WhResult}, network::message::Address, pods::{
     filesystem::fs_interface::SimpleFileType,
     itree::Ino, whpath::WhPath,
 }};
@@ -27,6 +25,13 @@ pub struct EntrySymlink {
     pub target: SymlinkPath,
 }
 
+impl Default for EntrySymlink {
+    fn default() -> Self {
+        Self {
+            target: SymlinkPath::SymlinkPathRelative("".into())
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 /// Should be extended until meeting [fuser::FileType]
@@ -41,16 +46,14 @@ impl FsEntry {
         match self {
             FsEntry::File(_) => SimpleFileType::File,
             FsEntry::Directory(_) => SimpleFileType::Directory,
+            FsEntry::Symlink(_) => SimpleFileType::Symlink,
         }
     }
 
-    pub fn get_children(&self) -> io::Result<&Vec<Ino>> {
+    pub fn get_children(&self) -> WhResult<&Vec<Ino>> {
         match self {
-            FsEntry::File(_) => Err(io::Error::new(
-                io::ErrorKind::Other,
-                "entry is not a directory",
-            )),
             FsEntry::Directory(children) => Ok(children),
+            _ => Err(WhError::InodeIsNotADirectory),
         }
     }
 }

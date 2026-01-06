@@ -162,11 +162,11 @@ custom_error! {pub PodStopError
     DiskManagerStopFailed{e: io::Error} = "Unable to stop the disk manager properly. Your files are still on the system folder: ('.'mount_path). {e}",
 }
 
-/// Create all the directories present in ITree. (not the files)
+/// Create all directories and symlinks present in ITree. (not the files)
 ///
 /// Required at setup to resolve issue #179
 /// (files pulling need the parent folder to be already present)
-fn create_all_dirs(itree: &ITree, from: Ino, disk: &dyn DiskManager) -> io::Result<()> {
+fn create_all_shared(itree: &ITree, from: Ino, disk: &dyn DiskManager) -> io::Result<()> {
     let from = itree.get_inode(from).map_err(|e| e.into_io())?;
 
     match &from.entry {
@@ -188,7 +188,7 @@ fn create_all_dirs(itree: &ITree, from: Ino, disk: &dyn DiskManager) -> io::Resu
             }
 
             for child in children {
-                create_all_dirs(itree, *child, disk)?
+                create_all_shared(itree, *child, disk)?
             }
             Ok(())
         }
@@ -252,9 +252,9 @@ impl Pod {
         #[cfg(target_os = "windows")]
         let disk_manager = Box::new(WindowsDiskManager::new(&proto.mountpoint)?);
 
-        create_all_dirs(&proto.itree, ROOT, disk_manager.as_ref())
-            .inspect_err(|e| log::error!("unable to create_all_dirs: {e}"))
-            .map_err(|e| std::io::Error::new(e.kind(), format!("create_all_dirs: {e}")))?;
+        create_all_shared(&proto.itree, ROOT, disk_manager.as_ref())
+            .inspect_err(|e| log::error!("unable to create_all_shared: {e}"))
+            .map_err(|e| std::io::Error::new(e.kind(), format!("create_all_shared: {e}")))?;
 
         if let Ok(perms) = proto
             .itree
@@ -374,8 +374,8 @@ impl Pod {
 
         match entry {
             FsEntry::File(hosts) => Ok(hosts.clone()),
-            FsEntry::Directory(_) => Err(PodInfoError::WrongFileType {
-                detail: "Asked path is a directory (directories have no hosts)".to_owned(),
+            _ => Err(PodInfoError::WrongFileType {
+                detail: "Requested path not a file (only files have hosts)".to_owned(),
             }),
         }
     }

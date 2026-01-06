@@ -39,6 +39,7 @@ impl From<&FsEntry> for SimpleFileType {
         match entry {
             FsEntry::File(_) => SimpleFileType::File,
             FsEntry::Directory(_) => SimpleFileType::Directory,
+            FsEntry::Symlink(_) => SimpleFileType::Symlink,
         }
     }
 }
