@@ -106,7 +106,7 @@ impl FsInterface {
                 .map_err(|io| MakeInodeError::LocalCreationFailed { io }),
             FsEntry::Symlink(symlink) => self
                 .disk
-                .new_symlink(&new_path, inode.meta.perm, &symlink.target)
+                .new_symlink(&new_path, inode.meta.perm, symlink)
                 .map_err(|io| MakeInodeError::LocalCreationFailed { io }),
             // TODO - remove when merge is handled because new file should create folder
             // FsEntry::Directory(_) => {}

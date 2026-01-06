@@ -11,7 +11,7 @@ use std::{
 use openat::Dir;
 use tokio::io;
 
-use crate::pods::{itree::SymlinkPath, whpath::WhPath};
+use crate::pods::{itree::EntrySymlink, whpath::WhPath};
 
 use super::DiskManager;
 
@@ -125,8 +125,8 @@ impl DiskManager for UnixDiskManager {
         self.handle.open_file(path).is_ok()
     }
 
-fn new_symlink(&self, path: &WhPath, permissions: u16, target: &SymlinkPath) -> std::io::Result<()> {
-        let target = target.realize(&self.path);
+fn new_symlink(&self, path: &WhPath, permissions: u16, link: &EntrySymlink) -> std::io::Result<()> {
+        let target = link.target.realize(&self.path);
         self.handle.symlink(path, &target)?;
         self.set_permisions(path, permissions)
     }

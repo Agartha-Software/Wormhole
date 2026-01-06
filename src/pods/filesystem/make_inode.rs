@@ -118,7 +118,7 @@ impl FsInterface {
                 .map_err(|io| MakeInodeError::LocalCreationFailed { io }),
             FsEntry::Symlink(link) => self
                 .disk
-                .new_symlink(&new_path, new_inode.meta.perm, &link.target)
+                .new_symlink(&new_path, new_inode.meta.perm, link)
                 .map_err(|io| MakeInodeError::LocalCreationFailed { io }),
         }?;
         self.network_interface

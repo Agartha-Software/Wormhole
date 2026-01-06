@@ -1,8 +1,12 @@
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::PermissionsExt;
+#[cfg(target_os = "linux")]
+use wormhole::pods::disk_managers::unix_disk_manager::UnixDiskManager;
+#[cfg(target_os = "windows")]
+use wormhole::pods::disk_managers::unix_disk_manager::WindowsDiskManager;
 
 use assert_fs::{assert::PathAssert, prelude::PathChild};
-use wormhole::pods::disk_managers::{unix_disk_manager::UnixDiskManager, DiskManager};
+use wormhole::pods::{disk_managers::DiskManager, itree::EntrySymlink};
 
 pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::path::Path>>(
     disk: &D,
@@ -17,6 +21,12 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
         disk.new_dir(&"folder".try_into().unwrap(), 0o775)
             .expect("new_dir");
         temp_dir.child("folder").assert(predicates::path::is_dir());
+
+        disk.new_symlink(&"link".try_into().unwrap(), 0o775, &EntrySymlink::default())
+            .expect("new_symlink");
+        temp_dir
+            .child("link")
+            .assert(predicates::path::is_symlink());
     }
 
     // EXISTS
@@ -41,6 +51,10 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
         disk.new_dir(&"dir2".try_into().unwrap(), 0o755)
             .expect("new_dir");
         temp_dir.child("dir2").assert(predicates::path::is_dir());
+
+        disk.remove_symlink(&"link".try_into().unwrap())
+            .expect("remove_symlink");
+        temp_dir.child("link").assert(predicates::path::missing());
     }
 
     // WRITE
@@ -150,6 +164,7 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
             .metadata()
             .expect("metadata")
             .permissions();
+
         assert_eq!(p.mode() & 0o777, 0o444, "root permission set correctly");
 
         disk.set_permisions(&"".try_into().unwrap(), 0o775)
@@ -170,6 +185,7 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 pub fn test_unix_disk() {
     let temp_dir = assert_fs::TempDir::new().expect("creating temp dir");
     let disk = UnixDiskManager::new(&temp_dir.path()).expect("creating disk manager");
@@ -184,7 +200,7 @@ pub fn test_unix_disk() {
 
     let mountpoint = temp_dir.child("wormhole");
     mountpoint.create_dir_all();
-    let disk = UnixDiskManager::new(&mountpoint.path()).expect("creating disk manager");
+    let disk = WindowsDiskManager::new(&mountpoint.path()).expect("creating disk manager");
     let temp_dir = temp_dir.child(".wormhole");
 
     test_generic_disk(&disk, &temp_dir);
