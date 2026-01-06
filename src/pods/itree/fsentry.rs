@@ -21,15 +21,22 @@ pub enum SymlinkPath {
     /// Path relative to the WH drive. Not really absolute but emulates absolute symlinks within the WH drive
     SymlinkPathAbsolute(WhPath),
     /// absolute Path pointing outside the WH drive
-    SymlinkExternal(Utf8PathBuf),
+    SymlinkPathExternal(Utf8PathBuf),
 }
 
 impl SymlinkPath {
-    pub fn realize(&self, from: &Path) -> PathBuf {
+    pub fn realize(&self, mount: &Path, self_path: &WhPath) -> PathBuf {
         return match self {
-            SymlinkPath::SymlinkPathRelative(path) => path.into(),
-            SymlinkPath::SymlinkPathAbsolute(path) => from.join(path),
-            SymlinkPath::SymlinkExternal(path) => path.into(),
+            SymlinkPath::SymlinkPathRelative(path) => PathBuf::from_iter([
+                mount,
+                self_path
+                    .parent()
+                    .as_ref()
+                    .map_or(Path::new(""), |p| p.as_std_path()),
+                path.as_std_path(),
+            ]),
+            SymlinkPath::SymlinkPathAbsolute(path) => mount.join(path),
+            SymlinkPath::SymlinkPathExternal(path) => path.into(),
         };
     }
 }
@@ -39,7 +46,7 @@ impl Display for SymlinkPath {
         match self {
             SymlinkPath::SymlinkPathRelative(path) => f.write_str(path.as_str()),
             SymlinkPath::SymlinkPathAbsolute(path) => write!(f, "//{}", path.as_str()),
-            SymlinkPath::SymlinkExternal(path) => f.write_str(path.as_str()),
+            SymlinkPath::SymlinkPathExternal(path) => f.write_str(path.as_str()),
         }
     }
 }
@@ -81,5 +88,100 @@ impl FsEntry {
             FsEntry::Directory(children) => Ok(children),
             _ => Err(WhError::InodeIsNotADirectory),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::pods::{
+        filesystem::fs_interface::SimpleFileType,
+        itree::{EntrySymlink, SymlinkPath},
+        whpath::WhPath,
+    };
+    use assert_fs::{
+        assert::PathAssert,
+        prelude::{PathChild, PathCreateDir},
+        TempDir,
+    };
+
+    #[test]
+    fn test_realize_symlink() {
+        // / (temp_dir)
+        // |- external_file
+        // \- wormhole
+        //      |- internal_file
+        //      \- folder
+        //          |- internal_file2
+        //          \- link -> [../internal_file, /external_file, //internal_file, ./internal_file2]
+
+
+        let temp_dir = TempDir::new().expect("creating temp dir");
+        let mount_point = temp_dir.child("wormhole"); //.to_path_buf();
+
+        let folder = WhPath::try_from("folder").expect("checked");
+        let link_path = folder.join(&"link".try_into().expect("checked"));
+
+        let internal_file = mount_point.child("internal_file");
+        let internal_file2 = mount_point.child(folder).child("internal_file2");
+
+        let external_file = std::path::absolute(&temp_dir)
+            .expect(&format!("{:?} should exist", temp_dir.path()))
+            .join("external_file");
+
+        mount_point
+            .child(&link_path.parent().unwrap_or(WhPath::root()))
+            .create_dir_all()
+            .expect(&format!(
+                "{:?} should be a valid path",
+                mount_point.child(&link_path).path()
+            ));
+
+
+        std::fs::write(&internal_file, []).expect(&format!(
+            "parent of {:?} should exist",
+            internal_file.path()
+        ));
+        std::fs::write(&internal_file2, []).expect(&format!(
+            "parent of {:?} should exist",
+            internal_file.path()
+        ));
+        std::fs::write(&external_file, []).expect(&format!(
+            "parent of {:?} should exist",
+            external_file.as_path()
+        ));
+
+        let relative_link = EntrySymlink {
+            target: SymlinkPath::SymlinkPathRelative("../internal_file".into()),
+            hint: Some(SimpleFileType::File),
+        };
+
+        let relative_link2 = EntrySymlink {
+            target: SymlinkPath::SymlinkPathRelative("./internal_file2".into()),
+            hint: Some(SimpleFileType::File),
+        };
+
+        let absolute_link = EntrySymlink {
+            target: SymlinkPath::SymlinkPathAbsolute("internal_file".try_into().unwrap()),
+            hint: Some(SimpleFileType::File),
+        };
+
+        let external_link = EntrySymlink {
+            target: SymlinkPath::SymlinkPathExternal("external_file".into()),
+            hint: Some(SimpleFileType::File),
+        };
+
+        temp_dir
+            .child(relative_link.target.realize(&mount_point, &link_path))
+            .assert(predicates::path::exists());
+
+        temp_dir
+            .child(relative_link2.target.realize(&mount_point, &link_path))
+            .assert(predicates::path::exists());
+        temp_dir
+            .child(absolute_link.target.realize(&mount_point, &link_path))
+            .assert(predicates::path::exists());
+        temp_dir
+            .child(external_link.target.realize(&mount_point, &link_path))
+            .assert(predicates::path::exists());
     }
 }

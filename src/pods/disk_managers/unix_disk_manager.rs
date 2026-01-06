@@ -131,7 +131,7 @@ impl DiskManager for UnixDiskManager {
         permissions: u16,
         link: &EntrySymlink,
     ) -> std::io::Result<()> {
-        let target = link.target.realize(&self.path);
+        let target = link.target.realize(&self.path, path);
         self.handle.symlink(path, &target)?;
         self.set_permisions(path, permissions)
     }
