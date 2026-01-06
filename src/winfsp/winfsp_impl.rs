@@ -10,10 +10,7 @@ use custom_error::custom_error;
 use futures::io;
 use nt_time::FileTime;
 use ntapi::ntioapi::FILE_DIRECTORY_FILE;
-use winapi::shared::{
-    ntstatus::STATUS_INVALID_DEVICE_REQUEST,
-    winerror::ERROR_ALREADY_EXISTS,
-};
+use winapi::shared::{ntstatus::STATUS_INVALID_DEVICE_REQUEST, winerror::ERROR_ALREADY_EXISTS};
 use windows::Win32::Foundation::{NTSTATUS, STATUS_OBJECT_NAME_NOT_FOUND};
 use winfsp::{
     filesystem::{DirInfo, FileInfo, FileSecurity, FileSystemContext, WideNameInfo},
