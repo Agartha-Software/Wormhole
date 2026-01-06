@@ -427,14 +427,18 @@ impl NetworkInterface {
                 .expect("send_itree: unable to update modification on the network thread");
             Ok(())
         } else {
-            Err(WhError::WouldBlock { called_from: "send_tree".to_owned() })
+            Err(WhError::WouldBlock {
+                called_from: "send_tree".to_owned(),
+            })
         }
     }
 
     pub fn disconnect_peer(&self, addr: Address) -> WhResult<()> {
         self.peers
             .try_write_for(LOCK_TIMEOUT)
-            .ok_or(WhError::WouldBlock { called_from: "disconnect_peer: can't write lock peers".to_owned() })?
+            .ok_or(WhError::WouldBlock {
+                called_from: "disconnect_peer: can't write lock peers".to_owned(),
+            })?
             .retain(|p| p.hostname != addr);
 
         log::debug!("Disconnecting {addr}. Removing from inodes hosts");

@@ -125,7 +125,12 @@ impl DiskManager for UnixDiskManager {
         self.handle.open_file(path).is_ok()
     }
 
-fn new_symlink(&self, path: &WhPath, permissions: u16, link: &EntrySymlink) -> std::io::Result<()> {
+    fn new_symlink(
+        &self,
+        path: &WhPath,
+        permissions: u16,
+        link: &EntrySymlink,
+    ) -> std::io::Result<()> {
         let target = link.target.realize(&self.path);
         self.handle.symlink(path, &target)?;
         self.set_permisions(path, permissions)

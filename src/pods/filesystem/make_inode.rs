@@ -3,7 +3,11 @@ use custom_error::custom_error;
 use crate::{
     error::WhError,
     pods::{
-        filesystem::{File, diffs::{Sig, Signature}, permissions::has_write_perm},
+        filesystem::{
+            diffs::{Sig, Signature},
+            permissions::has_write_perm,
+            File,
+        },
         itree::{EntrySymlink, FsEntry, ITree, Inode},
         whpath::InodeName,
     },

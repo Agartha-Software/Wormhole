@@ -1,7 +1,8 @@
 use std::fmt;
 
-use crate::{
-    pods::{itree::{FsEntry, Ino}, whpath::WhPath},
+use crate::pods::{
+    itree::{FsEntry, Ino},
+    whpath::WhPath,
 };
 
 pub type TreeLine = (u8, Ino, WhPath, FsEntry); // (indentation_level, ino, path, hosts)
@@ -24,10 +25,8 @@ impl fmt::Display for CliHostTree {
                 FsEntry::Directory(_) => todo!(),
                 FsEntry::Symlink(symlink) => {
                     let target = &symlink.target;
-                    output.push_str(&format!(
-                        "{ident}[{ino}] {path:?}    ->    {target}\n",
-                    ));
-                },
+                    output.push_str(&format!("{ident}[{ino}] {path:?}    ->    {target}\n",));
+                }
             }
         }
         write!(f, "{output}")

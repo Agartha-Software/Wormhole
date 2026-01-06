@@ -234,7 +234,9 @@ impl ITree {
     pub fn remove_inode(&mut self, id: Ino) -> Result<Inode, RemoveInodeError> {
         let inode = self.get_inode(id)?;
         match &inode.entry {
-            FsEntry::Directory(children) if children.len() > 0 => return Err(RemoveInodeError::NonEmpty),
+            FsEntry::Directory(children) if children.len() > 0 => {
+                return Err(RemoveInodeError::NonEmpty)
+            }
             _ => {}
         }
 
@@ -356,9 +358,7 @@ impl ITree {
 
         match &mut inode.entry {
             FsEntry::File(old_hosts) => old_hosts.retain(|host| !remove_hosts.contains(host)),
-            _ => {
-                return Err(WhError::InodeIsADirectory)
-            }
+            _ => return Err(WhError::InodeIsADirectory),
         };
         Ok(())
     }
