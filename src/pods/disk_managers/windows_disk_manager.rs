@@ -3,9 +3,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use std::os::windows::fs as os_fs;
+
 use tokio::io;
 
-use crate::{pods::whpath::WhPath, winfsp::winfsp_impl::aliased_path};
+use crate::{
+    pods::{filesystem::fs_interface::SimpleFileType, itree::EntrySymlink, whpath::WhPath},
+    winfsp::winfsp_impl::aliased_path,
+};
 
 use super::{DiskManager, DiskSizeInfo};
 
@@ -111,5 +116,35 @@ impl DiskManager for WindowsDiskManager {
 
     fn file_exists(&self, path: &WhPath) -> bool {
         std::fs::exists(&self.mount_point.join(path)).unwrap_or(false)
+    }
+
+    fn new_symlink(
+        &self,
+        path: &WhPath,
+        permissions: u16,
+        link: &EntrySymlink,
+    ) -> std::io::Result<()> {
+        let target = link.target.realize(&self.mount_point, path);
+
+        let hint = match std::fs::exists(&target) {
+            Ok(true) => {
+                if target.is_dir() {
+                    &Some(SimpleFileType::Directory)
+                } else {
+                    &Some(SimpleFileType::File)
+                }
+            }
+            _ => &link.hint,
+        };
+
+        if let Some(SimpleFileType::Directory) = hint {
+            os_fs::symlink_dir(&target, path)
+        } else {
+            os_fs::symlink_file(&target, path)
+        }
+    }
+
+    fn remove_symlink(&self, path: &WhPath) -> std::io::Result<()> {
+        std::fs::remove_file(path)
     }
 }
