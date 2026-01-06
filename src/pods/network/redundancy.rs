@@ -103,7 +103,7 @@ async fn check_integrity(
 
     // Applies redundancy to needed files
     let selected_files: Vec<Ino> =
-        ITree::n_read_lock(&nw_interface.itree, "redundancy: check_integrity")?
+        ITree::read_lock(&nw_interface.itree, "redundancy: check_integrity")?
             .iter()
             .filter_map(|(ino, inode)| {
                 eligible_to_apply(

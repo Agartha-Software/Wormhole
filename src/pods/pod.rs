@@ -167,13 +167,13 @@ custom_error! {pub PodStopError
 /// Required at setup to resolve issue #179
 /// (files pulling need the parent folder to be already present)
 fn create_all_dirs(itree: &ITree, from: Ino, disk: &dyn DiskManager) -> io::Result<()> {
-    let from = itree.n_get_inode(from).map_err(|e| e.into_io())?;
+    let from = itree.get_inode(from).map_err(|e| e.into_io())?;
 
     match &from.entry {
         FsEntry::File(_) => Ok(()),
         FsEntry::Directory(children) => {
             let current_path = itree
-                .n_get_path_from_inode_id(from.id)
+                .get_path_from_inode_id(from.id)
                 .map_err(|e| e.into_io())?;
 
             // skipping root folder
@@ -366,7 +366,7 @@ impl Pod {
     // SECTION getting info from the pod (for the cli)
 
     pub fn get_file_hosts(&self, path: &WhPath) -> Result<Vec<Address>, PodInfoError> {
-        let binding = ITree::n_read_lock(&self.network_interface.itree, "Pod::get_info")?;
+        let binding = ITree::read_lock(&self.network_interface.itree, "Pod::get_info")?;
         let entry = &binding
             .get_inode_from_path(path)
             .map_err(|_| PodInfoError::FileNotFound)?
@@ -384,7 +384,7 @@ impl Pod {
         &self,
         path: Option<&WhPath>,
     ) -> Result<CliHostTree, PodInfoError> {
-        let itree = ITree::n_read_lock(&self.network_interface.itree, "Pod::get_info")?;
+        let itree = ITree::read_lock(&self.network_interface.itree, "Pod::get_info")?;
 
         Ok(CliHostTree {
             lines: itree.get_file_tree_and_hosts(path)?,
@@ -477,7 +477,7 @@ impl Pod {
 
         // drop(self.fuse_handle); // FIXME - do something like block the filesystem
 
-        let itree = ITree::n_read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
+        let itree = ITree::read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
 
         let peers: Vec<Address> = self
             .peers

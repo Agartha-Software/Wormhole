@@ -9,7 +9,7 @@ use crate::{
 
 impl NetworkInterface {
     pub fn set_inode_xattr(&self, ino: Ino, key: &str, data: Vec<u8>) -> WhResult<()> {
-        ITree::n_write_lock(&self.itree, "network_interface::get_inode_xattr")?.set_inode_xattr(
+        ITree::write_lock(&self.itree, "network_interface::get_inode_xattr")?.set_inode_xattr(
             ino,
             key,
             data.clone(),
@@ -25,12 +25,12 @@ impl NetworkInterface {
     }
 
     pub fn recept_inode_xattr(&self, ino: Ino, key: &str, data: Vec<u8>) -> WhResult<()> {
-        ITree::n_write_lock(&self.itree, "network_interface::get_inode_xattr")?
+        ITree::write_lock(&self.itree, "network_interface::get_inode_xattr")?
             .set_inode_xattr(ino, key, data)
     }
 
     pub fn remove_inode_xattr(&self, ino: Ino, key: &str) -> WhResult<()> {
-        ITree::n_write_lock(&self.itree, "network_interface::get_inode_xattr")?
+        ITree::write_lock(&self.itree, "network_interface::get_inode_xattr")?
             .remove_inode_xattr(ino, key)?;
 
         self.to_network_message_tx
@@ -43,7 +43,7 @@ impl NetworkInterface {
     }
 
     pub fn recept_remove_inode_xattr(&self, ino: Ino, key: &str) -> WhResult<()> {
-        ITree::n_write_lock(&self.itree, "network_interface::get_inode_xattr")?
+        ITree::write_lock(&self.itree, "network_interface::get_inode_xattr")?
             .remove_inode_xattr(ino, key)
     }
 }

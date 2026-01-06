@@ -58,7 +58,7 @@ impl Filesystem for FuseController {
     }
 
     fn getattr(&mut self, req: &Request, ino: u64, _fh: Option<u64>, reply: ReplyAttr) {
-        let attrs = self.fs_interface.n_get_inode_attributes(ino);
+        let attrs = self.fs_interface.get_inode_attributes(ino);
 
         match attrs {
             Ok(attrs) => reply.attr(&TTL, &attrs.with_ids(req.uid(), req.gid())),
@@ -594,7 +594,7 @@ impl Filesystem for FuseController {
     }
 
     fn access(&mut self, _req: &Request<'_>, ino: u64, mask: i32, reply: ReplyEmpty) {
-        let meta = match self.fs_interface.n_get_inode_attributes(ino) {
+        let meta = match self.fs_interface.get_inode_attributes(ino) {
             Ok(meta) => meta,
             Err(err) => {
                 log::error!("access({ino}, {mask}): {err}");

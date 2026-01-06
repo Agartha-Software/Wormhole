@@ -35,9 +35,9 @@ impl FsInterface {
         ino: Ino,
         meta: Metadata,
     ) -> Result<(), AcknoledgeSetAttrError> {
-        let mut itree = ITree::n_write_lock(&self.itree, "acknowledge_metadata")?;
-        let path = itree.n_get_path_from_inode_id(ino)?;
-        let inode = itree.n_get_inode_mut(ino)?;
+        let mut itree = ITree::write_lock(&self.itree, "acknowledge_metadata")?;
+        let path = itree.get_path_from_inode_id(ino)?;
+        let inode = itree.get_inode_mut(ino)?;
 
         if meta != inode.meta {
             match &inode.entry {
@@ -86,7 +86,7 @@ impl FsInterface {
             }
         }
 
-        itree.n_get_inode_mut(ino)?.meta = meta;
+        itree.get_inode_mut(ino)?.meta = meta;
         Ok(())
     }
 
@@ -104,9 +104,9 @@ impl FsInterface {
         file_handle: Option<UUID>,
         flags: Option<u32>,
     ) -> Result<Metadata, SetAttrError> {
-        let itree = ITree::n_read_lock(&self.itree, "setattr")?;
-        let path = itree.n_get_path_from_inode_id(ino)?;
-        let mut meta = itree.n_get_inode(ino)?.meta.clone();
+        let itree = ITree::read_lock(&self.itree, "setattr")?;
+        let path = itree.get_path_from_inode_id(ino)?;
+        let mut meta = itree.get_inode(ino)?.meta.clone();
         drop(itree);
 
         //Except for size, No permissions are required on the file itself, but permission is required on all of the directories in pathname that lead to the file.

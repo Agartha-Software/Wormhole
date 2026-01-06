@@ -38,8 +38,8 @@ custom_error! {
 
 impl FsInterface {
     fn construct_file_path(&self, parent: Ino, name: &InodeName) -> WhResult<WhPath> {
-        let itree = ITree::n_read_lock(&self.itree, "fs_interface.rename.construct_file_path")?;
-        let mut parent_path = itree.n_get_path_from_inode_id(parent)?;
+        let itree = ITree::read_lock(&self.itree, "fs_interface.rename.construct_file_path")?;
+        let mut parent_path = itree.get_path_from_inode_id(parent)?;
 
         parent_path.push(name.into());
         return Ok(parent_path);
@@ -65,7 +65,7 @@ impl FsInterface {
     }
 
     pub fn set_meta_size(&self, ino: Ino, meta: Metadata) -> Result<(), RenameError> {
-        let path = ITree::n_read_lock(&self.itree, "rename")?.n_get_path_from_inode_id(ino)?;
+        let path = ITree::read_lock(&self.itree, "rename")?.get_path_from_inode_id(ino)?;
 
         self.disk
             .set_file_size(&path, meta.size as usize)
@@ -87,8 +87,8 @@ impl FsInterface {
         source_ino: u64,
         dest_ino: Option<u64>,
     ) -> Result<(), RenameError> {
-        let meta = ITree::n_read_lock(&self.itree, "fs_interface::remove_inode")?
-            .n_get_inode(source_ino)
+        let meta = ITree::read_lock(&self.itree, "fs_interface::remove_inode")?
+            .get_inode(source_ino)
             .expect("already checked")
             .meta
             .clone();
@@ -101,7 +101,7 @@ impl FsInterface {
 
         let dest_ino = if let Some(dest_ino) = dest_ino {
             let mut meta = self
-                .n_get_inode_attributes(dest_ino)
+                .get_inode_attributes(dest_ino)
                 .map_err(|_| WhError::InodeNotFound)?;
             meta.size = 0;
             self.set_meta_size(source_ino, meta)?;
@@ -126,8 +126,8 @@ impl FsInterface {
 
         {
             // write the new file
-            let itree = ITree::n_read_lock(&self.itree, "fs_interface.write")?;
-            let path = itree.n_get_path_from_inode_id(dest_ino)?;
+            let itree = ITree::read_lock(&self.itree, "fs_interface.write")?;
+            let path = itree.get_path_from_inode_id(dest_ino)?;
             drop(itree);
 
             self.disk
@@ -169,8 +169,8 @@ impl FsInterface {
             return Ok(());
         }
 
-        let itree = ITree::n_read_lock(&self.itree, "fs_interface::remove_inode")?;
-        let p_inode = itree.n_get_inode(parent).map_err(|err| match err {
+        let itree = ITree::read_lock(&self.itree, "fs_interface::remove_inode")?;
+        let p_inode = itree.get_inode(parent).map_err(|err| match err {
             WhError::InodeNotFound => RenameError::SourceParentNotFound,
             WhError::InodeIsNotADirectory => RenameError::SourceParentNotFolder,
             source => RenameError::WhError { source },
@@ -179,7 +179,7 @@ impl FsInterface {
             return Err(RenameError::PermissionDenied);
         }
         let src_ino = itree
-            .n_get_inode_child_by_name(p_inode, name.as_ref())
+            .get_inode_child_by_name(p_inode, name.as_ref())
             .map_err(|err| match err {
                 WhError::InodeNotFound => RenameError::SourceParentNotFound,
                 WhError::InodeIsNotADirectory => RenameError::SourceParentNotFolder,
@@ -187,7 +187,7 @@ impl FsInterface {
             })?
             .id; // assert source file exists
         let dest_ino = match itree
-            .n_get_inode_child_by_name(itree.n_get_inode(new_parent)?, new_name.as_ref())
+            .get_inode_child_by_name(itree.get_inode(new_parent)?, new_name.as_ref())
         {
             Ok(inode) => Some(inode.id),
             Err(WhError::InodeNotFound) => None,
@@ -219,7 +219,7 @@ impl FsInterface {
 
         self.rename_locally(parent, new_parent, &name, &new_name)?;
         self.network_interface
-            .n_rename(parent, new_parent, name, new_name, overwrite)?;
+            .rename(parent, new_parent, name, new_name, overwrite)?;
         Ok(())
     }
 
@@ -231,9 +231,9 @@ impl FsInterface {
         new_name: InodeName,
         overwrite: bool,
     ) -> Result<(), RenameError> {
-        let itree = ITree::n_read_lock(&self.itree, "fs_interface::remove_inode")?;
+        let itree = ITree::read_lock(&self.itree, "fs_interface::remove_inode")?;
         let dest_ino = match itree
-            .n_get_inode_child_by_name(itree.n_get_inode(new_parent)?, new_name.as_ref())
+            .get_inode_child_by_name(itree.get_inode(new_parent)?, new_name.as_ref())
         {
             Ok(inode) => Some(inode.id),
             Err(WhError::InodeNotFound) => None,

@@ -39,21 +39,21 @@ impl FsInterface {
     #[cfg(target_os = "linux")]
     pub fn fuse_remove_inode(&self, parent: Ino, name: InodeName) -> Result<(), RemoveFileError> {
         let target = {
-            let itree = ITree::n_read_lock(&self.itree, "fs_interface::fuse_remove_inode")?;
-            let parent = itree.n_get_inode(parent)?;
+            let itree = ITree::read_lock(&self.itree, "fs_interface::fuse_remove_inode")?;
+            let parent = itree.get_inode(parent)?;
             if !has_write_perm(parent.meta.perm) {
                 return Err(RemoveFileError::PermissionDenied);
             }
-            itree.n_get_inode_child_by_name(parent, name.as_ref())?.id
+            itree.get_inode_child_by_name(parent, name.as_ref())?.id
         };
 
         self.remove_inode(target)
     }
 
     pub fn remove_inode_locally(&self, id: Ino) -> Result<(), RemoveFileError> {
-        let itree = ITree::n_read_lock(&self.itree, "fs_interface::remove_inode")?;
-        let to_remove_path = itree.n_get_path_from_inode_id(id)?;
-        let entry = itree.n_get_inode(id)?.entry.to_owned();
+        let itree = ITree::read_lock(&self.itree, "fs_interface::remove_inode")?;
+        let to_remove_path = itree.get_path_from_inode_id(id)?;
+        let entry = itree.get_inode(id)?.entry.to_owned();
         drop(itree);
 
         match entry {

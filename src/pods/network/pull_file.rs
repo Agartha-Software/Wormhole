@@ -34,9 +34,9 @@ impl NetworkInterface {
     /// context.
     ///
     pub fn pull_file_sync(&self, file: Ino) -> Result<Option<Arc<Vec<u8>>>, PullError> {
-        let itree = ITree::n_read_lock(&self.itree, "pull file sync")?;
+        let itree = ITree::read_lock(&self.itree, "pull file sync")?;
         let hosts = {
-            if let FsEntry::File(hosts) = &itree.n_get_inode(file)?.entry {
+            if let FsEntry::File(hosts) = &itree.get_inode(file)?.entry {
                 hosts
             } else {
                 return Err(WhError::InodeIsADirectory.into());
