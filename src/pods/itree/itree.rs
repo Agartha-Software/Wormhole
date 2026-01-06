@@ -1,3 +1,5 @@
+#[cfg(target_os = "windows")]
+use crate::pods::itree::WINDOWS_DEFAULT_PERMS_MODE;
 use crate::{
     data::tree_hosts::TreeLine,
     error::WhResult,
@@ -10,8 +12,6 @@ use crate::{
         whpath::{InodeName, InodeNameError, WhPath},
     },
 };
-#[cfg(target_os = "windows")]
-use crate::pods::itree::WINDOWS_DEFAULT_PERMS_MODE;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Serialize};
 use std::{
