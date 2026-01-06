@@ -1,15 +1,18 @@
-use std::{fmt::Display, path::{Path, PathBuf}};
+use std::{
+    fmt::Display,
+    path::{Path, PathBuf},
+};
 
 use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 
-use crate::{error::{WhError, WhResult}, network::message::Address, pods::{
-    filesystem::fs_interface::SimpleFileType,
-    itree::Ino, whpath::WhPath,
-}};
+use crate::{
+    error::{WhError, WhResult},
+    network::message::Address,
+    pods::{filesystem::fs_interface::SimpleFileType, itree::Ino, whpath::WhPath},
+};
 
 pub type Hosts = Vec<Address>;
-
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum SymlinkPath {
@@ -27,13 +30,7 @@ impl SymlinkPath {
             SymlinkPath::SymlinkPathRelative(path) => path.into(),
             SymlinkPath::SymlinkPathAbsolute(path) => from.join(path),
             SymlinkPath::SymlinkExternal(path) => path.into(),
-        }
-    }
-}
-
-impl Default for SymlinkPath {
-    fn default() -> Self {
-        Self::SymlinkPathRelative("".into())
+        };
     }
 }
 
@@ -41,16 +38,25 @@ impl Display for SymlinkPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SymlinkPath::SymlinkPathRelative(path) => f.write_str(path.as_str()),
-            SymlinkPath::SymlinkPathAbsolute(path) =>  write!(f, "//{}", path.as_str()),
+            SymlinkPath::SymlinkPathAbsolute(path) => write!(f, "//{}", path.as_str()),
             SymlinkPath::SymlinkExternal(path) => f.write_str(path.as_str()),
         }
     }
 }
 
-
-#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct EntrySymlink {
     pub target: SymlinkPath,
+    pub hint: Option<SimpleFileType>,
+}
+
+impl Default for EntrySymlink {
+    fn default() -> Self {
+        Self {
+            target: SymlinkPath::SymlinkPathRelative(".".into()),
+            hint: Some(SimpleFileType::Directory),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -58,7 +64,7 @@ pub struct EntrySymlink {
 pub enum FsEntry {
     File(Hosts),
     Directory(Vec<Ino>),
-    Symlink(EntrySymlink)
+    Symlink(EntrySymlink),
 }
 
 impl FsEntry {
