@@ -255,12 +255,16 @@ impl FsInterface {
 
     pub fn send_file(&self, inode: InodeId, to: Address) -> io::Result<()> {
         let itree = ITree::read_lock(&self.itree, "send_itree").map_err(io::Error::other)?;
-        let path = itree.get_path_from_inode_id(inode).map_err(io::Error::other)?;
+        let path = itree
+            .get_path_from_inode_id(inode)
+            .map_err(io::Error::other)?;
         let mut size = itree.get_inode(inode).map_err(io::Error::other)?.meta.size as usize;
         let mut data = vec![0; size];
         size = self.disk.read_file(&path, 0, &mut data)?;
         data.resize(size, 0);
-        self.network_interface.send_file(inode, data, to).map_err(io::Error::other)
+        self.network_interface
+            .send_file(inode, data, to)
+            .map_err(io::Error::other)
     }
 
     pub fn read_local_file(&self, inode: InodeId) -> WhResult<Vec<u8>> {

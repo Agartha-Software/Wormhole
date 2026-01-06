@@ -437,18 +437,12 @@ impl ITree {
     /// Remove hosts from an inode
     ///
     /// Only works on inodes pointing files (no folders)
-    pub fn remove_inode_hosts(
-        &mut self,
-        ino: InodeId,
-        remove_hosts: Vec<Address>,
-    ) -> WhResult<()> {
+    pub fn remove_inode_hosts(&mut self, ino: InodeId, remove_hosts: Vec<Address>) -> WhResult<()> {
         let inode = self.get_inode_mut(ino)?;
 
         match &mut inode.entry {
             FsEntry::File(old_hosts) => old_hosts.retain(|host| !remove_hosts.contains(host)),
-            _ => {
-                return Err(WhError::InodeIsADirectory)
-            }
+            _ => return Err(WhError::InodeIsADirectory),
         };
         Ok(())
     }

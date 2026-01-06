@@ -186,13 +186,12 @@ impl FsInterface {
                 source => RenameError::WhError { source },
             })?
             .id; // assert source file exists
-        let dest_ino = match itree
-            .get_inode_child_by_name(itree.get_inode(new_parent)?, new_name.as_ref())
-        {
-            Ok(inode) => Some(inode.id),
-            Err(WhError::InodeNotFound) => None,
-            Err(source) => return Err(source.into()),
-        };
+        let dest_ino =
+            match itree.get_inode_child_by_name(itree.get_inode(new_parent)?, new_name.as_ref()) {
+                Ok(inode) => Some(inode.id),
+                Err(WhError::InodeNotFound) => None,
+                Err(source) => return Err(source.into()),
+            };
         drop(itree);
 
         if dest_ino.is_some() && !overwrite {
@@ -232,13 +231,12 @@ impl FsInterface {
         overwrite: bool,
     ) -> Result<(), RenameError> {
         let itree = ITree::read_lock(&self.itree, "fs_interface::remove_inode")?;
-        let dest_ino = match itree
-            .get_inode_child_by_name(itree.get_inode(new_parent)?, new_name.as_ref())
-        {
-            Ok(inode) => Some(inode.id),
-            Err(WhError::InodeNotFound) => None,
-            Err(source) => return Err(source.into()),
-        };
+        let dest_ino =
+            match itree.get_inode_child_by_name(itree.get_inode(new_parent)?, new_name.as_ref()) {
+                Ok(inode) => Some(inode.id),
+                Err(WhError::InodeNotFound) => None,
+                Err(source) => return Err(source.into()),
+            };
         drop(itree);
         if let Some(dest_ino) = dest_ino {
             if overwrite {

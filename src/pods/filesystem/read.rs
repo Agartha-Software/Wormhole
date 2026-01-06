@@ -105,14 +105,12 @@ impl FsInterface {
         let hostname = self.network_interface.hostname()?;
         let mut buf = Vec::new();
         let itree = self.itree.read();
-        let size = itree
-            .get_inode(ino)
-            .and_then(|inode| match &inode.entry {
-                FsEntry::File(hosts) => Ok(hosts
-                    .contains(&hostname)
-                    .then_some(inode.meta.size as usize)),
-                FsEntry::Directory(_) => Err(WhError::InodeIsADirectory),
-            })?;
+        let size = itree.get_inode(ino).and_then(|inode| match &inode.entry {
+            FsEntry::File(hosts) => Ok(hosts
+                .contains(&hostname)
+                .then_some(inode.meta.size as usize)),
+            FsEntry::Directory(_) => Err(WhError::InodeIsADirectory),
+        })?;
         drop(itree);
         if let Some(mut size) = size {
             buf.resize(size, 0);
