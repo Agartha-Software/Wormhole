@@ -64,7 +64,6 @@ impl Inode {
     }
 }
 
-#[cfg(target_os = "windows")]
 pub const WINDOWS_DEFAULT_PERMS_MODE: u16 = 666;
 
 /* NOTE
