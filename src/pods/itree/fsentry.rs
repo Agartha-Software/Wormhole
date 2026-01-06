@@ -114,7 +114,6 @@ mod test {
         //          |- internal_file2
         //          \- link -> [../internal_file, /external_file, //internal_file, ./internal_file2]
 
-
         let temp_dir = TempDir::new().expect("creating temp dir");
         let mount_point = temp_dir.child("wormhole"); //.to_path_buf();
 
@@ -135,7 +134,6 @@ mod test {
                 "{:?} should be a valid path",
                 mount_point.child(&link_path).path()
             ));
-
 
         std::fs::write(&internal_file, []).expect(&format!(
             "parent of {:?} should exist",
