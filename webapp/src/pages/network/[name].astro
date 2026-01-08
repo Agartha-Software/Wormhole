@@ -10,5 +10,5 @@ const { name } = Astro.params;
 ---
 
 <NetworkLayout>
-    <NetworkPage name={name} client:load />
+    <NetworkPage name={name} client:only="preact" />
 </NetworkLayout>
