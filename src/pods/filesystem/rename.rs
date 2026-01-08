@@ -5,10 +5,8 @@ use custom_error::custom_error;
 use crate::{
     error::{WhError, WhResult},
     pods::{
-        filesystem::{
-            flush::FlushError, fs_interface::SimpleFileType, permissions::has_write_perm,
-        },
-        itree::{ITree, Ino, Metadata},
+        filesystem::{flush::FlushError, permissions::has_write_perm},
+        itree::{FsEntry, ITree, Ino, Metadata},
         whpath::{InodeName, WhPath},
     },
 };
@@ -108,8 +106,8 @@ impl FsInterface {
             self.set_meta_size(source_ino, meta)?;
             dest_ino
         } else {
-            let kind = SimpleFileType::File; // 'special' files can only be regular files
-            self.make_inode(new_parent, new_name, meta.perm, kind)
+            let entry = FsEntry::new_file(); // 'special' files can only be regular files
+            self.make_inode(new_parent, new_name, meta.perm, entry)
                 .map_err(|err| match err {
                     MakeInodeError::WhError { source } => RenameError::WhError { source },
                     MakeInodeError::AlreadyExist => RenameError::DestinationExists,

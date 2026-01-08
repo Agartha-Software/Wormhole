@@ -75,6 +75,14 @@ pub enum FsEntry {
 }
 
 impl FsEntry {
+    pub fn new_file() -> Self {
+        FsEntry::File(vec![])
+    }
+
+    pub fn new_directory() -> Self {
+        FsEntry::Directory(vec![])
+    }
+
     pub fn get_filetype(&self) -> SimpleFileType {
         match self {
             FsEntry::File(_) => SimpleFileType::File,

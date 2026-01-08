@@ -13,6 +13,7 @@ use crate::pods::filesystem::remove_inode::RemoveFileError;
 use crate::pods::filesystem::rename::RenameError;
 use crate::pods::filesystem::write::WriteError;
 use crate::pods::filesystem::xattrs::GetXAttrError;
+use crate::pods::itree::FsEntry;
 use crate::pods::network::pull_file::PullError;
 use crate::pods::whpath::{osstr_to_str, InodeName};
 use fuser::{
@@ -270,9 +271,15 @@ impl Filesystem for FuseController {
             }
         };
 
+        let entry = match kind {
+            SimpleFileType::File => FsEntry::new_file(),
+            SimpleFileType::Directory => FsEntry::new_directory(),
+            SimpleFileType::Symlink => return reply.error(libc::EINVAL),
+        };
+
         match self
             .fs_interface
-            .make_inode(parent, name, permissions, kind)
+            .make_inode(parent, name, permissions, entry)
         {
             Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
             Err(MakeInodeError::LocalCreationFailed { io }) => {
@@ -305,7 +312,7 @@ impl Filesystem for FuseController {
 
         match self
             .fs_interface
-            .make_inode(parent, name, mode as u16, SimpleFileType::Directory)
+            .make_inode(parent, name, mode as u16, FsEntry::new_directory())
             .inspect_err(|e| log::error!("mkdir: {e}"))
         {
             Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
