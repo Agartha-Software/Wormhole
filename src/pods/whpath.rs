@@ -123,17 +123,23 @@ impl TryFrom<&str> for WhPath {
     }
 }
 
-impl From<Utf8PathBuf> for WhPath {
-    fn from(value: Utf8PathBuf) -> Self {
-        Self { inner: value }
+impl TryFrom<Utf8PathBuf> for WhPath {
+    type Error = WhPathError;
+
+    fn try_from(p: Utf8PathBuf) -> Result<Self, Self::Error> {
+        is_valid_for_whpath(&p)?;
+
+        Ok(Self { inner: p })
     }
 }
 
-impl From<&Utf8Path> for WhPath {
-    fn from(value: &Utf8Path) -> Self {
-        Self {
-            inner: value.into(),
-        }
+impl TryFrom<&Utf8Path> for WhPath {
+    type Error = WhPathError;
+
+    fn try_from(p: &Utf8Path) -> Result<Self, Self::Error> {
+        is_valid_for_whpath(&p)?;
+
+        Ok(Self { inner: p.into() })
     }
 }
 
