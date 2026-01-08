@@ -82,54 +82,23 @@ impl Filesystem for FuseController {
         };
     }
 
-    fn setattr(
+    fn release(
         &mut self,
-        req: &Request<'_>,
-        ino: u64,
-        mode: Option<u32>,
-        uid: Option<u32>,
-        gid: Option<u32>,
-        size: Option<u64>,
-        atime: Option<fuser::TimeOrNow>,
-        mtime: Option<fuser::TimeOrNow>,
-        ctime: Option<SystemTime>,
-        file_handle: Option<u64>,
-        _crtime: Option<SystemTime>,
-        _chgtime: Option<SystemTime>,
-        _bkuptime: Option<SystemTime>,
-        flags: Option<u32>,
-        reply: ReplyAttr,
+        _req: &Request<'_>,
+        _ino: u64,
+        file_handle: u64,
+        _flags: i32,
+        _lock_owner: Option<u64>,
+        _flush: bool,
+        reply: fuser::ReplyEmpty,
     ) {
-        match self
-            .fs_interface
-            .setattr(
-                ino,
-                mode,
-                uid,
-                gid,
-                size,
-                atime.map(time_or_now_to_system_time),
-                mtime.map(time_or_now_to_system_time),
-                ctime,
-                file_handle,
-                flags,
-            )
-            .inspect_err(|e| log::error!("setattr({ino}): {e}"))
-        {
-            Ok(meta) => reply.attr(&TTL, &meta.with_ids(req.uid(), req.gid())),
-            Err(SetAttrError::WhError { source }) => reply.error(source.to_libc()),
-            Err(SetAttrError::SizeNoPerm) => reply.error(libc::EACCES),
-            Err(SetAttrError::InvalidFileHandle) => reply.error(libc::EBADFD),
-            Err(SetAttrError::SetFileSizeIoError { io }) => {
-                reply.error(io.raw_os_error().expect(
-                    "Local setattr error should always be the underling libc::open os error",
-                ))
-            }
-            Err(SetAttrError::SetPermIoError { io }) => {
-                reply.error(io.raw_os_error().expect(
-                    "Local setattr error should always be the underling libc::open os error",
-                ))
-            }
+        match self.fs_interface.release(file_handle) {
+            Ok(()) => reply.ok(),
+            Err(FlushError::DiffError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::PullError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::ReadError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::WriteError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::WhError { source }) => reply.error(source.to_libc()),
         }
     }
 
@@ -449,6 +418,57 @@ impl Filesystem for FuseController {
         }
     }
 
+    fn setattr(
+        &mut self,
+        req: &Request<'_>,
+        ino: u64,
+        mode: Option<u32>,
+        uid: Option<u32>,
+        gid: Option<u32>,
+        size: Option<u64>,
+        atime: Option<fuser::TimeOrNow>,
+        mtime: Option<fuser::TimeOrNow>,
+        ctime: Option<SystemTime>,
+        file_handle: Option<u64>,
+        _crtime: Option<SystemTime>,
+        _chgtime: Option<SystemTime>,
+        _bkuptime: Option<SystemTime>,
+        flags: Option<u32>,
+        reply: ReplyAttr,
+    ) {
+        match self
+            .fs_interface
+            .setattr(
+                ino,
+                mode,
+                uid,
+                gid,
+                size,
+                atime.map(time_or_now_to_system_time),
+                mtime.map(time_or_now_to_system_time),
+                ctime,
+                file_handle,
+                flags,
+            )
+            .inspect_err(|e| log::error!("setattr({ino}): {e}"))
+        {
+            Ok(meta) => reply.attr(&TTL, &meta.with_ids(req.uid(), req.gid())),
+            Err(SetAttrError::WhError { source }) => reply.error(source.to_libc()),
+            Err(SetAttrError::SizeNoPerm) => reply.error(libc::EACCES),
+            Err(SetAttrError::InvalidFileHandle) => reply.error(libc::EBADFD),
+            Err(SetAttrError::SetFileSizeIoError { io }) => {
+                reply.error(io.raw_os_error().expect(
+                    "Local setattr error should always be the underling libc::open os error",
+                ))
+            }
+            Err(SetAttrError::SetPermIoError { io }) => {
+                reply.error(io.raw_os_error().expect(
+                    "Local setattr error should always be the underling libc::open os error",
+                ))
+            }
+        }
+    }
+
     fn write(
         &mut self,
         _req: &Request<'_>,
@@ -550,26 +570,6 @@ impl Filesystem for FuseController {
         {
             Ok(_) => reply.ok(),
             Err(err) => reply.error(err.to_libc()),
-        }
-    }
-
-    fn release(
-        &mut self,
-        _req: &Request<'_>,
-        _ino: u64,
-        file_handle: u64,
-        _flags: i32,
-        _lock_owner: Option<u64>,
-        _flush: bool,
-        reply: fuser::ReplyEmpty,
-    ) {
-        match self.fs_interface.release(file_handle) {
-            Ok(()) => reply.ok(),
-            Err(FlushError::DiffError { source: _ }) => reply.error(libc::EWOULDBLOCK),
-            Err(FlushError::PullError { source: _ }) => reply.error(libc::EWOULDBLOCK),
-            Err(FlushError::ReadError { source: _ }) => reply.error(libc::EWOULDBLOCK),
-            Err(FlushError::WriteError { source: _ }) => reply.error(libc::EWOULDBLOCK),
-            Err(FlushError::WhError { source }) => reply.error(source.to_libc()),
         }
     }
 
