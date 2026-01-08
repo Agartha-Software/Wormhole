@@ -1,10 +1,11 @@
 use std::path::PathBuf;
-
+use ts_rs::TS;
 use serde::{Deserialize, Serialize};
 
 use crate::cli::{ConfigType, IdentifyNewPodGroup, IdentifyPodArgs, IdentifyPodGroup, Mode};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum PodId {
     Name(String),
     Path(PathBuf),
@@ -36,7 +37,8 @@ impl From<IdentifyNewPodGroup> for PodId {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct NewRequest {
     pub name: String,
     pub port: Option<u16>,
@@ -47,18 +49,21 @@ pub struct NewRequest {
     pub additional_hosts: Vec<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct GetHostsRequest {
     pub path: PathBuf,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct RemoveRequest {
     pub pod: PodId,
     pub mode: Mode,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum Command {
     Unfreeze(PodId),
     Remove(RemoveRequest),
