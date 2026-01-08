@@ -26,7 +26,7 @@ pub struct Server {
 pub const POD_DEFAULT_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)); // Change to 127.0.0.0?
 pub const POD_DEFAULT_PORT: u16 = 40000;
 pub const POD_PORT_MAX_TRIES: u16 = 100;
-pub const POD_PORT_RANGE_END: u16 = POD_DEFAULT_PORT + POD_PORT_MAX_TRIES;
+pub const POD_PORT_RANGE_END: u16 = POD_DEFAULT_PORT.saturating_add(POD_PORT_MAX_TRIES);
 
 fn new_tcp_socket() -> io::Result<TcpSocket> {
     let socket = TcpSocket::new_v4()
