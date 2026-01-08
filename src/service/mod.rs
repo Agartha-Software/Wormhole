@@ -53,10 +53,12 @@ impl Service {
     pub async fn stop_all_pods(self) -> ExitCode {
         let mut status = ExitCode::SUCCESS;
         for (name, pod) in self.pods.into_iter() {
-            let _ = pod
-                .save(&self.socket)
-                .await
-                .inspect_err(|err| log::error!("Couldn't save the pod data: {err}"));
+            if pod.should_restart {
+                let _ = pod
+                    .save(&self.socket)
+                    .await
+                    .inspect_err(|err| log::error!("Couldn't save the pod data: {err}"));
+            }
 
             match pod.stop().await {
                 Ok(()) => log::info!("Stopped pod '{name}'"),

@@ -56,6 +56,7 @@ pub struct Pod {
     redundancy_worker_handle: JoinHandle<()>,
     pub global_config: Arc<RwLock<GlobalConfig>>,
     name: String,
+    pub should_restart: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -66,6 +67,7 @@ pub struct PodPrototype {
     pub public_url: Option<String>,
     pub bound_socket: SocketAddr,
     pub mountpoint: PathBuf,
+    pub should_restart: bool,
 }
 
 type ConnectionInfo = (ITree, Vec<PeerIPC>);
@@ -308,6 +310,7 @@ impl Pod {
             global_config: global.clone(),
             redundancy_worker_handle,
             name: proto.name,
+            should_restart: proto.should_restart,
         })
     }
 
@@ -517,6 +520,7 @@ impl Pod {
             public_url: self.network_interface.public_url.clone(),
             bound_socket: self.network_interface.bound_socket,
             mountpoint: self.mountpoint.clone(),
+            should_restart: self.should_restart,
         })
     }
 
@@ -526,6 +530,7 @@ impl Pod {
                 name: Some(self.name.clone()),
                 hostname: Some(self.network_interface.hostname.clone()),
                 public_url: self.network_interface.public_url.clone(),
+                restart: Some(self.should_restart),
             },
         }
     }

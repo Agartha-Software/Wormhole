@@ -68,7 +68,7 @@ pub fn delete_saved_pods(socket_address: &String) -> io::Result<()> {
     }
     for dir_entry in folder.read_dir()? {
         let path = dir_entry?.path();
-        log::trace!("{path:?}");
+        log::trace!("Deleting saved: {path:?}");
         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("bak") {
             fs::remove_file(path)?;
         }
