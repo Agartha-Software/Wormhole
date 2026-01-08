@@ -1,0 +1,15 @@
+---
+import Main from "./Main.astro";
+---
+
+<Main>
+    <div class="grid gap-10">
+        <div class="flex m-5 sticky">
+            <slot name="bar" />
+        </div>
+
+        <div>
+            <slot />
+        </div>
+    </div>
+</Main>

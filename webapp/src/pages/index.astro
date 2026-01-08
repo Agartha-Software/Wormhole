@@ -1,0 +1,10 @@
+---
+import H1 from "../components/text/H1";
+import NetworkLayout from "../layouts/NetworkLayout.astro";
+import NetworkList from "../components/dynamic/NetworkList";
+---
+
+<NetworkLayout>
+    <H1 slot="bar">Wormhole</H1>
+    <NetworkList client:load />
+</NetworkLayout>
