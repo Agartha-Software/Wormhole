@@ -11,9 +11,7 @@ use std::{
 use openat::Dir;
 use tokio::io;
 
-use crate::pods::{
-    whpath::{WhPath},
-};
+use crate::pods::whpath::WhPath;
 
 use super::DiskManager;
 
@@ -119,7 +117,7 @@ impl DiskManager for UnixDiskManager {
     }
 
     fn size_info(&self) -> std::io::Result<super::DiskSizeInfo> {
-        let parent = &self.mountpoint.parent().unwrap_or( &self.mountpoint);
+        let parent = &self.mountpoint.parent().unwrap_or(&self.mountpoint);
 
         // FIXME - xfstests is crashing when using real mountpoint path and not parent path
         // Should be investigated
