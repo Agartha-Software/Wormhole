@@ -49,6 +49,7 @@ where
         (None, None) => None,
         (None, Some(public_url)) => Some(public_url),
         (Some(public_url), None) => Some(public_url),
+        (Some(url_config), Some(url_args)) if url_config == url_args => Some(url_config),
         (Some(_), Some(_)) => {
             send_answer(
                 NewAnswer::ConflictWithConfig("Public url".to_string()),
@@ -66,6 +67,7 @@ where
             .unwrap_or("wormhole-default-hostname".into()),
         (None, Some(hostname)) => hostname,
         (Some(hostname), None) => hostname,
+        (Some(h_config), Some(h_args)) if h_config == h_args => h_config,
         (Some(_), Some(_)) => {
             send_answer(
                 NewAnswer::ConflictWithConfig("Hostname".to_string()),
