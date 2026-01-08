@@ -13,7 +13,7 @@ use crate::{
     pods::{itree::LOCK_TIMEOUT, pod::Pod},
 };
 
-async fn locked_config_to_string<Conf>(
+async fn locking_config_to_string<Conf>(
     config: &Arc<RwLock<Conf>>,
 ) -> std::io::Result<Option<String>>
 where
@@ -53,13 +53,13 @@ where
                     )
                     .await?
                 }
-                ConfigType::Global => match locked_config_to_string(&pod.global_config).await? {
+                ConfigType::Global => match locking_config_to_string(&pod.global_config).await? {
                     Some(global) => {
                         send_answer(ShowConfigAnswer::SuccessGlobal(global), stream).await?
                     }
                     None => send_answer(ShowConfigAnswer::ConfigBlock, stream).await?,
                 },
-                ConfigType::Both => match locked_config_to_string(&pod.global_config).await? {
+                ConfigType::Both => match locking_config_to_string(&pod.global_config).await? {
                     Some(global) => {
                         send_answer(
                             ShowConfigAnswer::SuccessBoth(generate_local_config_file(pod), global),
