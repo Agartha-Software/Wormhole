@@ -1,4 +1,5 @@
 use std::{
+    ffi::OsStr,
     fmt::Display,
     path::{Path, PathBuf},
 };
@@ -21,7 +22,7 @@ pub enum SymlinkPath {
     /// Path relative to the WH drive. Not really absolute but emulates absolute symlinks within the WH drive
     SymlinkPathAbsolute(WhPath),
     /// absolute Path pointing outside the WH drive
-    SymlinkPathExternal(Utf8PathBuf),
+    SymlinkPathExternal(PathBuf),
 }
 
 impl SymlinkPath {
@@ -46,7 +47,7 @@ impl Display for SymlinkPath {
         match self {
             SymlinkPath::SymlinkPathRelative(path) => f.write_str(path.as_str()),
             SymlinkPath::SymlinkPathAbsolute(path) => write!(f, "//{}", path.as_str()),
-            SymlinkPath::SymlinkPathExternal(path) => f.write_str(path.as_str()),
+            SymlinkPath::SymlinkPathExternal(path) => path.display().fmt(f),
         }
     }
 }
@@ -64,6 +65,77 @@ impl Default for EntrySymlink {
             hint: Some(SimpleFileType::Directory),
         }
     }
+}
+
+impl EntrySymlink {
+    /// Create a Symlink from a path, considering the mountpoint
+    ///
+    /// Note: because symlink targets are not checked, any failure results in
+    /// creation of a SymlinkPathExternal() regardless of the actual contents
+    /// This is because External paths are opque to wormhole and transparent to the OS
+    /// If wormhole failed to parse, we can't handle it,
+    /// but the os will always treat it as an arbitrary OsString
+    ///
+    pub fn parse(target: &Path, mountpoint: &Path) -> Result<Self, Self> {
+        let failure = || Self {
+            target: SymlinkPath::SymlinkPathExternal(target.to_owned()),
+            hint: None,
+        };
+
+        if target.is_absolute() {
+            let components = normalize(target);
+            if components
+                .clone()
+                .zip(mountpoint.iter())
+                .all(|(a, b)| a == b)
+            {
+                Ok(Self {
+                    target: SymlinkPath::SymlinkPathAbsolute(
+                        WhPath::try_from(PathBuf::from_iter(
+                            components.skip(mountpoint.iter().count()),
+                        ))
+                        .map_err(|_| failure())?,
+                    ),
+                    hint: None,
+                })
+            } else {
+                Ok(Self {
+                    target: SymlinkPath::SymlinkPathExternal(target.into()),
+                    hint: None,
+                })
+            }
+        } else {
+            Ok(Self {
+                target: SymlinkPath::SymlinkPathRelative(
+                    Utf8PathBuf::from_os_string(target.into()).map_err(|_| failure())?,
+                ),
+                hint: None,
+            })
+        }
+    }
+}
+
+fn normalize(path: &Path) -> std::vec::IntoIter<&OsStr> {
+    let mut result = vec![];
+    for component in path.iter() {
+        const DOT: &[u8] = ".".as_bytes();
+        const DOTDOT: &[u8] = "..".as_bytes();
+        match component.as_encoded_bytes() {
+            DOT => {}
+            DOTDOT => {
+                if result.len() > 0 {
+                    result.pop();
+                } else {
+                    result.push(component)
+                }
+            }
+            component => result.push(unsafe {
+                /* direct from .as_encoded_bytes() */
+                OsStr::from_encoded_bytes_unchecked(component)
+            }),
+        }
+    }
+    return result.into_iter();
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]

@@ -6,6 +6,7 @@ use crate::pods::filesystem::flush::FlushError;
 use crate::pods::filesystem::fs_interface::{FsInterface, SimpleFileType};
 use crate::pods::filesystem::make_inode::MakeInodeError;
 use crate::pods::filesystem::open::{check_permissions, OpenError};
+use crate::pods::filesystem::permissions::SYMLINK_DEFAULT_PERMISSION;
 use crate::pods::filesystem::read::ReadError;
 
 use crate::pods::filesystem::readdir::ReadDirError;
@@ -13,6 +14,7 @@ use crate::pods::filesystem::remove_inode::RemoveFileError;
 use crate::pods::filesystem::rename::RenameError;
 use crate::pods::filesystem::write::WriteError;
 use crate::pods::filesystem::xattrs::GetXAttrError;
+use crate::pods::itree::EntrySymlink;
 use crate::pods::itree::FsEntry;
 use crate::pods::network::pull_file::PullError;
 use crate::pods::whpath::{osstr_to_str, InodeName};
@@ -631,6 +633,59 @@ impl Filesystem for FuseController {
             Err(OpenError::WhError { source }) => reply.error(source.to_libc()),
         };
     }
+
+    fn symlink(
+        &mut self,
+        req: &Request<'_>,
+        parent_ino: u64,
+        link_name: &OsStr,
+        // target path is identicall to given to command,
+        // and is already relative to the link, not to CWD
+        target: &Path,
+        reply: ReplyEntry,
+    ) {
+        let name: InodeName = match link_name.to_owned().try_into() {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
+        let entry = match EntrySymlink::parse(target, &self.fs_interface.mountpoint) {
+            Ok(symlink) => FsEntry::Symlink(symlink),
+            Err(symlink) => FsEntry::Symlink(symlink),
+        };
+
+        match self
+            .fs_interface
+            .make_inode(parent_ino, name, SYMLINK_DEFAULT_PERMISSION, entry)
+        {
+            Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
+            Err(MakeInodeError::LocalCreationFailed { io }) => {
+                reply.error(io.raw_os_error().expect(
+                    "Local creation error should always be the underling libc::open os error",
+                ))
+            }
+            Err(MakeInodeError::WhError { source }) => reply.error(source.to_libc()),
+            Err(MakeInodeError::AlreadyExist) => reply.error(libc::EEXIST),
+            Err(MakeInodeError::ParentNotFound) => reply.error(libc::ENOENT),
+            Err(MakeInodeError::ParentNotFolder) => reply.error(libc::ENOTDIR),
+            Err(MakeInodeError::ProtectedNameIsFolder) => reply.error(libc::EISDIR),
+            Err(MakeInodeError::PermissionDenied) => reply.error(libc::EACCES),
+        }
+    }
+
+    // fn link(
+    //     &mut self,
+    //     _req: &Request<'_>,
+    //     ino: u64,
+    //     newparent: u64,
+    //     newname: &OsStr,
+    //     reply: ReplyEntry,
+    // ) {
+    //     log::warn!(
+    //         "[Not Implemented] link(ino: {ino:#x?}, newparent: {newparent:#x?}, newname: {newname:?})"
+    //     );
+    //     reply.error(libc::EPERM);
+    // }
 }
 
 pub fn mount_fuse(
