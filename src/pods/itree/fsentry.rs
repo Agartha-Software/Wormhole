@@ -26,7 +26,8 @@ pub enum SymlinkPath {
 }
 
 impl SymlinkPath {
-    pub fn realize(&self, mount: &Path, self_path: &WhPath) -> PathBuf {
+    /// Create a canonical path from a symlink
+    pub fn resolve(&self, mount: &Path, self_path: &WhPath) -> PathBuf {
         return match self {
             SymlinkPath::SymlinkPathRelative(path) => PathBuf::from_iter([
                 mount,
@@ -36,6 +37,16 @@ impl SymlinkPath {
                     .map_or(Path::new(""), |p| p.as_std_path()),
                 path.as_std_path(),
             ]),
+            SymlinkPath::SymlinkPathAbsolute(path) => mount.join(path),
+            SymlinkPath::SymlinkPathExternal(path) => path.into(),
+        };
+    }
+
+    /// Create a system path from a symlink
+    /// This doesn't resolve the symlink, only handles External vs Absolute distinction
+    pub fn realize(&self, mount: &Path) -> PathBuf {
+        return match self {
+            SymlinkPath::SymlinkPathRelative(path) => path.as_std_path().to_owned(),
             SymlinkPath::SymlinkPathAbsolute(path) => mount.join(path),
             SymlinkPath::SymlinkPathExternal(path) => path.into(),
         };
@@ -112,6 +123,10 @@ impl EntrySymlink {
                 hint: None,
             })
         }
+    }
+
+    pub fn read(&self, mountpoint: &Path) -> PathBuf {
+        self.target.realize(mountpoint)
     }
 }
 
@@ -249,17 +264,17 @@ mod test {
         };
 
         temp_dir
-            .child(relative_link.target.realize(&mount_point, &link_path))
+            .child(relative_link.target.resolve(&mount_point, &link_path))
             .assert(predicates::path::exists());
 
         temp_dir
-            .child(relative_link2.target.realize(&mount_point, &link_path))
+            .child(relative_link2.target.resolve(&mount_point, &link_path))
             .assert(predicates::path::exists());
         temp_dir
-            .child(absolute_link.target.realize(&mount_point, &link_path))
+            .child(absolute_link.target.resolve(&mount_point, &link_path))
             .assert(predicates::path::exists());
         temp_dir
-            .child(external_link.target.realize(&mount_point, &link_path))
+            .child(external_link.target.resolve(&mount_point, &link_path))
             .assert(predicates::path::exists());
     }
 }

@@ -25,6 +25,7 @@ use fuser::{
 use libc::{XATTR_CREATE, XATTR_REPLACE};
 use std::ffi::OsStr;
 use std::io;
+use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -206,6 +207,18 @@ impl Filesystem for FuseController {
             }
         }
         reply.ok();
+    }
+
+    fn readlink(&mut self, _req: &Request<'_>, ino: u64, reply: ReplyData) {
+        match self.fs_interface.readlink(ino) {
+            Ok(symlink) => reply.data(
+                symlink
+                    .read(&self.fs_interface.mountpoint)
+                    .as_os_str()
+                    .as_bytes(),
+            ),
+            Err(e) => reply.error(e.to_libc()),
+        }
     }
 
     fn getxattr(
