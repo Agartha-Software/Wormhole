@@ -1,12 +1,17 @@
 pub mod clap;
 
+use crate::ipc::error::ListenerError;
 use crate::ipc::service::socket::new_socket_listener;
 use crate::ipc::service::tcp::new_tcp_listener;
 use crate::pods::pod::Pod;
 use crate::pods::save::{delete_saved_pods, load_saved_pods};
 use crate::service::clap::ServiceArgs;
+use interprocess::local_socket::tokio::Listener;
+use interprocess::local_socket::traits::tokio::Listener as TokioListenerExt;
 use std::collections::HashMap;
 use std::process::ExitCode;
+use tokio::net::TcpListener;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 pub struct Service {
     pub pods: HashMap<String, Pod>,
@@ -14,12 +19,6 @@ pub struct Service {
     tcp_listener: TcpListener,
     socket_listener: Listener,
 }
-
-use crate::ipc::error::ListenerError;
-use interprocess::local_socket::tokio::Listener;
-use interprocess::local_socket::traits::tokio::Listener as TokioListenerExt;
-use tokio::net::TcpListener;
-use tokio::sync::mpsc::UnboundedReceiver;
 
 impl Service {
     pub async fn new(args: ServiceArgs) -> Option<Self> {
