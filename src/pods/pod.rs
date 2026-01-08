@@ -76,68 +76,70 @@ custom_error! {pub PodInfoError
     FileNotFound = "PodInfoError: file not found",
 }
 
-async fn try_to_connect_prototype(
-    protoype: &mut PodPrototype,
-    fail_on_network: bool,
-    receiver_in: &UnboundedSender<FromNetworkMessage>,
-) -> Result<ConnectionInfo, io::Error> {
-    if !protoype.global_config.general.entrypoints.is_empty() {
-        for first_contact in &protoype.global_config.general.entrypoints {
-            match PeerIPC::connect(
-                first_contact.to_owned(),
-                protoype.hostname.clone(),
-                protoype.public_url.clone(),
-                receiver_in,
-            )
-            .await
-            {
-                Err(HandshakeError::CouldntConnect) => continue,
-                Err(e) => log::error!("{first_contact}: {e}"),
-                Ok((ipc, accept)) => {
-                    if let Some(urls) =
-                        accept
-                            .urls
-                            .into_iter()
-                            .skip(1)
-                            .try_fold(Vec::new(), |mut a, b| {
-                                a.push(b?);
-                                Some(a)
-                            })
-                    {
-                        let new_hostname = accept.rename.unwrap_or(protoype.hostname.clone());
-
-                        match PeerIPC::peer_startup(
-                            urls,
-                            new_hostname.clone(),
-                            accept.hostname,
-                            receiver_in,
-                        )
-                        .await
+impl PodPrototype {
+    async fn try_to_connect(
+        &mut self,
+        fail_on_network: bool,
+        receiver_in: &UnboundedSender<FromNetworkMessage>,
+    ) -> Result<ConnectionInfo, io::Error> {
+        if !self.global_config.general.entrypoints.is_empty() {
+            for first_contact in &self.global_config.general.entrypoints {
+                match PeerIPC::connect(
+                    first_contact.to_owned(),
+                    self.hostname.clone(),
+                    self.public_url.clone(),
+                    receiver_in,
+                )
+                .await
+                {
+                    Err(HandshakeError::CouldntConnect) => continue,
+                    Err(e) => log::error!("{first_contact}: {e}"),
+                    Ok((ipc, accept)) => {
+                        if let Some(urls) =
+                            accept
+                                .urls
+                                .into_iter()
+                                .skip(1)
+                                .try_fold(Vec::new(), |mut a, b| {
+                                    a.push(b?);
+                                    Some(a)
+                                })
                         {
-                            Ok(mut other_ipc) => {
-                                other_ipc.insert(0, ipc);
+                            let new_hostname = accept.rename.unwrap_or(self.hostname.clone());
 
-                                protoype.hostname = new_hostname;
-                                protoype.global_config = accept.config;
+                            match PeerIPC::peer_startup(
+                                urls,
+                                new_hostname.clone(),
+                                accept.hostname,
+                                receiver_in,
+                            )
+                            .await
+                            {
+                                Ok(mut other_ipc) => {
+                                    other_ipc.insert(0, ipc);
 
-                                return Ok((accept.itree, other_ipc));
-                            }
+                                    self.hostname = new_hostname;
+                                    self.global_config = accept.config;
 
-                            Err(e) => log::error!("a peer failed: {e}"),
-                        };
+                                    return Ok((accept.itree, other_ipc));
+                                }
+
+                                Err(e) => log::error!("a peer failed: {e}"),
+                            };
+                        }
                     }
                 }
             }
+            if fail_on_network {
+                log::error!("None of the specified peers could answer. Stopping.");
+                return Err(io::Error::other("None of the specified peers could answer"));
+            }
         }
-        if fail_on_network {
-            log::error!("None of the specified peers could answer. Stopping.");
-            return Err(io::Error::other("None of the specified peers could answer"));
-        }
+        Ok((
+            generate_itree(&self.mountpoint, &self.hostname).unwrap_or(ITree::new()),
+            vec![],
+        ))
     }
-    Ok((
-        generate_itree(&protoype.mountpoint, &protoype.hostname).unwrap_or(ITree::new()),
-        vec![],
-    ))
 }
 
 custom_error! {pub PodStopError
@@ -190,15 +192,15 @@ impl Pod {
         log::trace!("mount point {:?}", prototype.mountpoint);
         let (receiver_in, receiver_out) = mpsc::unbounded_channel();
 
-        let (itree, peers) = try_to_connect_prototype(
-            &mut prototype,
-            // NOTE - temporary fix
-            // made to help with tests and debug
-            // choice not to fail should later be supported by the cli
-            true,
-            &receiver_in,
-        )
-        .await?;
+        let (itree, peers) = prototype
+            .try_to_connect(
+                // NOTE - temporary fix
+                // made to help with tests and debug
+                // choice not to fail should later be supported by the cli
+                true,
+                &receiver_in,
+            )
+            .await?;
 
         Self::realize(prototype, server, receiver_in, receiver_out, itree, peers)
     }
