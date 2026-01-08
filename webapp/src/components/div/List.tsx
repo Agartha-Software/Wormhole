@@ -2,7 +2,7 @@ import { toChildArray, type ComponentChild } from "preact";
 import type ChildrenProps from "../../ts/ChildrenProps";
 
 function Entry({child}: {child: ComponentChild}) {
-    return <li>{child}</li>
+    return <li className="h-fit">{child}</li>
 }
 
 type ExtendedProps = {

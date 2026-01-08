@@ -1,14 +1,23 @@
 ---
+import NetworkList from "../components/dynamic/NetworkList";
+import H1 from "../components/text/H1";
 import Main from "./Main.astro";
+const { name } = Astro.params; // check that this works in non SSR
 ---
 
 <Main>
-    <div class="grid gap-10">
-        <div class="flex m-5 sticky">
+    <div class="flex">
+        <div class="ml-8 grid gap-5 sticky h-fit">
+            <div class="m-5">
+                <H1>Wormhole</H1>
+            </div>
+            <NetworkList selected={name} client:load />
             <slot name="bar" />
         </div>
 
-        <div>
+        <div
+            class="ml-10 rounded-l-3xl w-full min-h-screen p-8 bg-slate-600 shadow-[0px_0px_25px_0px_rgba(0,_0,_0,_0.4)]"
+        >
             <slot />
         </div>
     </div>

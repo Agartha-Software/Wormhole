@@ -1,0 +1,14 @@
+---
+import { actions } from "astro:actions";
+import H2 from "../../components/text/H2";
+import NetworkLayout from "../../layouts/NetworkLayout.astro";
+import Status from "../../components/dynamic/Status";
+import NetworkPage from "../../components/pages/NetworkPage";
+
+export const prerender = false;
+const { name } = Astro.params;
+---
+
+<NetworkLayout>
+    <NetworkPage name={name} client:load />
+</NetworkLayout>

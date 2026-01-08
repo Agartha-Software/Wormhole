@@ -4,7 +4,7 @@ import List from "../div/List";
 import { actions } from "astro:actions";
 import NetworkManifest from "./NetworkManifest";
 
-export default function () {
+export default function ({selected}: {selected: string}) {
     const [nwList, setNwList] = useState<Network[] | undefined | "error">(undefined);
     useEffect(() => {
         actions.get_networks(null).then(nws => {
@@ -18,6 +18,8 @@ export default function () {
     } else if (nwList === "error") {
         return <List><p>Error loading networks</p></List>
     } else {
-        return <List className="max-w-lg grid gap-2.5">{nwList.map(nw => <NetworkManifest network={nw} />)}</List>
+        return <List className="max-w-lg grid gap-2.5 h-fit">{nwList.map(
+            nw => <NetworkManifest selected={nw.name === selected} network={nw} />
+        )}</List>
     }
 }
