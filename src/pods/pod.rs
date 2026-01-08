@@ -327,6 +327,7 @@ impl Pod {
             network_interface.clone(),
             disk_manager,
             itree.clone(),
+            proto.mountpoint.clone(),
         ));
 
         // Start ability to recieve messages

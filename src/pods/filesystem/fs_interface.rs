@@ -14,6 +14,7 @@ use crate::pods::whpath::WhPath;
 use futures::io;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::file_handle::FileHandleManager;
@@ -25,6 +26,7 @@ pub struct FsInterface {
     pub disk: Box<dyn DiskManager>,
     pub file_handles: Arc<RwLock<FileHandleManager>>,
     pub itree: Arc<RwLock<ITree>>, // here only to read, as most write are made by network_interface
+    pub mountpoint: PathBuf,
 }
 
 #[derive(PartialEq, Debug, Serialize, Deserialize, Clone)]
@@ -51,12 +53,14 @@ impl FsInterface {
         network_interface: Arc<NetworkInterface>,
         disk_manager: Box<dyn DiskManager>,
         itree: Arc<RwLock<ITree>>,
+        mountpoint: PathBuf,
     ) -> Self {
         Self {
             network_interface,
             disk: disk_manager,
             file_handles: Arc::new(RwLock::new(FileHandleManager::new())),
             itree,
+            mountpoint,
         }
     }
 
