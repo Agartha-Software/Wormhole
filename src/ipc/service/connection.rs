@@ -16,7 +16,7 @@ use tokio::io::AsyncWriteExt;
 
 pub async fn handle_connection<Stream>(pods: &mut HashMap<String, Pod>, mut stream: Stream) -> bool
 where
-    Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin + 'static,
+    Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
 {
     log::trace!("Connection from CLI recieved!");
 
