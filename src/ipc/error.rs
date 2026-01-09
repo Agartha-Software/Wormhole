@@ -1,7 +1,7 @@
 use custom_error::custom_error;
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 use std::io::{self, ErrorKind};
+use ts_rs::TS;
 
 custom_error! {pub ListenerError
     TCPListenerError { source: TCPListenerError } = "{source}",

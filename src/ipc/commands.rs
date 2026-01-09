@@ -1,6 +1,5 @@
-use std::{net::IpAddr, path::PathBuf};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{net::IpAddr, path::PathBuf};
 use ts_rs::TS;
 
 use crate::cli::{ConfigType, IdentifyNewPodGroup, IdentifyPodArgs, IdentifyPodGroup, Mode};

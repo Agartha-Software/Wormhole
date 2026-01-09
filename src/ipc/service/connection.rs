@@ -11,9 +11,11 @@ use crate::{
     service::Service,
 };
 use either::Either;
+use interprocess::local_socket;
 use serde::Serialize;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
+use tokio::sync::oneshot;
 
 impl Service {
     pub async fn handle_connection<Stream>(&mut self, mut stream: Stream) -> bool
@@ -33,18 +35,42 @@ impl Service {
             .expect("Failed to read recieved command, shouldn't be possible!");
 
         match bincode::deserialize::<Command>(&buffer) {
-            Ok(command) => handle_command(command, &mut self.pods, &self.socket, &mut Either::Left(&mut stream))
-                .await
-                .unwrap_or_else(|e| {
-                    log::error!("Network Error: {e:?}"); // TODO verify relevance
-                    false
-                }),
+            Ok(command) => handle_command(
+                command,
+                &mut self.pods,
+                &self.socket,
+                &mut Either::Left(&mut stream),
+            )
+            .await
+            .unwrap_or_else(|e| {
+                log::error!("Network Error: {e:?}"); // TODO verify relevance
+                false
+            }),
             Err(err) => {
                 log::error!("Command recieved not recognized by the service: {err:?}");
                 eprintln!("Command recieved not recognized by the service.");
                 false
             }
         }
+    }
+
+    /// Borrow pods, execute the command, sends the answer to the web api
+    pub async fn handle_tcp_connection(
+        &mut self,
+        command: Command,
+        reply_tx: oneshot::Sender<String>,
+    ) -> bool {
+        let mut buffer = String::new();
+        let mut stream = Either::Right(&mut buffer);
+        let _ = handle_command::<local_socket::tokio::Stream>(
+            command,
+            &mut self.pods,
+            &self.socket,
+            &mut stream,
+        )
+        .await;
+        let _ = reply_tx.send(buffer);
+        false
     }
 }
 

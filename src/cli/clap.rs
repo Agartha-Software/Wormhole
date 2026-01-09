@@ -1,5 +1,5 @@
-use ts_rs::TS;
 use std::{net::IpAddr, path::PathBuf};
+use ts_rs::TS;
 
 use crate::{
     cli::config_clap::ConfigCommand,
