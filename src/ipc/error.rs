@@ -1,5 +1,6 @@
 use custom_error::custom_error;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 use std::io::ErrorKind;
 
 custom_error! {pub ListenerError
@@ -76,9 +77,11 @@ where
     })
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct IoError {
     #[serde(serialize_with = "serialize", deserialize_with = "deserialize")]
+    #[ts(skip)]
     pub kind: ErrorKind,
     pub error: String,
 }
