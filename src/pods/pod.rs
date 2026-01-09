@@ -1,7 +1,9 @@
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::{io, sync::Arc};
 
-use crate::config::{GlobalConfig, LocalConfig};
+use crate::config::local_file::{GeneralLocalConfig, LocalConfigFile};
+use crate::config::GlobalConfig;
 use crate::data::tree_hosts::CliHostTree;
 use crate::error::{WhError, WhResult};
 #[cfg(target_os = "linux")]
@@ -14,9 +16,7 @@ use crate::pods::disk_managers::unix_disk_manager::UnixDiskManager;
 #[cfg(target_os = "windows")]
 use crate::pods::disk_managers::windows_disk_manager::WindowsDiskManager;
 use crate::pods::disk_managers::DiskManager;
-use crate::pods::itree::{
-    FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME, LOCAL_CONFIG_INO, LOCK_TIMEOUT, ROOT,
-};
+use crate::pods::itree::{FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_INO, LOCK_TIMEOUT, ROOT};
 use crate::pods::network::redundancy::redundancy_worker;
 use crate::pods::whpath::WhPath;
 #[cfg(target_os = "windows")]
@@ -24,8 +24,8 @@ use crate::winfsp::winfsp_impl::{mount_fsp, WinfspHost};
 use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use fuser;
-use log::info;
 use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
 
@@ -55,18 +55,22 @@ pub struct Pod {
     new_peer_handle: JoinHandle<()>,
     redundancy_worker_handle: JoinHandle<()>,
     pub global_config: Arc<RwLock<GlobalConfig>>,
-    pub local_config: Arc<RwLock<LocalConfig>>,
+    name: String,
+    pub should_restart: bool,
 }
 
-struct PodPrototype {
-    pub itree: ITree,
-    pub peers: Vec<PeerIPC>,
+#[derive(Serialize, Deserialize, Clone)]
+pub struct PodPrototype {
     pub global_config: GlobalConfig,
-    pub local_config: LocalConfig,
+    pub name: String,
+    pub hostname: String,
+    pub public_url: Option<String>,
+    pub bound_socket: SocketAddr,
     pub mountpoint: PathBuf,
-    pub receiver_out: UnboundedReceiver<FromNetworkMessage>,
-    pub receiver_in: UnboundedSender<FromNetworkMessage>,
+    pub should_restart: bool,
 }
+
+type ConnectionInfo = (ITree, Vec<PeerIPC>);
 
 custom_error! {pub PodInfoError
     WhError{source: WhError} = "{source}",
@@ -74,81 +78,71 @@ custom_error! {pub PodInfoError
     FileNotFound = "PodInfoError: file not found",
 }
 
-async fn initiate_connection(
-    mountpoint: &Path,
-    local_config: &LocalConfig,
-    global_config: &GlobalConfig,
-    receiver_in: &UnboundedSender<FromNetworkMessage>,
-    receiver_out: UnboundedReceiver<FromNetworkMessage>,
-) -> Result<PodPrototype, UnboundedReceiver<FromNetworkMessage>> {
-    if !global_config.general.entrypoints.is_empty() {
-        for first_contact in &global_config.general.entrypoints {
-            match PeerIPC::connect(first_contact.to_owned(), local_config, receiver_in.clone())
+impl PodPrototype {
+    async fn try_to_connect(
+        &mut self,
+        fail_on_network: bool,
+        receiver_in: &UnboundedSender<FromNetworkMessage>,
+    ) -> Result<ConnectionInfo, io::Error> {
+        if !self.global_config.general.entrypoints.is_empty() {
+            for first_contact in &self.global_config.general.entrypoints {
+                match PeerIPC::connect(
+                    first_contact.to_owned(),
+                    self.hostname.clone(),
+                    self.public_url.clone(),
+                    receiver_in,
+                )
                 .await
-            {
-                Err(HandshakeError::CouldntConnect) => continue,
-                Err(e) => {
-                    log::error!("{first_contact}: {e}");
-                    return Err(receiver_out);
-                }
-                Ok((ipc, accept)) => {
-                    return if let Some(urls) =
-                        accept.urls.into_iter().skip(1).fold(Some(vec![]), |a, b| {
-                            a.and_then(|mut a| {
-                                a.push(b?);
-                                Some(a)
-                            })
-                        }) {
-                        let mut local_config = local_config.clone();
-                        if let Some(rename) = accept.rename {
-                            local_config.general.hostname = rename;
-                        }
-
-                        match PeerIPC::peer_startup(
-                            urls,
-                            local_config.general.hostname.clone(),
-                            accept.hostname,
-                            receiver_in.clone(),
-                        )
-                        .await
-                        {
-                            Ok(mut other_ipc) => {
-                                other_ipc.insert(0, ipc);
-                                Ok(PodPrototype {
-                                    itree: accept.itree,
-                                    peers: other_ipc,
-                                    global_config: accept.config,
-                                    local_config,
-                                    mountpoint: mountpoint.into(),
-                                    receiver_out,
-                                    receiver_in: receiver_in.clone(),
+                {
+                    Err(HandshakeError::CouldntConnect) => continue,
+                    Err(e) => log::error!("{first_contact}: {e}"),
+                    Ok((ipc, accept)) => {
+                        if let Some(urls) =
+                            accept
+                                .urls
+                                .into_iter()
+                                .skip(1)
+                                .try_fold(Vec::new(), |mut a, b| {
+                                    a.push(b?);
+                                    Some(a)
                                 })
-                            }
-                            Err(e) => {
-                                log::error!("a peer failed: {e}");
-                                Err(receiver_out)
-                            }
+                        {
+                            let new_hostname = accept.rename.unwrap_or(self.hostname.clone());
+
+                            match PeerIPC::peer_startup(
+                                urls,
+                                new_hostname.clone(),
+                                accept.hostname,
+                                receiver_in,
+                            )
+                            .await
+                            {
+                                Ok(mut other_ipc) => {
+                                    other_ipc.insert(0, ipc);
+
+                                    self.hostname = new_hostname;
+                                    self.global_config = accept.config;
+
+                                    return Ok((accept.itree, other_ipc));
+                                }
+
+                                Err(e) => log::error!("a peer failed: {e}"),
+                            };
                         }
-                    } else {
-                        log::error!("Peers do not all have a url!");
-                        Err(receiver_out)
-                    };
+                    }
                 }
             }
+            if fail_on_network {
+                log::error!("None of the specified peers could answer. Stopping.");
+                return Err(io::Error::other("None of the specified peers could answer"));
+            }
         }
-        info!("None of the known address answered correctly, starting a FS.")
+        Ok((
+            generate_itree(&self.mountpoint, &self.hostname).unwrap_or(ITree::new()),
+            vec![],
+        ))
     }
-    Err(receiver_out)
 }
-
-// fn register_to_others(peers: &Vec<PeerIPC>, self_address: &Address) -> std::io::Result<()> {
-//     for peer in peers {
-//         peer.sender
-//             .send((MessageContent::Register(self_address.clone()), None))
-//             .map_err(|err| std::io::Error::new(io::ErrorKind::NotConnected, err))?;
-//     }
-//     Ok(())
-// }
 
 custom_error! {pub PodStopError
     WhError{source: WhError} = "{source}",
@@ -196,53 +190,31 @@ fn create_all_dirs(itree: &ITree, from: InodeId, disk: &dyn DiskManager) -> io::
 }
 
 impl Pod {
-    pub async fn new(
-        global_config: GlobalConfig,
-        local_config: LocalConfig,
-        mountpoint: &Path,
-        server: Arc<Server>,
-    ) -> io::Result<Self> {
-        let global_config = global_config;
-
-        log::trace!("mount point {:?}", mountpoint);
+    pub async fn new(mut prototype: PodPrototype, server: Arc<Server>) -> io::Result<Self> {
+        log::trace!("mount point {:?}", prototype.mountpoint);
         let (receiver_in, receiver_out) = mpsc::unbounded_channel();
 
-        let proto = match initiate_connection(
-            mountpoint,
-            &local_config,
-            &global_config,
-            &receiver_in,
-            receiver_out,
-        )
-        .await
-        {
-            Ok(proto) => proto,
-            Err(receiver_out) => {
-                if !global_config.general.entrypoints.is_empty() {
-                    // NOTE - temporary fix
-                    // made to help with tests and debug
-                    // choice not to fail should later be supported by the cli
-                    log::error!("No peers answered. Stopping.");
-                    return Err(io::Error::other("None of the specified peers could answer"));
-                }
-                let itree = generate_itree(mountpoint, &local_config.general.hostname)
-                    .unwrap_or(ITree::new());
-                PodPrototype {
-                    itree,
-                    peers: vec![],
-                    global_config,
-                    local_config,
-                    mountpoint: mountpoint.into(),
-                    receiver_out,
-                    receiver_in,
-                }
-            }
-        };
+        let (itree, peers) = prototype
+            .try_to_connect(
+                // NOTE - temporary fix
+                // made to help with tests and debug
+                // choice not to fail should later be supported by the cli
+                true,
+                &receiver_in,
+            )
+            .await?;
 
-        Self::realize(proto, server).await
+        Self::realize(prototype, server, receiver_in, receiver_out, itree, peers)
     }
 
-    async fn realize(proto: PodPrototype, server: Arc<Server>) -> io::Result<Self> {
+    fn realize(
+        proto: PodPrototype,
+        server: Arc<Server>,
+        receiver_in: UnboundedSender<FromNetworkMessage>,
+        receiver_out: UnboundedReceiver<FromNetworkMessage>,
+        itree: ITree,
+        peers: Vec<PeerIPC>,
+    ) -> io::Result<Self> {
         let (senders_in, senders_out) = mpsc::unbounded_channel();
 
         let (redundancy_tx, redundancy_rx) = mpsc::unbounded_channel();
@@ -252,12 +224,11 @@ impl Pod {
         #[cfg(target_os = "windows")]
         let disk_manager = Box::new(WindowsDiskManager::new(&proto.mountpoint)?);
 
-        create_all_dirs(&proto.itree, ROOT, disk_manager.as_ref())
+        create_all_dirs(&itree, ROOT, disk_manager.as_ref())
             .inspect_err(|e| log::error!("unable to create_all_dirs: {e}"))
             .map_err(|e| std::io::Error::new(e.kind(), format!("create_all_dirs: {e}")))?;
 
-        if let Ok(perms) = proto
-            .itree
+        if let Ok(perms) = itree
             .get_inode(GLOBAL_CONFIG_INO)
             .map(|inode| inode.meta.perm)
         {
@@ -275,38 +246,17 @@ impl Pod {
                 })?;
         }
 
-        if let Ok(perms) = proto
-            .itree
-            .get_inode(LOCAL_CONFIG_INO)
-            .map(|inode| inode.meta.perm)
-        {
-            let _ = disk_manager.new_file(&WhPath::try_from(LOCAL_CONFIG_FNAME).unwrap(), perms);
-            disk_manager
-                .write_file(
-                    &WhPath::try_from(LOCAL_CONFIG_FNAME).unwrap(),
-                    toml::to_string(&proto.local_config)
-                        .expect("infallible")
-                        .as_bytes(),
-                    0,
-                )
-                .map_err(|e| {
-                    std::io::Error::new(e.kind(), format!("write_file(local_config): {e}"))
-                })?;
-        }
-
-        let url = proto.local_config.general.url.clone();
-
-        let itree: Arc<RwLock<ITree>> = Arc::new(RwLock::new(proto.itree));
-        let local = Arc::new(RwLock::new(proto.local_config));
+        let itree: Arc<RwLock<ITree>> = Arc::new(RwLock::new(itree));
         let global = Arc::new(RwLock::new(proto.global_config));
 
         let network_interface = Arc::new(NetworkInterface::new(
             itree.clone(),
-            url,
+            proto.public_url,
+            proto.bound_socket,
+            proto.hostname,
             senders_in.clone(),
             redundancy_tx.clone(),
-            Arc::new(RwLock::new(proto.peers)),
-            local.clone(),
+            Arc::new(RwLock::new(peers)),
             global.clone(),
         ));
 
@@ -318,7 +268,7 @@ impl Pod {
 
         // Start ability to recieve messages
         let network_airport_handle = tokio::spawn(NetworkInterface::network_airport(
-            proto.receiver_out,
+            receiver_out,
             fs_interface.clone(),
         ));
 
@@ -330,7 +280,7 @@ impl Pod {
 
         let new_peer_handle = tokio::spawn(NetworkInterface::incoming_connections_watchdog(
             server,
-            proto.receiver_in.clone(),
+            receiver_in,
             network_interface.clone(),
         ));
 
@@ -357,9 +307,10 @@ impl Pod {
             network_airport_handle,
             peer_broadcast_handle,
             new_peer_handle,
-            local_config: local.clone(),
             global_config: global.clone(),
             redundancy_worker_handle,
+            name: proto.name,
+            should_restart: proto.should_restart,
         })
     }
 
@@ -440,15 +391,7 @@ impl Pod {
     async fn send_files_when_stopping(&self, itree: &ITree, peers: Vec<Address>) {
         futures_util::future::join_all(
             itree
-                .files_hosted_only_by(
-                    &self
-                        .network_interface
-                        .local_config
-                        .read()
-                        .general
-                        .hostname
-                        .clone(),
-                )
+                .files_hosted_only_by(&self.network_interface.hostname.clone())
                 .filter_map(|inode| {
                     if inode.id == GLOBAL_CONFIG_INO
                         || inode.id == LOCAL_CONFIG_INO
@@ -498,9 +441,7 @@ impl Pod {
             .expect("to_network_message_tx closed.");
 
         let Self {
-            network_interface: _,
             fs_interface,
-            mountpoint: _,
             peers,
             #[cfg(target_os = "linux")]
             fuse_handle,
@@ -510,8 +451,7 @@ impl Pod {
             peer_broadcast_handle,
             new_peer_handle,
             redundancy_worker_handle,
-            global_config: _,
-            local_config: _,
+            ..
         } = self;
 
         #[cfg(target_os = "linux")]
@@ -566,8 +506,33 @@ impl Pod {
         &self.mountpoint
     }
 
-    pub fn contains(&self, path: &PathBuf) -> bool {
+    pub fn contains(&self, path: &Path) -> bool {
         path.starts_with(&self.mountpoint)
+    }
+
+    pub fn try_generate_prototype(&self) -> Option<PodPrototype> {
+        let global_config = self.global_config.try_read_for(LOCK_TIMEOUT)?.clone();
+
+        Some(PodPrototype {
+            global_config,
+            name: self.name.clone(),
+            hostname: self.network_interface.hostname.clone(),
+            public_url: self.network_interface.public_url.clone(),
+            bound_socket: self.network_interface.bound_socket,
+            mountpoint: self.mountpoint.clone(),
+            should_restart: self.should_restart,
+        })
+    }
+
+    pub fn generate_local_config(&self) -> LocalConfigFile {
+        LocalConfigFile {
+            general: GeneralLocalConfig {
+                name: Some(self.name.clone()),
+                hostname: Some(self.network_interface.hostname.clone()),
+                public_url: self.network_interface.public_url.clone(),
+                restart: Some(self.should_restart),
+            },
+        }
     }
 
     pub fn get_inspect_info(&self) -> InspectInfo {
@@ -583,12 +548,10 @@ impl Pod {
             .collect();
 
         InspectInfo {
-            url: self.network_interface.url.clone(),
-            hostname: self
-                .network_interface
-                .hostname()
-                .expect("Can't lock network"),
-            name: "".to_string(), //TODO to delete
+            public_url: self.network_interface.public_url.clone(),
+            bound_socket: self.network_interface.bound_socket,
+            hostname: self.network_interface.hostname.clone(),
+            name: self.name.clone(),
             connected_peers: peers_data,
             mount: self.mountpoint.clone(),
         }

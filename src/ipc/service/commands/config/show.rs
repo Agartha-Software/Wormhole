@@ -13,7 +13,9 @@ use crate::{
     pods::{itree::LOCK_TIMEOUT, pod::Pod},
 };
 
-async fn config_to_string<Conf>(config: &Arc<RwLock<Conf>>) -> std::io::Result<Option<String>>
+async fn locking_config_to_string<Conf>(
+    config: &Arc<RwLock<Conf>>,
+) -> std::io::Result<Option<String>>
 where
     Conf: Serialize + Clone,
 {
@@ -25,6 +27,11 @@ where
     Ok(Some(
         toml::to_string(&config.clone()).expect("Serialization shouldn't be able to fail"),
     ))
+}
+
+fn generate_local_config_file(pod: &Pod) -> String {
+    let config = pod.generate_local_config();
+    toml::to_string(&config).expect("Serialization shouldn't be able to fail")
 }
 
 pub async fn show<Stream>(
@@ -39,26 +46,27 @@ where
     match find_pod(&args, pods) {
         Some((_, pod)) => {
             match config_type {
-                ConfigType::Local => match config_to_string(&pod.local_config).await? {
-                    Some(local) => {
-                        send_answer(ShowConfigAnswer::SuccessLocal(local), stream).await?
-                    }
-                    None => send_answer(ShowConfigAnswer::ConfigBlock, stream).await?,
-                },
-                ConfigType::Global => match config_to_string(&pod.global_config).await? {
+                ConfigType::Local => {
+                    send_answer(
+                        ShowConfigAnswer::SuccessLocal(generate_local_config_file(pod)),
+                        stream,
+                    )
+                    .await?
+                }
+                ConfigType::Global => match locking_config_to_string(&pod.global_config).await? {
                     Some(global) => {
                         send_answer(ShowConfigAnswer::SuccessGlobal(global), stream).await?
                     }
                     None => send_answer(ShowConfigAnswer::ConfigBlock, stream).await?,
                 },
-                ConfigType::Both => match config_to_string(&pod.local_config).await? {
-                    Some(local) => match config_to_string(&pod.global_config).await? {
-                        Some(global) => {
-                            send_answer(ShowConfigAnswer::SuccessBoth(local, global), stream)
-                                .await?
-                        }
-                        None => send_answer(ShowConfigAnswer::ConfigBlock, stream).await?,
-                    },
+                ConfigType::Both => match locking_config_to_string(&pod.global_config).await? {
+                    Some(global) => {
+                        send_answer(
+                            ShowConfigAnswer::SuccessBoth(generate_local_config_file(pod), global),
+                            stream,
+                        )
+                        .await?
+                    }
                     None => send_answer(ShowConfigAnswer::ConfigBlock, stream).await?,
                 },
             };

@@ -1,11 +1,12 @@
 use std::{
     io::{self, ErrorKind},
+    net::SocketAddr,
     sync::Arc,
     time::UNIX_EPOCH,
 };
 
 use crate::{
-    config::{GlobalConfig, LocalConfig},
+    config::GlobalConfig,
     error::{WhError, WhResult},
     network::{
         message::{
@@ -49,12 +50,13 @@ pub fn get_all_peers_address(peers: &Arc<RwLock<Vec<PeerIPC>>>) -> WhResult<Vec<
 #[derive(Debug)]
 pub struct NetworkInterface {
     pub itree: Arc<RwLock<ITree>>,
-    pub url: Option<String>,
+    pub public_url: Option<String>,
+    pub bound_socket: SocketAddr,
+    pub hostname: String,
     pub to_network_message_tx: UnboundedSender<ToNetworkMessage>,
     pub to_redundancy_tx: UnboundedSender<RedundancyMessage>,
     pub callbacks: Callbacks,
     pub peers: Arc<RwLock<Vec<PeerIPC>>>,
-    pub local_config: Arc<RwLock<LocalConfig>>,
     pub global_config: Arc<RwLock<GlobalConfig>>,
 }
 
@@ -62,33 +64,25 @@ impl NetworkInterface {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         itree: Arc<RwLock<ITree>>,
-        url: Option<String>,
+        public_url: Option<String>,
+        bound_socket: SocketAddr,
+        hostname: String,
         to_network_message_tx: UnboundedSender<ToNetworkMessage>,
         to_redundancy_tx: UnboundedSender<RedundancyMessage>,
         peers: Arc<RwLock<Vec<PeerIPC>>>,
-        local_config: Arc<RwLock<LocalConfig>>,
         global_config: Arc<RwLock<GlobalConfig>>,
     ) -> Self {
         Self {
             itree,
-            url,
+            public_url,
+            bound_socket,
+            hostname,
             to_network_message_tx,
             to_redundancy_tx,
             callbacks: Callbacks::new(),
             peers,
-            local_config,
             global_config,
         }
-    }
-
-    pub fn hostname(&self) -> WhResult<String> {
-        Ok(self
-            .local_config
-            .try_read()
-            .ok_or(WhError::DeadLock)?
-            .general
-            .hostname
-            .clone())
     }
 
     #[deprecated(note = "bad to preallocate inodes like this")]
@@ -262,7 +256,7 @@ impl NetworkInterface {
     }
 
     pub fn revoke_remote_hosts(&self, id: InodeId) -> WhResult<()> {
-        self.update_hosts(id, vec![self.hostname()?])?;
+        self.update_hosts(id, vec![self.hostname.clone()])?;
         // self.apply_redundancy(id);
         Ok(())
     }

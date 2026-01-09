@@ -51,7 +51,7 @@ impl EnvironmentManager {
         );
 
         let mut instance = std::process::Command::new(SERVICE_BIN)
-            .args(&["-s", &socket_from_id(socket), "--nodeamon"])
+            .args(&["-s", &socket_from_id(socket), "--nodeamon", "--clean"])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .stdin(Stdio::piped())
