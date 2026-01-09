@@ -1,16 +1,23 @@
-use crate::error::WhResult;
+use std::io;
+use std::sync::Arc;
+
 use crate::network::message::{MessageContent, ToNetworkMessage};
 use crate::pods::itree::{FsEntry, ITree};
-use crate::pods::network::callbacks::Callback;
+use crate::pods::network::callbacks::Request;
 use crate::pods::network::network_interface::NetworkInterface;
 use crate::{error::WhError, pods::itree::InodeId};
 use custom_error::custom_error;
+use tokio::sync::mpsc;
 
 custom_error! {
+    #[derive(Clone)]
     /// Error describing the read syscall
     pub PullError
     WhError{source: WhError} = "{source}",
-    NoHostAvailable = "No host available"
+    NoHostAvailable = "No host available",
+
+    // Arc required to keep clonability
+    WriteError{io: Arc<io::Error>} = "failed to write: {io}",
 
     //Theses two errors, for now panic to simplify their detection because they should never happen:
     //PullFolder
@@ -18,18 +25,25 @@ custom_error! {
 }
 
 impl NetworkInterface {
-    // REVIEW - recheck and simplify this if possible
-    pub fn pull_file_sync(&self, file: InodeId) -> Result<Option<Callback>, PullError> {
+    /// Pull the file from the network
+    /// Returns a copy of the file's buffer if it was pulled
+    ///
+    /// # Panics
+    ///
+    /// This function panics if called within an asynchronous execution
+    /// context.
+    ///
+    pub fn pull_file_sync(&self, file: InodeId) -> Result<Option<Arc<Vec<u8>>>, PullError> {
         let itree = ITree::n_read_lock(&self.itree, "pull file sync")?;
         let hosts = {
             if let FsEntry::File(hosts) = &itree.n_get_inode(file)?.entry {
                 hosts
             } else {
-                panic!("Pulling a folder is invalid.")
+                return Err(WhError::InodeIsADirectory.into());
             }
         };
 
-        if hosts.len() == 0 {
+        if hosts.is_empty() {
             return Err(PullError::NoHostAvailable);
         }
 
@@ -39,34 +53,29 @@ impl NetworkInterface {
             // if the asked file is already on disk
             Ok(None)
         } else {
-            let callback = self.callbacks.n_create(Callback::Pull(file))?;
-            let (status_tx, mut status_rx) = tokio::sync::mpsc::unbounded_channel::<WhResult<()>>();
+            let procedure = || {
+                // will try to pull on all redundancies until success
+                for host in hosts {
+                    let (tx, mut rx) = mpsc::unbounded_channel();
+                    // trying on host `pull_from`
+                    self.to_network_message_tx
+                        .send(ToNetworkMessage::SpecificMessage(
+                            (MessageContent::RequestFile(file), Some(tx)),
+                            vec![host.clone()], // NOTE - naive choice for now
+                        ))
+                        .expect("pull_file: unable to request on the network thread");
 
-            // will try to pull on all redundancies until success
-            for host in hosts {
-                // trying on host `pull_from`
-                self.to_network_message_tx
-                    .send(ToNetworkMessage::SpecificMessage(
-                        (
-                            MessageContent::RequestFile(file, hostname.clone()),
-                            Some(status_tx.clone()),
-                        ),
-                        vec![host.clone()], // NOTE - naive choice for now
-                    ))
-                    .expect("pull_file: unable to request on the network thread");
-
-                // processing status
-                match status_rx
-                    .blocking_recv()
-                    .expect("pull_file: unable to get status from the network thread")
-                {
-                    Ok(()) => return Ok(Some(callback)),
-                    Err(_) => continue,
+                    // processing status
+                    match rx.blocking_recv() {
+                        Some(_) => return Ok(()),
+                        _ => continue,
+                    }
                 }
-            }
-            let _ = self.callbacks.resolve(callback, true);
-            log::error!("No host is currently able to send the file.\nFile: {file}");
-            return Err(PullError::NoHostAvailable);
+                log::error!("No host is currently able to send the file.\nFile: {file}");
+                Err(PullError::NoHostAvailable)
+            };
+
+            self.callbacks.request_sync(&Request::Pull(file), procedure)
         }
     }
 }

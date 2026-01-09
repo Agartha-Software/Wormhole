@@ -23,6 +23,11 @@ repository = "https://github.com/Agartha-Software/Wormhole"
 rust-version = "1.87.0"
 
 
+[patch.crates-io]
+librsync = { git = 'https://github.com/mbrt/librsync-rs.git'}
+librsync-sys = { git = 'https://github.com/mbrt/librsync-rs.git'}
+
+
 [lib]
 name = "wormhole"
 path = "src/lib.rs"
@@ -92,6 +97,8 @@ custom_error = "1.9.2"
 signal-hook = "0.3.18"
 futures = "0.3"
 gethostname = "1.0.2"
+librsync = "0.2.4"
+rand = "0.9.2"
 interprocess = { version = "2.2.3", features = ["tokio"] }
 camino = "1.2.1"
 fs2 = "0.4.3"
@@ -103,6 +110,7 @@ dir-diff = "0.3.3"
 serial_test = "3.2.0"
 tokio = { version = "1.38.0", default-features = false, features = ["process"] }
 lazy_static = "1.5.0"
+rand = "0.9.2"
 
 [package.metadata.deb]
 maintainer-scripts = "service/"

@@ -44,7 +44,7 @@ impl UnixDiskManager {
 
 impl UnixDiskManager {
     fn exist(&self, path: &WhPath) -> bool {
-        path.as_str().len() == 0 || self.handle.metadata(path).is_ok()
+        path.as_str().is_empty() || self.handle.metadata(path).is_ok()
     }
 }
 
@@ -72,7 +72,7 @@ impl DiskManager for UnixDiskManager {
 
     fn write_file(&self, path: &WhPath, binary: &[u8], offset: usize) -> io::Result<usize> {
         let file = self.handle.update_file(path, 0o600)?;
-        Ok(file.write_at(&binary, offset as u64)?) // NOTE - used "as" because into() is not supported
+        file.write_at(binary, offset as u64) // NOTE - used "as" because into() is not supported
     }
 
     fn set_file_size(&self, path: &WhPath, size: usize) -> io::Result<()> {

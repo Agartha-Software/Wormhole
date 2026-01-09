@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use crate::pods::filesystem::file_handle::{AccessMode, FileHandle, FileHandleManager, UUID};
-use crate::pods::itree::ITree;
+use crate::pods::filesystem::File;
+use crate::pods::itree::{FsEntry, ITree, Ino};
 use crate::pods::network::pull_file::PullError;
 use crate::{error::WhError, pods::itree::InodeId};
 use custom_error::custom_error;
@@ -9,13 +12,20 @@ use super::fs_interface::FsInterface;
 
 custom_error! {
     /// Error describing the read syscall
+    #[derive(Clone)]
     pub ReadError
     WhError{source: WhError} = "{source}",
     PullError{source: PullError} = "{source}",
-    LocalReadFailed{io: std::io::Error} = "Local read failed: {io}",
+    LocalReadFailed{io: Arc<std::io::Error>} = "Local read failed: {io}",
     CantPull = "Unable to pull file",
     NoReadPermission = "The permissions doesn't allow to read",
     NoFileHandle = "The file doesn't have a file handle",
+}
+
+impl From<std::io::Error> for ReadError {
+    fn from(io: std::io::Error) -> Self {
+        Self::LocalReadFailed { io: Arc::new(io) }
+    }
 }
 
 fn check_file_handle<'a>(
@@ -29,42 +39,93 @@ fn check_file_handle<'a>(
             no_atime: _,
             dirty: _,
             ino: _,
-        }) => return Err(ReadError::NoReadPermission),
+            signature: _,
+        }) => Err(ReadError::NoReadPermission),
         Some(&FileHandle {
             perm: AccessMode::Execute,
             direct: _,
             no_atime: _,
             dirty: _,
             ino: _,
-        }) => return Err(ReadError::NoReadPermission),
-        None => return Err(ReadError::NoFileHandle),
+            signature: _,
+        }) => Err(ReadError::NoReadPermission),
+        None => Err(ReadError::NoFileHandle),
         Some(file_handle) => Ok(file_handle),
     }
 }
 
 impl FsInterface {
-    pub fn get_file_data(
+    /// # Panics
+    ///
+    /// This function panics if called within an asynchronous execution
+    /// context.
+    ///
+    pub fn get_file_data_sync(
         &self,
-        file: InodeId,
+        ino: Ino,
         offset: usize,
         buf: &mut [u8],
     ) -> Result<usize, ReadError> {
-        let ok = match self.network_interface.pull_file_sync(file)? {
-            None => true,
-            Some(call) => self.network_interface.callbacks.n_wait_for(call)?,
-        };
-
-        if !ok {
-            return Err(ReadError::CantPull);
-        }
-
-        self.disk
-            .read_file(
-                &ITree::n_read_lock(&self.itree, "read_file")?.n_get_path_from_inode_id(file)?,
+        match self.network_interface.pull_file_sync(ino)? {
+            None => Ok(self.disk.read_file(
+                &ITree::n_read_lock(&self.itree, "read_file")?.n_get_path_from_inode_id(ino)?,
                 offset,
                 buf,
-            )
-            .map_err(|io| ReadError::LocalReadFailed { io })
+            )?),
+            Some(data) => {
+                let size = data.len().saturating_sub(offset);
+                if size > 0 {
+                    buf[..size].copy_from_slice(&data[offset..offset + size]);
+                }
+                Ok(size)
+            }
+        }
+    }
+
+    /// Get or pull the file from storage or network
+    ///
+    /// # Panics
+    ///
+    /// This function panics if called within an asynchronous execution
+    /// context.
+    ///
+    pub fn get_whole_file_sync(&self, ino: Ino) -> Result<File, ReadError> {
+        match self.network_interface.pull_file_sync(ino)? {
+            None => self
+                .get_local_file(ino)
+                .map(|o| o.expect("promised by pull_file_sync")),
+            Some(data) => Ok(File(data)),
+        }
+    }
+
+    /// Get locally stored file as-is if it exists without accessing the network
+    /// returns Ok(Some(file)) if the file is tracked
+    /// returns Ok(None) if the file is not tracked
+    pub fn get_local_file(&self, ino: Ino) -> Result<Option<File>, ReadError> {
+        let hostname = self.network_interface.hostname()?;
+        let mut buf = Vec::new();
+        let itree = self.itree.read();
+        let size = itree
+            .n_get_inode(ino)
+            .and_then(|inode| match &inode.entry {
+                FsEntry::File(hosts) => Ok(hosts
+                    .contains(&hostname)
+                    .then_some(inode.meta.size as usize)),
+                FsEntry::Directory(_) => Err(WhError::InodeIsADirectory),
+            })?;
+        drop(itree);
+        if let Some(mut size) = size {
+            buf.resize(size, 0);
+            size = self.disk.read_file(
+                &ITree::n_read_lock(&self.itree, "read_file")?.n_get_path_from_inode_id(ino)?,
+                0,
+                &mut buf[..],
+            )?;
+            buf.resize(size, 0);
+            Ok(Some(File(Arc::new(buf))))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn read_file(
@@ -79,6 +140,6 @@ impl FsInterface {
             let _file_handle = check_file_handle(&file_handles, file_handle)?;
         }
 
-        self.get_file_data(file, offset, buf)
+        self.get_file_data_sync(file, offset, buf)
     }
 }

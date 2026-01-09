@@ -1,12 +1,11 @@
 use std::{
-    collections::HashMap,
     io::{self, ErrorKind},
     sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
+    time::UNIX_EPOCH,
 };
 
 use crate::{
-    config::{types::Config, GlobalConfig, LocalConfig},
+    config::{GlobalConfig, LocalConfig},
     error::{WhError, WhResult},
     network::{
         message::{
@@ -22,11 +21,8 @@ use parking_lot::RwLock;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
+use crate::pods::filesystem::{remove_inode::RemoveInodeError, rename::RenameError};
 use crate::pods::itree::{FsEntry, Metadata};
-use crate::pods::{
-    filesystem::{remove_inode::RemoveInodeError, rename::RenameError},
-    itree::BLOCK_SIZE,
-};
 
 use crate::pods::{
     filesystem::fs_interface::FsInterface,
@@ -34,6 +30,11 @@ use crate::pods::{
 };
 
 use crate::pods::network::callbacks::Callbacks;
+
+// We use a function here because we need templates, but we don't want to leak this kind of weird function to anywhere else
+fn into_boxed_io<T: std::error::Error>(err: T) -> io::Error {
+    std::io::Error::other(format!("{}: {err}", std::any::type_name::<T>()))
+}
 
 pub fn get_all_peers_address(peers: &Arc<RwLock<Vec<PeerIPC>>>) -> WhResult<Vec<String>> {
     Ok(peers
@@ -58,6 +59,7 @@ pub struct NetworkInterface {
 }
 
 impl NetworkInterface {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         itree: Arc<RwLock<ITree>>,
         url: Option<String>,
@@ -72,9 +74,7 @@ impl NetworkInterface {
             url,
             to_network_message_tx,
             to_redundancy_tx,
-            callbacks: Callbacks {
-                callbacks: HashMap::new().into(),
-            },
+            callbacks: Callbacks::new(),
             peers,
             local_config,
             global_config,
@@ -168,10 +168,9 @@ impl NetworkInterface {
     #[must_use]
     /// Add the requested entry to the itree and inform the network
     pub fn register_new_inode(&self, inode: Inode) -> Result<(), MakeInodeError> {
-        let inode_id = inode.id.clone();
         ITree::n_write_lock(&self.itree, "register_new_inode")?.add_inode(inode.clone())?;
 
-        if !ITree::is_local_only(inode_id) {
+        if !ITree::is_local_only(inode.id) {
             self.to_network_message_tx
                 .send(ToNetworkMessage::BroadcastMessage(MessageContent::Inode(
                     inode,
@@ -220,7 +219,6 @@ impl NetworkInterface {
             })
     }
 
-    #[must_use]
     /// Get a new inode, add the requested entry to the itree and inform the network
     pub fn acknowledge_new_file(&self, inode: Inode, _id: InodeId) -> Result<(), MakeInodeError> {
         let mut itree = ITree::n_write_lock(&self.itree, "acknowledge_new_file")?;
@@ -260,40 +258,6 @@ impl NetworkInterface {
                 vec![to],
             ))
             .expect("send_file: unable to update modification on the network thread");
-        Ok(())
-    }
-
-    fn affect_write_locally(&self, id: InodeId, new_size: usize) -> WhResult<Metadata> {
-        let mut itree = ITree::n_write_lock(&self.itree, "network_interface.affect_write_locally")?;
-        let inode = itree.n_get_inode_mut(id)?;
-        let new_size = (new_size as u64).max(inode.meta.size);
-        inode.meta.size = new_size as u64;
-        inode.meta.blocks = ((new_size + BLOCK_SIZE - 1) / BLOCK_SIZE) as u64;
-
-        inode.meta.mtime = SystemTime::now();
-
-        inode.entry = match &inode.entry {
-            FsEntry::File(_) => FsEntry::File(vec![self.hostname()?]),
-            _ => panic!("Can't edit hosts on folder"),
-        };
-        Ok(inode.meta.clone())
-    }
-
-    pub fn write_file(&self, id: InodeId, new_size: usize) -> WhResult<()> {
-        let meta = self.affect_write_locally(id, new_size)?;
-        let self_hostname = LocalConfig::read_lock(&self.local_config, "affect_write_locally")?
-            .general
-            .hostname
-            .clone();
-
-        if !ITree::is_local_only(id) {
-            self.to_network_message_tx
-                .send(ToNetworkMessage::BroadcastMessage(
-                    MessageContent::RevokeFile(id, self_hostname, meta),
-                ))
-                .expect("revoke_remote_hosts: unable to update modification on the network thread");
-            // self.apply_redundancy(id);
-        }
         Ok(())
     }
 
@@ -496,7 +460,7 @@ impl NetworkInterface {
             .try_write_for(LOCK_TIMEOUT)
             .ok_or(std::io::Error::new(
                 std::io::ErrorKind::WouldBlock,
-                format!("disconnect_peer: can't write lock peers"),
+                "disconnect_peer: can't write lock peers",
             ))?
             .retain(|p| p.hostname != addr);
 
@@ -529,81 +493,44 @@ impl NetworkInterface {
             let content_debug = format!("{content:?}");
 
             let action_result = match content {
-                MessageContent::PullAnswer(id, binary) => fs_interface.recept_binary(id, binary),
+                MessageContent::PullAnswer(id, binary) => fs_interface.recept_binary(id, binary)
+                                                            .map_err(into_boxed_io),
                 MessageContent::RedundancyFile(id, binary) => fs_interface.recept_redundancy(id, binary)
-                    .map_err(|e| std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("WhError: {e}"),
-                )),
-                MessageContent::Inode(inode) => fs_interface.recept_inode(inode).or_else(|err| {
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("WhError: {err}"),
-                        ))
-                    }),
-                MessageContent::EditHosts(id, hosts) => fs_interface.recept_edit_hosts(id, hosts).or_else(|err| {
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("WhError: {err}"),
-                        ))
-                    }),
-                MessageContent::RevokeFile(id, host, meta) => fs_interface.recept_revoke_hosts(id, host, meta).or_else(|err| {
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("WhError: {err}"),
-                        ))
-                    }),
+                                            .map_err(into_boxed_io),
+                MessageContent::Inode(inode) => fs_interface.recept_inode(inode).map_err(into_boxed_io),
+                MessageContent::EditHosts(id, hosts) => fs_interface.recept_edit_hosts(id, hosts).map_err(into_boxed_io),
+                MessageContent::RevokeFile(id, host, meta) => fs_interface.recept_revoke_hosts(id, host, meta).map_err(into_boxed_io),
                 MessageContent::AddHosts(id, hosts) => fs_interface.recept_add_hosts(id, hosts),
                 MessageContent::RemoveHosts(id, hosts) => {
-                    fs_interface.recept_remove_hosts(id, hosts)
-                }
+                                            fs_interface.recept_remove_hosts(id, hosts)
+                                        }
                 MessageContent::EditMetadata(id, meta) =>
-                    fs_interface.acknowledge_metadata(id, meta).or_else(|err| {
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("WhError: {err}"),
-                        ))
-                    }),
-                MessageContent::Remove(id) => fs_interface.recept_remove_inode(id).or_else(|err| {
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("WhError: {err}"),
-                        ))
-                    }),
-                MessageContent::RequestFile(inode, peer) => fs_interface.send_file(inode, peer),
+                                            fs_interface.acknowledge_metadata(id, meta).map_err(into_boxed_io),
+                MessageContent::Remove(id) => fs_interface.recept_remove_inode(id).map_err(into_boxed_io),
+                MessageContent::RequestFile(inode) => fs_interface.send_file(inode, origin),
                 MessageContent::RequestFs => fs_interface.send_filesystem(origin),
                 MessageContent::Rename(parent, new_parent, name, new_name, overwrite) =>
-                    fs_interface
-                    .recept_rename(parent, new_parent, name, new_name, overwrite)
-                    .map_err(|err| {
-                        std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("WhError: {err}"),
-                        )
-                    }),
+                                            fs_interface
+                                            .recept_rename(parent, new_parent, name, new_name, overwrite)
+                                            .map_err(into_boxed_io),
                 MessageContent::SetXAttr(ino, key, data) => fs_interface
-                    .network_interface
-                    .recept_inode_xattr(ino, &key, data)
-                    .or_else(|err| {
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("WhError: {err}"),
-                        ))
-                    }),
+                                            .network_interface
+                                            .recept_inode_xattr(ino, &key, data)
+                                            .map_err(into_boxed_io),
+
                 MessageContent::RemoveXAttr(ino, key) => fs_interface
-                    .network_interface
-                    .recept_remove_inode_xattr(ino, &key)
-                    .or_else(|err| {
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("WhError: {err}"),
-                        ))
-                    }),
+                                            .network_interface
+                                            .recept_remove_inode_xattr(ino, &key)
+                                            .map_err(into_boxed_io),
                 MessageContent::FsAnswer(_, _, _) => {
-                    Err(io::Error::new(ErrorKind::InvalidInput,
-                        "Late answer from first connection, loaded network interface shouldn't recieve FsAnswer"))
-                },
-                MessageContent::Disconnect(addr) => fs_interface.network_interface.disconnect_peer(addr)
+                                            Err(io::Error::new(ErrorKind::InvalidInput,
+                                                "Late answer from first connection, loaded network interface shouldn't recieve FsAnswer"))
+                                        },
+                MessageContent::Disconnect => fs_interface.network_interface.disconnect_peer(origin),
+                MessageContent::FileDelta(ino, meta, sig, delta) => fs_interface.accept_delta(ino, meta, sig, delta, origin)
+                                            .map_err(into_boxed_io),
+                MessageContent::FileChanged(ino, meta) => fs_interface.accept_file_changed(ino, meta, origin).map_err(into_boxed_io),
+                MessageContent::DeltaRequest(ino, sig) => fs_interface.respond_delta(ino, sig, origin).map_err(into_boxed_io),
             };
             if let Err(error) = action_result {
                 log::error!(
@@ -636,14 +563,20 @@ impl NetworkInterface {
                     });
                 }
                 ToNetworkMessage::SpecificMessage((message_content, status_tx), origins) => {
-                    peers_tx
+                    let count = peers_tx
                         .iter()
                         .filter(|&(_, address)| origins.contains(address))
-                        .for_each(|(channel, address)| {
+                        .map(|(channel, address)| {
                             channel
-                                .send((message_content.clone(), status_tx.clone()))
+                                .send((message_content.clone(), status_tx.clone())) // warning: only the first peer channel can set a status
                                 .expect(&format!("failed to send message to peer {}", address))
-                        });
+                        })
+                        .count();
+                    if count == 0 {
+                        log::warn!(
+                            "contact_peers: {message_content}: No peers by hostname {origins:?}"
+                        )
+                    }
                 }
             };
         }
