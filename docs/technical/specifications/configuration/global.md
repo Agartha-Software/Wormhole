@@ -5,9 +5,6 @@
 
 Main configuration for a Wormhole network.
 This configuration defines the general behavior of the network and all its related information.
-> [!IMPORTANT]
-> The system will always try to comply with the rules defined here. In case of conflict, they have absolute priority over almost all [individual pod configuration](./pod_conf.md) rules.
-> See [emergency strategies](../strategies/emergency.md) for more details.
 
 ## Implemented Features
 
@@ -18,6 +15,16 @@ This configuration defines the general behavior of the network and all its relat
 > [!CAUTION] Mandatory
 > **name**: string
 > Short and simple name for the network.
+
+**entrypoints**: list of strings
+*default: []*
+List of network URLs (addresses) to use to join the network.
+> [!TIP]
+> Essential for bootstrapping. You must provide at least one active peer URL here if you want to join an existing mesh.
+
+**hosts**: list of strings
+*default: []*
+List of known hostnames of peers in the network. Helps in identifying and connecting to specific nodes.
 
 ---
 
