@@ -101,6 +101,9 @@ impl DiskManager for WindowsDiskManager {
         Ok(DiskSizeInfo {
             free_size: fs2::free_space(&self.mount_point)? as usize,
             total_size: fs2::total_space(&self.mount_point)? as usize,
+            files: 0,      // Will be filled by FsInterface
+            ffree: 0,      // Will be filled by FsInterface
+            bsize: 4096,   // Standard block size
         })
     }
 

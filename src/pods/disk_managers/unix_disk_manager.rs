@@ -127,6 +127,9 @@ impl DiskManager for UnixDiskManager {
         Ok(super::DiskSizeInfo {
             free_size: free as usize,
             total_size: total as usize,
+            files: 0,      // Will be filled by FsInterface
+            ffree: 0,      // Will be filled by FsInterface
+            bsize: 4096,   // Standard block size
         })
         .inspect_err(|e| log::error!("UnixDiskManager::size_info Error on {:?}: {e}", parent))
     }

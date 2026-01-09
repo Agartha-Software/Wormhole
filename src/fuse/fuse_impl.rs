@@ -674,9 +674,9 @@ impl Filesystem for FuseController {
     }
 
     fn statfs(&mut self, _req: &Request<'_>, _ino: u64, reply: fuser::ReplyStatfs) {
-        match self.fs_interface.disk.size_info() {
+        match self.fs_interface.get_size_info() {
             Ok(info) => {
-                let bsize = 4096; // Block size standard
+                let bsize = info.bsize as u64;
                 let blocks = (info.total_size as u64) / bsize;
                 let bfree = (info.free_size as u64) / bsize;
 
@@ -684,11 +684,11 @@ impl Filesystem for FuseController {
                     blocks,
                     bfree,
                     bfree,
-                    1_000_000, // files (inodes total) - arbitrary high value
-                    1_000_000, // ffree (inodes free)
-                    bsize as u32,
-                    255, // namelen - maximum length of a file name
-                    bsize as u32,
+                    info.files,     // Total number of inodes (files)
+                    info.ffree,     // Free inodes available
+                    info.bsize,     // Block size in bytes
+                    255,         // namelen - maximum length of a file name
+                    info.bsize,  // Fragment size (same as block size)
                 );
             }
             Err(e) => {
