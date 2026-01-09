@@ -704,7 +704,7 @@ pub fn mount_fuse(
     allow_other_users: bool,
     fs_interface: Arc<FsInterface>,
 ) -> io::Result<BackgroundSession> {
-    let options = vec![
+    let mut options = vec![
         MountOption::RW,
         MountOption::DefaultPermissions,
         MountOption::FSName(format!(
@@ -715,12 +715,8 @@ pub fn mount_fuse(
                 .to_string_lossy()
         )),
     ];
-    let options = if allow_other_users {
-        let mut opts = options;
-        opts.push(MountOption::AllowOther); //NOTE - Necessary for xfstests
-        opts
-    } else {
-        options
+    if allow_other_users {
+        options.push(MountOption::AllowOther);
     };
     let ctrl = FuseController { fs_interface };
 
