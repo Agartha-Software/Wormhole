@@ -62,7 +62,15 @@ where
         }
     };
 
-    let answer = match Pod::new(global_config, local_config, &args.mountpoint, server).await {
+    let answer = match Pod::new(
+        global_config,
+        local_config,
+        &args.mountpoint,
+        args.allow_other_users,
+        server,
+    )
+    .await
+    {
         Ok(pod) => {
             pods.insert(args.name, pod);
             println!("New pod created successfully at '{port}'");
