@@ -10,7 +10,7 @@ use crate::{
         service::{
             connection::{handle_command, handle_connection},
             socket::new_socket_listener,
-            tcp::new_free_tcp_listener,
+            tcp::{create_tcp_socket, new_free_tcp_listener},
         },
     },
     pods::pod::Pod,
@@ -38,18 +38,8 @@ pub async fn start_commands_listeners(
     specific_socket: Option<String>,
     mut signals_rx: UnboundedReceiver<()>,
 ) -> Result<(), ListenerError> {
-    let (tcp_listener, ip) = match specific_ip {
-        Some(ip) => (
-            TcpListener::bind(&ip).await.map_err(|err| {
-                TCPListenerError::ProvidedIpNotAvailable {
-                    ip: ip.to_string(),
-                    err,
-                }
-            })?,
-            ip,
-        ),
-        None => new_free_tcp_listener().await?,
-    };
+    let (tcp_listener, ip) = create_tcp_socket(specific_ip).await?;
+
     println!("Started Tcp Listener at '{}'", ip.to_string());
 
     let (tx, mut rx) = mpsc::channel::<(Command, oneshot::Sender<String>)>(100);
