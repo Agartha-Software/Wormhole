@@ -60,7 +60,7 @@ where
 
             stream.write_u32(serialized.len() as u32).await?;
             stream.write_all(&serialized).await
-        },
+        }
         Either::Right(stream) => {
             let serialized = serde_json::to_value(answer)?;
             **stream = serialized.to_string();
@@ -72,7 +72,7 @@ where
 pub async fn handle_command<Stream>(
     command: Command,
     pods: &mut HashMap<String, Pod>,
-    stream: &mut either::Either<&mut Stream, &mut String>
+    stream: &mut either::Either<&mut Stream, &mut String>,
 ) -> std::io::Result<bool>
 where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
