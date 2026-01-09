@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
-use crate::ipc::service::commands::find_pod;
-use crate::ipc::{answers::InspectAnswer, commands::PodId, service::connection::send_answer};
+use crate::ipc::{answers::InspectAnswer, commands::PodId};
 use crate::pods::pod::Pod;
+use crate::service::commands::find_pod;
+use crate::service::connection::send_answer;
 
 pub async fn inspect<Stream>(
     args: PodId,

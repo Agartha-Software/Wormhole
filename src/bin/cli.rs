@@ -6,7 +6,7 @@ use clap::Parser;
 use std::process::ExitCode;
 use wormhole::cli::{print_err, Cli};
 use wormhole::ipc::cli::{command_network, start_local_socket};
-use wormhole::ipc::service::socket::SOCKET_DEFAULT_NAME;
+use wormhole::service::socket::SOCKET_DEFAULT_NAME;
 
 #[tokio::main]
 async fn main() -> ExitCode {

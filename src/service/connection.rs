@@ -1,15 +1,12 @@
 use std::collections::HashMap;
 
-use crate::{
-    ipc::{
-        commands::Command,
-        service::commands::{
-            check, freeze, generate, gethosts, inspect, new, remove, show, status, tree, unfreeze,
-        },
+use crate::service::{
+    commands::{
+        check, freeze, generate, gethosts, inspect, new, remove, show, status, tree, unfreeze,
     },
-    pods::pod::Pod,
-    service::Service,
+    Service,
 };
+use crate::{ipc::commands::Command, pods::pod::Pod};
 use serde::Serialize;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;

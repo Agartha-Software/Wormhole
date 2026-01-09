@@ -2,12 +2,13 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     config::{local_file::LocalConfigFile, types::Config, GlobalConfig},
-    ipc::{answers::NewAnswer, commands::NewRequest, service::connection::send_answer},
+    ipc::{answers::NewAnswer, commands::NewRequest},
     network::server::Server,
     pods::{
         itree::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
         pod::{Pod, PodPrototype},
     },
+    service::connection::send_answer,
 };
 
 pub async fn new<Stream>(

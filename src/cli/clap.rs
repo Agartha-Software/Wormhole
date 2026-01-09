@@ -2,8 +2,8 @@ use std::{net::IpAddr, path::PathBuf};
 
 use crate::{
     cli::config_clap::ConfigCommand,
-    ipc::service::socket::SOCKET_DEFAULT_NAME,
     pods::itree::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
+    service::socket::SOCKET_DEFAULT_NAME,
 };
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};

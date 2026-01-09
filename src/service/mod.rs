@@ -1,15 +1,19 @@
 pub mod clap;
+pub mod commands;
+pub mod connection;
+pub mod socket;
+pub mod tcp;
 
 use crate::ipc::error::ListenerError;
-use crate::ipc::service::socket::new_socket_listener;
-use crate::ipc::service::tcp::new_tcp_listener;
 use crate::pods::pod::Pod;
 use crate::pods::save::{delete_saved_pods, load_saved_pods};
 use crate::service::clap::ServiceArgs;
 use interprocess::local_socket::tokio::Listener;
 use interprocess::local_socket::traits::tokio::Listener as TokioListenerExt;
+use socket::new_socket_listener;
 use std::collections::HashMap;
 use std::process::ExitCode;
+use tcp::new_tcp_listener;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::UnboundedReceiver;
 

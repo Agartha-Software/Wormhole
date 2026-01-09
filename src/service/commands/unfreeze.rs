@@ -1,4 +1,5 @@
-use crate::ipc::{answers::UnfreezeAnswer, commands::PodId, service::connection::send_answer};
+use crate::ipc::{answers::UnfreezeAnswer, commands::PodId};
+use crate::service::connection::send_answer;
 
 pub async fn unfreeze<Stream>(_: PodId, stream: &mut Stream) -> std::io::Result<bool>
 where
