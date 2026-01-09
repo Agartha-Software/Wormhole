@@ -4,8 +4,7 @@
 
 use clap::Parser;
 use std::process::ExitCode;
-use wormhole::cli::{print_err, Cli};
-use wormhole::ipc::cli::{command_network, start_local_socket};
+use wormhole::cli::{command_network, print_err, start_local_socket, Cli};
 use wormhole::service::socket::SOCKET_DEFAULT_NAME;
 
 #[tokio::main]

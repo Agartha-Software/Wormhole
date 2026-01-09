@@ -1,12 +1,8 @@
+use interprocess::local_socket::tokio::Stream;
 use std::io;
 
-use interprocess::local_socket::tokio::Stream;
-
-use crate::ipc::{
-    answers::StatusAnswer,
-    cli::connection::{recieve_answer, send_command},
-    commands::Command,
-};
+use crate::cli::connection::{recieve_answer, send_command};
+use crate::ipc::{answers::StatusAnswer, commands::Command};
 
 pub async fn status(mut stream: Stream) -> io::Result<String> {
     send_command(Command::Status, &mut stream).await?;

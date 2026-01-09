@@ -1,14 +1,11 @@
+use interprocess::local_socket::tokio::Stream;
 use std::io;
 
-use crate::ipc::answers::FreezeAnswer;
-use interprocess::local_socket::tokio::Stream;
-
 use crate::{
+    cli::connection::{recieve_answer, send_command},
     cli::IdentifyPodArgs,
-    ipc::{
-        cli::connection::{recieve_answer, send_command},
-        commands::{Command, PodId},
-    },
+    ipc::answers::FreezeAnswer,
+    ipc::commands::{Command, PodId},
 };
 
 pub async fn _freeze(args: IdentifyPodArgs, mut stream: Stream) -> Result<(), io::Error> {

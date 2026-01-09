@@ -1,14 +1,11 @@
+use interprocess::local_socket::tokio::Stream;
 use std::io;
 
 use crate::{
-    cli::{Mode, RemoveArgs},
-    ipc::{answers::RemoveAnswer, commands::RemoveRequest},
-};
-use interprocess::local_socket::tokio::Stream;
-
-use crate::ipc::{
     cli::connection::{recieve_answer, send_command},
-    commands::{Command, PodId},
+    cli::{Mode, RemoveArgs},
+    ipc::answers::RemoveAnswer,
+    ipc::commands::{Command, PodId, RemoveRequest},
 };
 
 pub async fn remove(args: RemoveArgs, mut stream: Stream) -> Result<String, io::Error> {

@@ -1,14 +1,12 @@
+use interprocess::local_socket::tokio::Stream;
 use std::io;
 
 use crate::ipc::answers::{InspectAnswer, PeerInfo};
-use interprocess::local_socket::tokio::Stream;
 
 use crate::{
+    cli::connection::{recieve_answer, send_command},
     cli::IdentifyPodArgs,
-    ipc::{
-        cli::connection::{recieve_answer, send_command},
-        commands::{Command, PodId},
-    },
+    ipc::commands::{Command, PodId},
 };
 
 fn display_peers(peers: Vec<PeerInfo>) -> String {
