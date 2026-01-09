@@ -13,7 +13,7 @@ pub async fn remove<Stream>(
     args: RemoveRequest,
     socket_address: &String,
     pods: &mut HashMap<String, Pod>,
-    stream: &mut Stream,
+    stream: &mut either::Either<&mut Stream, &mut String>,
 ) -> std::io::Result<bool>
 where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,

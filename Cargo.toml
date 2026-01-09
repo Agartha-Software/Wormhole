@@ -103,6 +103,10 @@ interprocess = { version = "2.2.3", features = ["tokio"] }
 camino = "1.2.1"
 fs2 = "0.4.3"
 colored = "3.0.0"
+serde_json = "1.0.149"
+ts-rs = "11.1.0"
+axum = "0.8.8"
+either = "1.15.0"
 directories = "6.0.0"
 
 [dev-dependencies]

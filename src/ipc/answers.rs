@@ -1,10 +1,12 @@
 use std::{net::SocketAddr, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::{cli::ConfigType, ipc::error::IoError, pods::itree::Hosts};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum NewAnswer {
     Success(SocketAddr),
     AlreadyExist,
@@ -16,7 +18,8 @@ pub enum NewAnswer {
     FailedToCreatePod(IoError),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum GetHostsAnswer {
     Hosts(Hosts),
     FileNotInsideARunningPod,
@@ -25,29 +28,34 @@ pub enum GetHostsAnswer {
     FailedToGetHosts(IoError),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum UnfreezeAnswer {
     Success,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum FreezeAnswer {
     Success,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum RemoveAnswer {
     Success,
     PodNotFound,
     PodStopFailed(String),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum StatusAnswer {
     Success,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct PeerInfo {
     pub hostname: String,
     pub url: Option<String>,
@@ -64,7 +72,8 @@ impl std::fmt::Display for PeerInfo {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct InspectInfo {
     pub public_url: Option<String>,
     pub bound_socket: SocketAddr,
@@ -74,20 +83,23 @@ pub struct InspectInfo {
     pub mount: PathBuf,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum InspectAnswer {
     Information(InspectInfo),
     PodNotFound,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum TreeAnswer {
     Tree(String),
     PodNotFound,
     PodTreeFailed(IoError),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum GenerateConfigAnswer {
     Success,
     SuccessDefault,
@@ -98,7 +110,8 @@ pub enum GenerateConfigAnswer {
     ConfigBlock,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum ShowConfigAnswer {
     SuccessBoth(String, String),
     SuccessLocal(String),
@@ -107,7 +120,8 @@ pub enum ShowConfigAnswer {
     ConfigBlock,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum CheckConfigAnswer {
     Success,
     PodNotFound,

@@ -45,7 +45,7 @@ fn write_defaults(
 // Return true no error have been sent and the command can continue
 async fn write_local_config<Stream>(
     pod: &Pod,
-    stream: &mut Stream,
+    stream: &mut either::Either<&mut Stream, &mut String>,
     overwrite: bool,
 ) -> std::io::Result<bool>
 where
@@ -77,7 +77,7 @@ where
 // Return true no error have been sent and the command can continue
 async fn write_global_config<Stream>(
     pod: &Pod,
-    stream: &mut Stream,
+    stream: &mut either::Either<&mut Stream, &mut String>,
     overwrite: bool,
 ) -> std::io::Result<bool>
 where
@@ -116,7 +116,7 @@ pub async fn generate<Stream>(
     overwrite: bool,
     config_type: ConfigType,
     pods: &HashMap<String, Pod>,
-    stream: &mut Stream,
+    stream: &mut either::Either<&mut Stream, &mut String>,
 ) -> std::io::Result<bool>
 where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
