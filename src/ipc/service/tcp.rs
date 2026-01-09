@@ -12,14 +12,13 @@ use tokio::sync::mpsc;
 use tokio::{net::TcpListener, sync::oneshot};
 
 const MAX_TRY_PORTS: u16 = 10;
-const MAX_PORT: u16 = 65535;
 const DEFAULT_ADDRESS: &str = "127.0.0.1:8081";
 
-pub async fn create_tcp_socket(
+pub async fn new_tcp_listener(
     specific_ip: Option<String>,
-) -> Result<(TcpListener, String), TCPListenerError> {
-    match specific_ip {
-        Some(ip) => Ok((
+) -> Result<TcpListener, TCPListenerError> {
+    let (tcp_listener, ip) = match specific_ip {
+        Some(ip) => (
             TcpListener::bind(&ip).await.map_err(|err| {
                 TCPListenerError::ProvidedIpNotAvailable {
                     ip: ip.to_string(),
@@ -27,12 +26,14 @@ pub async fn create_tcp_socket(
                 }
             })?,
             ip,
-        )),
-        None => new_free_tcp_listener().await,
-    }
+        ),
+        None => free_tcp_listener().await?,
+    };
+    println!("Started Tcp Listener at '{ip}'");
+    Ok(tcp_listener)
 }
 
-async fn new_free_tcp_listener() -> Result<(TcpListener, String), TCPListenerError> {
+async fn free_tcp_listener() -> Result<(TcpListener, String), TCPListenerError> {
     let mut ip: IpP = IpP::try_from(DEFAULT_ADDRESS).expect("Invalid ip provided");
 
     let mut port_tries_count = 0;
@@ -40,8 +41,8 @@ async fn new_free_tcp_listener() -> Result<(TcpListener, String), TCPListenerErr
         match TcpListener::bind(&ip.to_string()).await {
             Ok(listener) => break Ok((listener, ip.to_string())),
             Err(err) => {
-                if ip.port >= MAX_PORT {
-                    break Err(TCPListenerError::AboveMainPort { max_port: MAX_PORT });
+                if ip.port == u16::MAX {
+                    break Err(TCPListenerError::AboveMainPort { max_port: u16::MAX });
                 }
                 if port_tries_count > MAX_TRY_PORTS {
                     break Err(TCPListenerError::AboveMaxTry {

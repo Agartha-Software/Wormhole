@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{net::SocketAddr, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -8,11 +8,12 @@ use crate::{cli::ConfigType, ipc::error::IoError, pods::itree::Hosts};
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub enum NewAnswer {
-    Success(u16),
+    Success(SocketAddr),
     AlreadyExist,
     AlreadyMounted,
     InvalidIp,
     InvalidUrlIp,
+    ConflictWithConfig(String),
     BindImpossible(IoError),
     FailedToCreatePod(IoError),
 }
@@ -66,10 +67,7 @@ impl std::fmt::Display for PeerInfo {
             f,
             "Hostname: \"{}\", Url: {}",
             self.hostname,
-            self.url
-                .as_ref()
-                .map(|url| url.as_str())
-                .unwrap_or("Undefined")
+            self.url.clone().unwrap_or("None".to_string())
         )
     }
 }
@@ -77,7 +75,8 @@ impl std::fmt::Display for PeerInfo {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct InspectInfo {
-    pub url: Option<String>,
+    pub public_url: Option<String>,
+    pub bound_socket: SocketAddr,
     pub hostname: String,
     pub name: String,
     pub connected_peers: Vec<PeerInfo>,

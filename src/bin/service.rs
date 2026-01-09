@@ -2,7 +2,7 @@
 // In code we trust
 // AgarthaSoftware - 2024
 
-use std::collections::HashMap;
+use clap::Parser;
 /**DOC
  * Important variables to know :
  * nfa_rx - nfa_tx
@@ -20,37 +20,21 @@ use std::collections::HashMap;
  */
 use std::io::IsTerminal;
 use std::process::ExitCode;
-
-use clap::Parser;
 use tokio::sync::mpsc::{self, UnboundedSender};
-
-use wormhole::ipc::service::start_commands_listeners;
-use wormhole::pods::pod::Pod;
+use wormhole::service::clap::ServiceArgs;
+use wormhole::service::Service;
 
 #[cfg(target_os = "windows")]
 use winfsp::winfsp_init;
 use wormhole::signals::handle_signals;
 
-#[derive(Debug, Parser, Clone)]
-#[command(about, long_about = None)]
-struct ServiceArgs {
-    #[arg(long)]
-    pub nodeamon: bool,
-    #[arg(short)]
-    pub ip: Option<String>,
-    #[arg(short)]
-    pub socket: Option<String>,
-}
-
 #[tokio::main]
 async fn main() -> ExitCode {
+    env_logger::init();
+
     let (interrupt_tx, interrupt_rx) = mpsc::unbounded_channel::<()>();
     let (signals_tx, signals_rx) = mpsc::unbounded_channel::<()>();
     let args = ServiceArgs::parse();
-
-    let mut pods: HashMap<String, Pod> = HashMap::new();
-
-    env_logger::init();
 
     #[cfg(target_os = "windows")]
     match winfsp_init() {
@@ -69,7 +53,11 @@ async fn main() -> ExitCode {
     };
     let signals_task = tokio::spawn(handle_signals(signals_tx, interrupt_rx));
 
-    if let Err(err) = start_commands_listeners(&mut pods, args.ip, args.socket, signals_rx).await {
+    let Some(mut service) = Service::new(args).await else {
+        return ExitCode::FAILURE;
+    };
+
+    if let Err(err) = service.start_commands_listeners(signals_rx).await {
         eprintln!("{err}");
     }
 
@@ -82,22 +70,7 @@ async fn main() -> ExitCode {
         .unwrap_or_else(|e| panic!("Signals handler failed to join: {e}"));
 
     log::info!("Stopping");
-    stop_all_pods(pods).await
-}
-
-async fn stop_all_pods(pods: HashMap<String, Pod>) -> ExitCode {
-    let mut status = ExitCode::SUCCESS;
-    for (name, pod) in pods.into_iter() {
-        match pod.stop().await {
-            Ok(()) => log::info!("Stopped pod '{name}'"),
-            Err(e) => {
-                eprintln!("Pod '{name}' failed be stopped: {e}");
-                status = ExitCode::FAILURE
-            }
-        }
-    }
-    log::info!("Stopped");
-    status
+    service.stop_all_pods().await
 }
 
 pub async fn terminal_watchdog(tx: UnboundedSender<()>) {
@@ -105,13 +78,10 @@ pub async fn terminal_watchdog(tx: UnboundedSender<()>) {
     let mut buf = vec![0; 1024];
 
     while let Ok(read) = tokio::io::AsyncReadExt::read(&mut stdin, &mut buf).await {
-        // NOTE -  on ctrl-D -> quit
-        match read {
-            0 => {
-                let _ = tx.send(());
-                return;
-            }
-            _ => (),
+        // Quit on ctrl-D
+        if read == 0 {
+            let _ = tx.send(());
+            return;
         };
     }
 }

@@ -47,9 +47,7 @@ impl NetworkInterface {
             return Err(PullError::NoHostAvailable);
         }
 
-        let hostname = self.hostname()?;
-
-        if hosts.contains(&hostname) {
+        if hosts.contains(&self.hostname) {
             // if the asked file is already on disk
             Ok(None)
         } else {

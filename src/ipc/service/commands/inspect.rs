@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::ipc::answers::InspectInfo;
 use crate::ipc::service::commands::find_pod;
 use crate::ipc::{answers::InspectAnswer, commands::PodId, service::connection::send_answer};
 use crate::pods::pod::Pod;
@@ -14,15 +13,8 @@ where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
 {
     match find_pod(&args, pods) {
-        Some((name, pod)) => {
-            send_answer(
-                InspectAnswer::Information(InspectInfo {
-                    name: name.clone(),
-                    ..pod.get_inspect_info()
-                }),
-                stream,
-            )
-            .await?
+        Some((_, pod)) => {
+            send_answer(InspectAnswer::Information(pod.get_inspect_info()), stream).await?
         }
         None => send_answer(InspectAnswer::PodNotFound, stream).await?,
     };
