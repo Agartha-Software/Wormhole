@@ -5,6 +5,7 @@ use custom_error::custom_error;
 use crate::{
     error::{WhError, WhResult},
     pods::{
+        filesystem::flush::FlushError,
         filesystem::permissions::has_write_perm,
         itree::{ITree, InodeId, Metadata},
         whpath::{InodeName, WhPath},
@@ -31,6 +32,7 @@ custom_error! {
     ProtectedNameIsFolder = "Protected name can't be used for folders",
     ReadFailed{source: ReadError} = "Read failed on copy: {source}",
     LocalWriteFailed{io: std::io::Error} = "Write failed on copy: {io}",
+    FlushError{source: FlushError} = "Couldn't flush changes on special: {source}",
     PermissionDenied = "Permission denied"
 }
 
@@ -90,9 +92,8 @@ impl FsInterface {
             .expect("already checked")
             .meta
             .clone();
-        let mut data = vec![];
-        data.resize(meta.size as usize, 0u8);
-        self.get_file_data(source_ino, 0, &mut data)
+        let mut data = vec![0; meta.size as usize];
+        self.get_file_data_sync(source_ino, 0, &mut data)
             .map_err(|err| match err {
                 ReadError::WhError { source } => RenameError::WhError { source },
                 err => err.into(),
@@ -129,12 +130,11 @@ impl FsInterface {
             let path = itree.n_get_path_from_inode_id(dest_ino)?;
             drop(itree);
 
-            let new_size = data.len();
             self.disk
                 .write_file(&path, &data, 0)
                 .map_err(|io| RenameError::LocalWriteFailed { io })?;
 
-            self.network_interface.write_file(dest_ino, new_size)?;
+            self.flush(dest_ino, None)?;
         }
         self.remove_inode(source_ino).map_err(|err| match err {
             RemoveFileError::WhError { source } => RenameError::WhError { source },
@@ -156,6 +156,7 @@ impl FsInterface {
     ///  - copy/move  contents
     ///  - delete the source inode
     ///
+    /// Immediately replicated to other peers
     pub fn rename(
         &self,
         parent: InodeId,
@@ -201,7 +202,7 @@ impl FsInterface {
         if ITree::get_special(name.as_ref(), parent).is_some()
             || ITree::get_special(new_name.as_ref(), new_parent).is_some()
         {
-            return self.rename_special(new_parent, new_name, src_ino, dest_ino);
+            return self.rename_special(new_parent, new_name.clone(), src_ino, dest_ino);
         }
 
         if let Some(dest_ino) = dest_ino {
@@ -210,8 +211,8 @@ impl FsInterface {
                 RemoveFileError::LocalDeletionFailed { io } => {
                     RenameError::LocalOverwriteFailed { io }
                 }
-                RemoveFileError::NonEmpty => return RenameError::OverwriteNonEmpty,
-                RemoveFileError::WhError { source } => return RenameError::WhError { source },
+                RemoveFileError::NonEmpty => RenameError::OverwriteNonEmpty,
+                RemoveFileError::WhError { source } => RenameError::WhError { source },
                 RemoveFileError::PermissionDenied => RenameError::PermissionDenied,
             })?;
         }
