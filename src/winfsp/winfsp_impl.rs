@@ -10,14 +10,19 @@ use custom_error::custom_error;
 use futures::io;
 use nt_time::FileTime;
 use ntapi::ntioapi::FILE_DIRECTORY_FILE;
-use windows::Win32::Foundation::{STATUS_INVALID_DEVICE_REQUEST, STATUS_OBJECT_NAME_EXISTS, STATUS_OBJECT_NAME_NOT_FOUND};
+use windows::Win32::Foundation::{
+    STATUS_INVALID_DEVICE_REQUEST, STATUS_OBJECT_NAME_EXISTS, STATUS_OBJECT_NAME_NOT_FOUND,
+};
 use winfsp::{
     filesystem::{DirInfo, FileInfo, FileSecurity, FileSystemContext, WideNameInfo},
     host::{FileSystemHost, VolumeParams},
 };
 use winfsp_sys::{FspCleanupDelete, FILE_ACCESS_RIGHTS};
 
-use crate::pods::{filesystem::file_handle::{AccessMode, FileHandleManager, OpenFlags}, itree::FsEntry};
+use crate::pods::{
+    filesystem::file_handle::{AccessMode, FileHandleManager, OpenFlags},
+    itree::FsEntry,
+};
 use crate::{
     error::WhError,
     pods::{
@@ -210,7 +215,7 @@ impl FileSystemContext for FSPController {
         file_info: &mut winfsp::filesystem::OpenFileInfo,
     ) -> winfsp::Result<Self::FileContext> {
         log::trace!("create({:?})", file_name);
-        let entry =  if create_options & FILE_DIRECTORY_FILE != 0 {
+        let entry = if create_options & FILE_DIRECTORY_FILE != 0 {
             FsEntry::new_directory()
         } else {
             FsEntry::new_file()

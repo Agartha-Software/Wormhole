@@ -23,9 +23,9 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
         temp_dir.child("folder").assert(predicates::path::is_dir());
 
         disk.new_symlink(&"link".try_into().unwrap(), 0o775, &EntrySymlink::default())
-        .expect("new_symlink");
+            .expect("new_symlink");
 
-        #[cfg(target_os = "linux")] 
+        #[cfg(target_os = "linux")]
         temp_dir
             .child("link")
             .assert(predicates::path::is_symlink());
@@ -56,7 +56,7 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
 
         disk.remove_symlink(&"link".try_into().unwrap())
             .expect("remove_symlink");
-        #[cfg(target_os = "linux")] 
+        #[cfg(target_os = "linux")]
         temp_dir.child("link").assert(predicates::path::missing());
     }
 

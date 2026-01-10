@@ -31,8 +31,7 @@ use windows::Win32::{
         STATUS_OBJECT_PATH_NOT_FOUND, STATUS_PENDING, STATUS_POSSIBLE_DEADLOCK,
     },
     Storage::FileSystem::{
-        FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT,
-        FILE_WRITE_ATTRIBUTES, SYNCHRONIZE,
+        FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_DIRECTORY, FILE_WRITE_ATTRIBUTES, SYNCHRONIZE,
     },
 };
 use winfsp::{filesystem::FileInfo, FspError};
@@ -244,7 +243,6 @@ impl From<RemoveFileError> for FspError {
         }
     }
 }
-
 
 impl From<SetAttrError> for FspError {
     fn from(value: SetAttrError) -> Self {
