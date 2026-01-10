@@ -11,6 +11,7 @@ use crate::{
             open::OpenError,
             read::ReadError,
             readdir::ReadDirError,
+            remove_inode::{RemoveFileError, RemoveInodeError},
             rename::RenameError,
             write::WriteError,
         },
@@ -223,6 +224,27 @@ impl From<CreateError> for FspError {
         }
     }
 }
+
+impl From<RemoveInodeError> for FspError {
+    fn from(value: RemoveInodeError) -> Self {
+        match value {
+            RemoveInodeError::WhError { source } => source.into(),
+            RemoveInodeError::NonEmpty => STATUS_DIRECTORY_NOT_EMPTY.into(),
+        }
+    }
+}
+
+impl From<RemoveFileError> for FspError {
+    fn from(value: RemoveFileError) -> Self {
+        match value {
+            RemoveFileError::WhError { source } => source.into(),
+            RemoveFileError::NonEmpty => STATUS_DIRECTORY_NOT_EMPTY.into(),
+            RemoveFileError::LocalDeletionFailed { io } => io.into(),
+            RemoveFileError::PermissionDenied => STATUS_ACCESS_DENIED.into(),
+        }
+    }
+}
+
 
 impl From<SetAttrError> for FspError {
     fn from(value: SetAttrError) -> Self {

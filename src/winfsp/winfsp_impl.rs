@@ -86,21 +86,18 @@ impl FSPController {
     }
 }
 
-pub fn mount_fsp(
-    path: &Path,
-    fs_interface: Arc<FsInterface>,
-) -> Result<WinfspHost, std::io::Error> {
+pub fn mount_fsp(fs_interface: Arc<FsInterface>) -> Result<WinfspHost, std::io::Error> {
     let volume_params = VolumeParams::default();
+    let mountpoint = fs_interface.mountpoint.clone();
 
     let wormhole_context = FSPController {
         volume_label: Arc::new(RwLock::new("wormhole_fs".into())),
         fs_interface,
-        mount_point: path.to_owned(),
     };
     let mut host = FileSystemHost::<FSPController>::new(volume_params, wormhole_context)
         .map_err(|_| std::io::Error::new(ErrorKind::Other, "WinFSP FileSystemHost::new error"))?;
 
-    let path = path.to_string_lossy().to_string().replace("\\", "/");
+    let path = mountpoint.to_string_lossy().to_string().replace("\\", "/");
     log::info!("WinFSP mounting host @ {:?} ...", &path);
     host.mount(&path)
         .map_err(|_| io::Error::new(io::ErrorKind::Other, "WinFSP mount error"))?;
@@ -216,12 +213,17 @@ impl FileSystemContext for FSPController {
         file_info: &mut winfsp::filesystem::OpenFileInfo,
     ) -> winfsp::Result<Self::FileContext> {
         log::trace!("create({:?})", file_name);
-        let kind = match (create_options & FILE_DIRECTORY_FILE) != 0 {
-            true => SimpleFileType::Directory,
-            false => SimpleFileType::File,
+        let entry =  if create_options & FILE_DIRECTORY_FILE != 0 {
+            FsEntry::new_directory()
+        } else {
+            FsEntry::new_file()
         };
         // thread::sleep(std::time::Duration::from_secs(2));
-        log::info!("create({}, type: {:?})", file_name.display(), kind);
+        log::info!(
+            "create({}, type: {:?})",
+            file_name.display(),
+            entry.get_filetype()
+        );
 
         let path = WhPath::from_fake_absolute(file_name)?;
         let name: InodeName = (&path).into();
@@ -243,7 +245,7 @@ impl FileSystemContext for FSPController {
             .create(
                 parent,
                 name.into(),
-                kind,
+                entry,
                 OpenFlags::from_win_u32(granted_access),
                 AccessMode::from_win_u32(granted_access),
                 WINDOWS_DEFAULT_PERMS_MODE,
@@ -332,7 +334,7 @@ impl FileSystemContext for FSPController {
     ) -> winfsp::Result<u64> {
         log::trace!("get_security({})", context.ino);
 
-        Err(NTSTATUS(STATUS_INVALID_DEVICE_REQUEST).into())
+        Err(STATUS_INVALID_DEVICE_REQUEST.into())
     }
 
     // fn set_security(
@@ -716,7 +718,7 @@ impl FileSystemContext for FSPController {
         _output: &mut [u8],
     ) -> winfsp::Result<u32> {
         log::trace!("control: {}", context.ino);
-        Err(NTSTATUS(STATUS_INVALID_DEVICE_REQUEST).into())
+        Err(STATUS_INVALID_DEVICE_REQUEST.into())
     }
 
     fn dispatcher_stopped(&self, _normally: bool) {}

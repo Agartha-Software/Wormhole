@@ -366,7 +366,7 @@ impl Pod {
             fuse_handle: mount_fuse(&proto.mountpoint, fs_interface.clone())
                 .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fuse: {e}")))?,
             #[cfg(target_os = "windows")]
-            fsp_host: mount_fsp(&proto.mountpoint, fs_interface.clone())
+            fsp_host: mount_fsp(fs_interface.clone())
                 .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fsp: {e}")))?,
             network_airport_handle,
             peer_broadcast_handle,
