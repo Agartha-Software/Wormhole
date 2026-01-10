@@ -10,10 +10,7 @@ use custom_error::custom_error;
 use futures::io;
 use nt_time::FileTime;
 use ntapi::ntioapi::FILE_DIRECTORY_FILE;
-use winapi::shared::{
-    ntstatus::STATUS_INVALID_DEVICE_REQUEST,
-    winerror::{ERROR_ALREADY_EXISTS, ERROR_GEN_FAILURE},
-};
+use winapi::shared::{ntstatus::STATUS_INVALID_DEVICE_REQUEST, winerror::ERROR_ALREADY_EXISTS};
 use windows::Win32::Foundation::{NTSTATUS, STATUS_OBJECT_NAME_NOT_FOUND};
 use winfsp::{
     filesystem::{DirInfo, FileInfo, FileSecurity, FileSystemContext, WideNameInfo},
@@ -83,19 +80,9 @@ impl FSPController {
     ) -> winfsp::Result<()> {
         let itree = ITree::read_lock(&self.fs_interface.itree, "winfsp::get_file_info")?;
 
-        match itree.get_inode(context.ino) {
-            Ok(inode) => {
-                *file_info = (&inode.meta).into();
-                Ok(())
-            }
-            Err(err) => {
-                if err.kind() == ErrorKind::NotFound {
-                    Err(STATUS_OBJECT_NAME_NOT_FOUND.into())
-                } else {
-                    Err(winfsp::FspError::WIN32(ERROR_GEN_FAILURE))
-                }
-            }
-        }
+        let inode = itree.get_inode(context.ino)?;
+        *file_info = (&inode.meta).into();
+        Ok(())
     }
 }
 
@@ -197,35 +184,23 @@ impl FileSystemContext for FSPController {
         let path = WhPath::from_fake_absolute(file_name)?;
         let inode = ITree::read_lock(&self.fs_interface.itree, "winfsp::open")?
             .get_inode_from_path(&path)
-            .inspect_err(|e| log::warn!("open({display_name})::{e};"))
-            .cloned();
-        match inode {
-            Ok(inode) => {
-                *file_info.as_mut() = (&inode.meta).into();
-                file_info.set_normalized_name(file_name.as_slice(), None);
-                let handle = self
-                    .fs_interface
-                    .open(
-                        inode.id,
-                        OpenFlags::from_win_u32(granted_access),
-                        AccessMode::from_win_u32(granted_access),
-                    )
-                    .inspect_err(|e| log::warn!("open({display_name})::{e}"))?;
-                log::trace!("ok:{};", inode.id);
-                Ok(WormholeHandle {
-                    ino: inode.id,
-                    handle: handle,
-                })
-            }
-            Err(err) => {
-                log::warn!("open({display_name})::{:?}", err);
-                if err.kind() == ErrorKind::NotFound {
-                    Err(STATUS_OBJECT_NAME_NOT_FOUND.into())
-                } else {
-                    Err(winfsp::FspError::WIN32(ERROR_GEN_FAILURE))
-                }
-            }
-        }
+            .inspect_err(|e| log::warn!("open({display_name})::{e};"))?
+            .clone();
+        *file_info.as_mut() = (&inode.meta).into();
+        file_info.set_normalized_name(file_name.as_slice(), None);
+        let handle = self
+            .fs_interface
+            .open(
+                inode.id,
+                OpenFlags::from_win_u32(granted_access),
+                AccessMode::from_win_u32(granted_access),
+            )
+            .inspect_err(|e| log::warn!("open({display_name})::{e}"))?;
+        log::trace!("ok:{};", inode.id);
+        Ok(WormholeHandle {
+            ino: inode.id,
+            handle: handle,
+        })
     }
 
     fn create(
