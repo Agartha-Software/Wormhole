@@ -6,15 +6,15 @@ use tokio::sync::broadcast;
 use crate::{
     error::WhError,
     pods::{
-        itree::{InodeId, LOCK_TIMEOUT},
+        itree::{Ino, LOCK_TIMEOUT},
         network::pull_file::PullError,
     },
 };
 
 #[derive(Eq, Hash, PartialEq, Clone, Debug)]
 pub enum Request {
-    GetSignature(InodeId, String),
-    Pull(InodeId),
+    GetSignature(Ino, String),
+    Pull(Ino),
     PullFs,
 }
 

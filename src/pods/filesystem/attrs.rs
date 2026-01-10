@@ -7,10 +7,10 @@ use crate::{
     pods::{
         filesystem::{
             file_handle::{AccessMode, FileHandleManager, UUID},
-            fs_interface::FsInterface,
+            fs_interface::{FsInterface, SimpleFileType},
             permissions::has_write_perm,
         },
-        itree::{FsEntry, ITree, InodeId, Metadata, BLOCK_SIZE},
+        itree::{FsEntry, ITree, Ino, Metadata, BLOCK_SIZE},
     },
 };
 
@@ -28,16 +28,16 @@ custom_error! {pub AcknoledgeSetAttrError
 }
 
 impl FsInterface {
-    //fn get_inode_attributes(&self, ino: InodeId) -> WhResult<&Metadata> {}
+    //fn get_inode_attributes(&self, ino: Ino) -> WhResult<&Metadata> {}
 
     pub fn acknowledge_metadata(
         &self,
-        ino: InodeId,
+        ino: Ino,
         meta: Metadata,
     ) -> Result<(), AcknoledgeSetAttrError> {
-        let mut itree = ITree::n_write_lock(&self.itree, "acknowledge_metadata")?;
-        let path = itree.n_get_path_from_inode_id(ino)?;
-        let inode = itree.n_get_inode_mut(ino)?;
+        let mut itree = ITree::write_lock(&self.itree, "acknowledge_metadata")?;
+        let path = itree.get_path_from_inode_id(ino)?;
+        let inode = itree.get_inode_mut(ino)?;
 
         if meta != inode.meta {
             match &inode.entry {
@@ -45,13 +45,6 @@ impl FsInterface {
                     return Err(AcknoledgeSetAttrError::WhError {
                         source: WhError::InodeIsADirectory,
                     });
-                }
-                FsEntry::Directory(_) => {
-                    if meta.perm != inode.meta.perm {
-                        self.disk
-                            .set_permisions(&path, meta.perm)
-                            .map_err(|io| AcknoledgeSetAttrError::SetFileSizeIoError { io })?;
-                    }
                 }
                 FsEntry::File(hosts) => {
                     if hosts.contains(&self.network_interface.hostname) {
@@ -82,17 +75,24 @@ impl FsInterface {
                         }
                     }
                 }
+                _ => {
+                    if meta.perm != inode.meta.perm {
+                        self.disk
+                            .set_permisions(&path, meta.perm)
+                            .map_err(|io| AcknoledgeSetAttrError::SetFileSizeIoError { io })?;
+                    }
+                }
             }
         }
 
-        itree.n_get_inode_mut(ino)?.meta = meta;
+        itree.get_inode_mut(ino)?.meta = meta;
         Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
     pub fn setattr(
         &self,
-        ino: InodeId,
+        ino: Ino,
         mode: Option<u32>,
         uid: Option<u32>,
         gid: Option<u32>,
@@ -103,9 +103,9 @@ impl FsInterface {
         file_handle: Option<UUID>,
         flags: Option<u32>,
     ) -> Result<Metadata, SetAttrError> {
-        let itree = ITree::n_read_lock(&self.itree, "setattr")?;
-        let path = itree.n_get_path_from_inode_id(ino)?;
-        let mut meta = itree.n_get_inode(ino)?.meta.clone();
+        let itree = ITree::read_lock(&self.itree, "setattr")?;
+        let path = itree.get_path_from_inode_id(ino)?;
+        let mut meta = itree.get_inode(ino)?.meta.clone();
         drop(itree);
 
         //Except for size, No permissions are required on the file itself, but permission is required on all of the directories in pathname that lead to the file.
@@ -129,6 +129,9 @@ impl FsInterface {
         }
         // Set size if size it's defined, take permission from the file handle if the
         if let Some(size) = size {
+            if meta.kind != SimpleFileType::File {
+                return Err(WhError::InodeIsADirectory.into());
+            }
             match fh_perm {
                 Some(perm) if perm != AccessMode::Write && perm != AccessMode::ReadWrite => {
                     return Err(SetAttrError::SizeNoPerm)

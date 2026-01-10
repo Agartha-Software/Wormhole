@@ -11,7 +11,7 @@ use crate::{
     error::{WhError, WhResult},
     pods::{
         filesystem::diffs::Signature,
-        itree::{InodeId, LOCK_TIMEOUT},
+        itree::{Ino, LOCK_TIMEOUT},
     },
 };
 
@@ -39,7 +39,7 @@ pub struct FileHandle {
     pub perm: AccessMode,
     pub no_atime: bool,
     pub direct: bool,
-    pub ino: InodeId,
+    pub ino: Ino,
     pub dirty: bool,
     pub signature: Option<Signature>,
 }
@@ -71,7 +71,7 @@ impl FileHandleManager {
         &mut self,
         flags: OpenFlags,
         perm: AccessMode,
-        ino: InodeId,
+        ino: Ino,
         signature: Option<Signature>,
     ) -> WhResult<UUID> {
         let direct = flags.direct;

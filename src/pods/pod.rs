@@ -37,7 +37,7 @@ use crate::pods::{
     network::network_interface::NetworkInterface,
 };
 
-use super::itree::{InodeId, GLOBAL_CONFIG_INO, ITREE_FILE_FNAME, ITREE_FILE_INO};
+use super::itree::{Ino, GLOBAL_CONFIG_INO, ITREE_FILE_FNAME, ITREE_FILE_INO};
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -148,26 +148,39 @@ custom_error! {pub PodStopError
     WhError{source: WhError} = "{source}",
     ITreeSavingFailed{source: io::Error} = "Could not write itree to disk: {source}",
     PodNotRunning = "No pod with this name was found running.",
-    FileNotReadable{file: InodeId, reason: String} = "Could not read file from disk: ({file}) {reason}",
-    FileNotSent{file: InodeId} = "No pod was able to receive this file before stopping: ({file})",
+    FileNotReadable{file: Ino, reason: String} = "Could not read file from disk: ({file}) {reason}",
+    FileNotSent{file: Ino} = "No pod was able to receive this file before stopping: ({file})",
     #[cfg(target_os = "linux")]
     DiskManagerStopFailed{e: io::Error} = "Unable to stop the disk manager properly. Should not be an error on your platform {e}",
     #[cfg(target_os = "windows")]
     DiskManagerStopFailed{e: io::Error} = "Unable to stop the disk manager properly. Your files are still on the system folder: ('.'mount_path). {e}",
 }
 
-/// Create all the directories present in ITree. (not the files)
+/// Create all directories and symlinks present in ITree. (not the files)
 ///
 /// Required at setup to resolve issue #179
 /// (files pulling need the parent folder to be already present)
-fn create_all_dirs(itree: &ITree, from: InodeId, disk: &dyn DiskManager) -> io::Result<()> {
-    let from = itree.n_get_inode(from).map_err(|e| e.into_io())?;
+fn create_all_shared(itree: &ITree, from: Ino, disk: &dyn DiskManager) -> io::Result<()> {
+    let from = itree.get_inode(from).map_err(|e| e.into_io())?;
 
     match &from.entry {
         FsEntry::File(_) => Ok(()),
+        FsEntry::Symlink(symlink) => {
+            let current_path = itree
+                .get_path_from_inode_id(from.id)
+                .map_err(|e| e.into_io())?;
+            disk.new_symlink(&current_path, from.meta.perm, symlink)
+                .or_else(|e| {
+                    if e.kind() == io::ErrorKind::AlreadyExists {
+                        Ok(())
+                    } else {
+                        Err(e)
+                    }
+                })
+        }
         FsEntry::Directory(children) => {
             let current_path = itree
-                .n_get_path_from_inode_id(from.id)
+                .get_path_from_inode_id(from.id)
                 .map_err(|e| e.into_io())?;
 
             // skipping root folder
@@ -182,7 +195,7 @@ fn create_all_dirs(itree: &ITree, from: InodeId, disk: &dyn DiskManager) -> io::
             }
 
             for child in children {
-                create_all_dirs(itree, *child, disk)?
+                create_all_shared(itree, *child, disk)?
             }
             Ok(())
         }
@@ -224,9 +237,9 @@ impl Pod {
         #[cfg(target_os = "windows")]
         let disk_manager = Box::new(WindowsDiskManager::new(&proto.mountpoint)?);
 
-        create_all_dirs(&itree, ROOT, disk_manager.as_ref())
-            .inspect_err(|e| log::error!("unable to create_all_dirs: {e}"))
-            .map_err(|e| std::io::Error::new(e.kind(), format!("create_all_dirs: {e}")))?;
+        create_all_shared(&itree, ROOT, disk_manager.as_ref())
+            .inspect_err(|e| log::error!("unable to create_all_shared: {e}"))
+            .map_err(|e| std::io::Error::new(e.kind(), format!("create_all_shared: {e}")))?;
 
         if let Ok(perms) = itree
             .get_inode(GLOBAL_CONFIG_INO)
@@ -264,6 +277,7 @@ impl Pod {
             network_interface.clone(),
             disk_manager,
             itree.clone(),
+            proto.mountpoint.clone(),
         ));
 
         // Start ability to recieve messages
@@ -302,7 +316,7 @@ impl Pod {
             fuse_handle: mount_fuse(&proto.mountpoint, fs_interface.clone())
                 .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fuse: {e}")))?,
             #[cfg(target_os = "windows")]
-            fsp_host: mount_fsp(&proto.mountpoint, fs_interface.clone())
+            fsp_host: mount_fsp(fs_interface.clone())
                 .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fsp: {e}")))?,
             network_airport_handle,
             peer_broadcast_handle,
@@ -317,7 +331,7 @@ impl Pod {
     // SECTION getting info from the pod (for the cli)
 
     pub fn get_file_hosts(&self, path: &WhPath) -> Result<Vec<Address>, PodInfoError> {
-        let binding = ITree::n_read_lock(&self.network_interface.itree, "Pod::get_info")?;
+        let binding = ITree::read_lock(&self.network_interface.itree, "Pod::get_info")?;
         let entry = &binding
             .get_inode_from_path(path)
             .map_err(|_| PodInfoError::FileNotFound)?
@@ -325,8 +339,8 @@ impl Pod {
 
         match entry {
             FsEntry::File(hosts) => Ok(hosts.clone()),
-            FsEntry::Directory(_) => Err(PodInfoError::WrongFileType {
-                detail: "Asked path is a directory (directories have no hosts)".to_owned(),
+            _ => Err(PodInfoError::WrongFileType {
+                detail: "Requested path not a file (only files have hosts)".to_owned(),
             }),
         }
     }
@@ -335,7 +349,7 @@ impl Pod {
         &self,
         path: Option<&WhPath>,
     ) -> Result<CliHostTree, PodInfoError> {
-        let itree = ITree::n_read_lock(&self.network_interface.itree, "Pod::get_info")?;
+        let itree = ITree::read_lock(&self.network_interface.itree, "Pod::get_info")?;
 
         Ok(CliHostTree {
             lines: itree.get_file_tree_and_hosts(path)?,
@@ -348,7 +362,7 @@ impl Pod {
     async fn send_file_to_possible_hosts(
         &self,
         possible_hosts: &Vec<Address>,
-        ino: InodeId,
+        ino: Ino,
     ) -> Result<(), PodStopError> {
         let file_content =
             self.fs_interface
@@ -420,7 +434,7 @@ impl Pod {
 
         // drop(self.fuse_handle); // FIXME - do something like block the filesystem
 
-        let itree = ITree::n_read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
+        let itree = ITree::read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
 
         let peers: Vec<Address> = self
             .peers
