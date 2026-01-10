@@ -1,99 +1,98 @@
-# Wormhole CLI Usage Guide to setup a testing environement
+# Wormhole CLI Usage Guide to setup a testing environment
 
-This guide explains how to set up a new Wormhole network with multiple pods using the command line interface (CLI). The steps are designed to be simple and clear, requiring no consultation of external resources beyond this document.
+This guide explains how to set up a new Wormhole network with multiple pods using the command line interface (CLI) on a single machine.
 
 ## Prerequisites
 
 - [Rust](https://www.rust-lang.org/tools/install) installed.
-- Optional: [Docker](https://docs.docker.com/get-docker/) for containerized deployment.
+- **libfuse3-dev** installed (Linux only).
+- The project must be built (`cargo build --release`).
 
-## Step 1: Create virtual folders
+## Step 1: Start the Service
 
-Create three virtual folders to simulate different pods on your machine:
+Open a terminal and start the main Wormhole daemon. This service will manage all your pods.
 
+```sh
+# Keep this terminal open
+./target/release/wormholed
 ```
+
+## Step 2: Create virtual folders
+
+Open a new terminal. Create three folders that will serve as mount points for your pods:
+
+```sh
 mkdir virtual1 virtual2 virtual3
 ```
 
-## Step 2: Generate configuration templates
+## Step 3: Create the first Pod (The Network Origin)
 
-For each virtual folder, generate a configuration template using the CLI:
-
-```
-wormhole -- template virtual1
-wormhole -- template virtual2
-wormhole -- template virtual3
-```
-
-These commands create configuration files in each folder.
-
-## Step 3: Start Wormhole services
-
-Open three different terminals and run the following command in each to start three Wormhole services. These services will listen on 127.0.0.1:8081, 127.0.0.1:8082, and 127.0.0.1:8083 respectively, as configured in their respective virtual folders.
+Use the CLI to create the first pod named `pod1`. It will be mounted on the `virtual1` folder and listen on port 40001.
 
 ```sh
-wormholed
+./target/release/wormhole new pod1 -m ./virtual1 -p 40001
 ```
 
-## Step 4: Create a new network
+> **Note**: Since no update URL (`-u`) is provided, this pod starts a new network.
 
-In a new terminal, create a network with the first pod using the following command:
+## Step 4: Join the network with other pods
+
+Create two additional pods (`pod2` and `pod3`). We use the `-u` flag to tell them to connect to `pod1` (which is at `127.0.0.1:40001`).
+
+### For the second pod
 
 ```sh
-wormhole 127.0.0.1:8081 new virtual1 -p 40001
+./target/release/wormhole new pod2 -m ./virtual2 -p 40002 -u 127.0.0.1:40001
 ```
 
-This command initializes a network with a pod named "virtual1".
+### For the third pod (connecting to pod2, creating a chain)
 
-## Step 5: Join the network with other pods
-
-Add the second and third pods to the network using the following commands:
-
-For the second pod:
 ```sh
-wormhole 127.0.0.1:8082 new virtual2 -p 40002 -u 127.0.0.1:40001
+./target/release/wormhole new pod3 -m ./virtual3 -p 40003 -u 127.0.0.1:40002
 ```
 
-For the third pod:
+## Step 5: Verify network connectivity
+
+To test that all pods are properly connected, add a file to one pod and check if it appears in the others.
+
+### Create a file in the first pod
+
 ```sh
-wormhole 127.0.0.1:8083 new default virtual3 -p 40003 -- 127.0.0.1:40001 127.0.0.1:40002
+echo "Hello World" > virtual1/testfile.txt
 ```
 
-These commands connect the pods to the network using the address of the first pod.
+### Check the other folders (wait a second for sync)
 
-## Step 6: Verify network connectivity
-
-To test that all pods are properly connected, add a blank file to one pod and check if it appears in the others.
-
-For example, create a file in the first pod's folder:
 ```sh
-touch virtual1/testfile.txt
+cat virtual2/testfile.txt
+cat virtual3/testfile.txt
 ```
 
-Wait a few seconds for synchronization, then check the other folders:
+You should see "Hello World" in all folders.
+
+## Step 6: Inspect the Network
+
+You can see the status of your pods and the file tree using the following commands:
+
 ```sh
-ls virtual2
-ls virtual3
+# Show the file tree and where files are stored
+./target/release/wormhole tree
+
+# Inspect a specific pod
+./target/release/wormhole inspect
 ```
 
-You should see `testfile.txt` in both `virtual2` and `virtual3`. If the file appears in all folders, the network is functioning correctly.
+## Cleaning up
 
-## Note for advanced users
+To stop the test environment:
 
-To create a third instance on another machine in the same local area network, follow similar steps, adjusting the IP addresses accordingly. For example:
+1. Remove the pods (this unmounts the folders):
 
-1. On the other machine, create a virtual folder: `mkdir virtual3`
-2. Generate the configuration template: `wormhole template virtual3`
-3. Start the service: `wormholed`
-4. Join the network: `wormhole new virtual3 -p <listening_port> -u <first_pod_address:first_pod_port>`, where `<listening_port>` is the port for this pod, `<first_pod_address>` is the address of the first pod, and `<first_pod_port>` is its port.
-
-For instance, if the first pod is on 192.168.1.100:40001 and the third pod is on 192.168.1.101:40003, you would use:
-```
-wormhole new virtual3 -i 192.168.1.101:40003 -u 192.168.1.100:40001
+```sh
+./target/release/wormhole remove pod1
+./target/release/wormhole remove pod2
+./target/release/wormhole remove pod3
 ```
 
-**Note**: The original commands use loopback aliases (127.0.0.10, etc.), which work for pods on the same machine if configured appropriately. For a different machine, use its actual IP address.
+2. Stop the `wormholed` process (Ctrl+C).
 
-## Conclusion
-
-By following these steps, you have set up a functional Wormhole network with multiple pods and verified their connectivity. This process demonstrates a simple and clear onboarding for new users, without the need for external resources.

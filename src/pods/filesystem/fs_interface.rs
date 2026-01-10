@@ -98,7 +98,7 @@ impl FsInterface {
 
         match &inode.entry {
             // REVIEW - is it still useful to create an empty file in this case ?
-            FsEntry::File(hosts) if hosts.contains(&self.network_interface.hostname()?) => self
+            FsEntry::File(hosts) if hosts.contains(&self.network_interface.hostname) => self
                 .disk
                 .new_file(&new_path, inode.meta.perm)
                 .map(|_| ())
@@ -133,7 +133,7 @@ impl FsInterface {
         // TODO -> in case of failure, other hosts still think this one is valid. Should send error report to the redundancy manager
 
         ITree::write_lock(&self.itree, "recept_redundancy")?
-            .add_inode_hosts(id, vec![self.network_interface.hostname()?])
+            .add_inode_hosts(id, vec![self.network_interface.hostname.clone()])
             .inspect_err(|e| {
                 log::error!("Can't update (local) hosts for redundancy pulled file ({id}): {e}")
             })
@@ -170,20 +170,13 @@ impl FsInterface {
         );
         status.map_err(io::Error::other)?;
         self.network_interface
-            .add_inode_hosts(
-                id,
-                vec![self
-                    .network_interface
-                    .hostname()
-                    .ok()
-                    .ok_or(io::Error::other("deadlock"))?],
-            )
+            .add_inode_hosts(id, vec![self.network_interface.hostname.clone()])
             .expect("can't update inode hosts");
         Ok(())
     }
 
     pub fn recept_edit_hosts(&self, id: Ino, hosts: Vec<Address>) -> WhResult<()> {
-        if !hosts.contains(&self.network_interface.hostname()?) {
+        if !hosts.contains(&self.network_interface.hostname) {
             let path =
                 ITree::read_lock(&self.itree, "recept_edit_hosts")?.get_path_from_inode_id(id)?;
             if let Err(e) = self.disk.remove_file(&path) {
@@ -199,7 +192,7 @@ impl FsInterface {
         host: String,
         meta: Metadata,
     ) -> Result<(), AcknoledgeSetAttrError> {
-        let needs_delete = host != self.network_interface.hostname()?;
+        let needs_delete = host != self.network_interface.hostname;
         self.acknowledge_metadata(id, meta)?;
         self.network_interface
             .acknowledge_hosts_edition(id, vec![host])
@@ -221,7 +214,7 @@ impl FsInterface {
     }
 
     pub fn recept_remove_hosts(&self, id: Ino, hosts: Vec<Address>) -> WhResult<()> {
-        if hosts.contains(&self.network_interface.hostname()?) {
+        if hosts.contains(&self.network_interface.hostname) {
             if let Err(e) = self.disk.remove_file(
                 &ITree::read_lock(&self.itree, "recept_remove_hosts")?
                     .get_path_from_inode_id(id)?,

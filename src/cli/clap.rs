@@ -1,8 +1,8 @@
-use std::path::PathBuf;
+use std::{net::IpAddr, path::PathBuf};
 
 use crate::{
     cli::config_clap::ConfigCommand,
-    ipc::service::SOCKET_DEFAULT_NAME,
+    ipc::service::socket::SOCKET_DEFAULT_NAME,
     pods::itree::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
 };
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -130,9 +130,6 @@ pub struct NewArgs {
     /// Name of the pod to create
     // TODO: make optional again when the url can provide the name expected
     pub name: String,
-    /// Local port for the pod to use. By default automatically find a port on the range [40000-40100]
-    #[arg(long, short)]
-    pub port: Option<u16>,
     /// Mount point to create the pod in. By default creates a mount point in the working directory with the name of the pod
     #[arg(long = "mount", short, value_parser=parse_canonicalize_non_existant)]
     pub mountpoint: Option<PathBuf>,
@@ -144,7 +141,13 @@ pub struct NewArgs {
     pub hostname: Option<String>,
     /// Url this Pod reports to other to reach it
     #[arg(long, short)]
-    pub listen_url: Option<String>,
+    pub listen_url: Option<String>, // listen_url in the Cli and public_url in the code because the -p would conflict with the port
+    /// Ip address this Pod listen [default: 0.0.0.0]
+    #[arg(long, short)]
+    pub ip_address: Option<IpAddr>,
+    /// Local port for the pod to use. By default automatically find a port on the range [default: 40000-40100]
+    #[arg(long, short)]
+    pub port: Option<u16>,
     /// Additional hosts to try to join from as a backup
     #[arg(raw = true)]
     pub additional_hosts: Vec<String>,
