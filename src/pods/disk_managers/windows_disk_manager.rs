@@ -6,7 +6,7 @@ use std::{
 use tokio::io;
 
 use crate::{
-    pods::{itree::EntrySymlink, whpath::WhPath},
+    pods::{filesystem::fs_interface::SimpleFileType, itree::EntrySymlink, whpath::WhPath},
     winfsp::winfsp_impl::aliased_path,
 };
 
@@ -118,16 +118,26 @@ impl DiskManager for WindowsDiskManager {
 
     fn new_symlink(
         &self,
-        _path: &WhPath,
-        _permissions: u16,
-        _link: &EntrySymlink,
+        path: &WhPath,
+        permissions: u16,
+        link: &EntrySymlink,
     ) -> std::io::Result<()> {
-        // temporarily unavailable on windows
-        Ok(())
+        // replace with a dummy file or folder
+        match link.hint {
+            Some(SimpleFileType::Directory) => self.new_dir(path, permissions),
+            _ => self.new_file(path, permissions),
+        }
     }
 
-    fn remove_symlink(&self, _path: &WhPath) -> std::io::Result<()> {
-        // temporarily unavailable on windows
-        Ok(())
+    fn remove_symlink(&self, path: &WhPath) -> std::io::Result<()> {
+        // replaced with a dummy file or folder
+        let path = self.mount_point.join(path);
+        if path.is_dir() {
+            std::fs::remove_dir(&path)
+        } else if path.is_file() {
+            std::fs::remove_file(&path)
+        } else {
+            Ok(())
+        }
     }
 }

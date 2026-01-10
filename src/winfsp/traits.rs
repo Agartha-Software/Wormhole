@@ -58,7 +58,7 @@ impl From<&Metadata> for FileInfo {
         let attributes = match value.kind {
             SimpleFileType::File => FILE_ATTRIBUTE_ARCHIVE,
             SimpleFileType::Directory => FILE_ATTRIBUTE_DIRECTORY,
-            SimpleFileType::Symlink => FILE_ATTRIBUTE_REPARSE_POINT,
+            SimpleFileType::Symlink => FILE_ATTRIBUTE_ARCHIVE, // pretend it's a .lnk link,
         };
         let now = FileTime::now();
         FileInfo {

@@ -7,7 +7,7 @@ use crate::{
     pods::{
         filesystem::{
             file_handle::{AccessMode, FileHandleManager, UUID},
-            fs_interface::FsInterface,
+            fs_interface::{FsInterface, SimpleFileType},
             permissions::has_write_perm,
         },
         itree::{FsEntry, ITree, Ino, Metadata, BLOCK_SIZE},
@@ -130,6 +130,9 @@ impl FsInterface {
         }
         // Set size if size it's defined, take permission from the file handle if the
         if let Some(size) = size {
+            if meta.kind != SimpleFileType::File {
+                return Err(WhError::InodeIsADirectory.into());
+            }
             match fh_perm {
                 Some(perm) if perm != AccessMode::Write && perm != AccessMode::ReadWrite => {
                     return Err(SetAttrError::SizeNoPerm)
