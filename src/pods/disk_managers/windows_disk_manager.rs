@@ -3,12 +3,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use std::os::windows::fs as os_fs;
-
 use tokio::io;
 
 use crate::{
-    pods::{filesystem::fs_interface::SimpleFileType, itree::EntrySymlink, whpath::WhPath},
+    pods::{itree::EntrySymlink, whpath::WhPath},
     winfsp::winfsp_impl::aliased_path,
 };
 
@@ -125,9 +123,11 @@ impl DiskManager for WindowsDiskManager {
         _link: &EntrySymlink,
     ) -> std::io::Result<()> {
         // temporarily unavailable on windows
+        Ok(())
     }
 
     fn remove_symlink(&self, _path: &WhPath) -> std::io::Result<()> {
         // temporarily unavailable on windows
+        Ok(())
     }
 }

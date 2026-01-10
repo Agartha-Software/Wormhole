@@ -10,19 +10,18 @@ use custom_error::custom_error;
 use futures::io;
 use nt_time::FileTime;
 use ntapi::ntioapi::FILE_DIRECTORY_FILE;
-use winapi::shared::{ntstatus::STATUS_INVALID_DEVICE_REQUEST, winerror::ERROR_ALREADY_EXISTS};
-use windows::Win32::Foundation::{NTSTATUS, STATUS_OBJECT_NAME_NOT_FOUND};
+use windows::Win32::Foundation::{STATUS_INVALID_DEVICE_REQUEST, STATUS_OBJECT_NAME_EXISTS, STATUS_OBJECT_NAME_NOT_FOUND};
 use winfsp::{
     filesystem::{DirInfo, FileInfo, FileSecurity, FileSystemContext, WideNameInfo},
     host::{FileSystemHost, VolumeParams},
 };
 use winfsp_sys::{FspCleanupDelete, FILE_ACCESS_RIGHTS};
 
-use crate::pods::filesystem::file_handle::{AccessMode, FileHandleManager, OpenFlags};
+use crate::pods::{filesystem::file_handle::{AccessMode, FileHandleManager, OpenFlags}, itree::FsEntry};
 use crate::{
     error::WhError,
     pods::{
-        filesystem::fs_interface::{FsInterface, SimpleFileType},
+        filesystem::fs_interface::FsInterface,
         itree::{ITree, Ino, WINDOWS_DEFAULT_PERMS_MODE},
         whpath::{ConversionError, InodeName, WhPath, WhPathError},
     },
@@ -37,8 +36,6 @@ pub struct WormholeHandle {
 pub struct FSPController {
     pub volume_label: Arc<RwLock<String>>,
     pub fs_interface: Arc<FsInterface>,
-    pub mount_point: PathBuf,
-    // pub provider: Arc<RwLock<Provider<WindowsFolderHandle>>>,
 }
 
 #[allow(unused)] // unused: field `0` is used through ffi
@@ -231,7 +228,7 @@ impl FileSystemContext for FSPController {
         let itree = ITree::read_lock(&self.fs_interface.itree, "winfsp::create")?;
 
         if let Ok(_) = itree.get_inode_from_path(&path) {
-            return Err(winfsp::FspError::WIN32(ERROR_ALREADY_EXISTS));
+            return Err(STATUS_OBJECT_NAME_EXISTS.into());
         }
 
         let parent = itree
