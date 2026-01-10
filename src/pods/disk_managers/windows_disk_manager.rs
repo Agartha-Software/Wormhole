@@ -120,31 +120,14 @@ impl DiskManager for WindowsDiskManager {
 
     fn new_symlink(
         &self,
-        path: &WhPath,
-        permissions: u16,
-        link: &EntrySymlink,
+        _path: &WhPath,
+        _permissions: u16,
+        _link: &EntrySymlink,
     ) -> std::io::Result<()> {
-        let target = link.target.realize(&self.mount_point, path);
-
-        let hint = match std::fs::exists(&target) {
-            Ok(true) => {
-                if target.is_dir() {
-                    &Some(SimpleFileType::Directory)
-                } else {
-                    &Some(SimpleFileType::File)
-                }
-            }
-            _ => &link.hint,
-        };
-
-        if let Some(SimpleFileType::Directory) = hint {
-            os_fs::symlink_dir(&target, path)
-        } else {
-            os_fs::symlink_file(&target, path)
-        }
+        // temporarily unavailable on windows
     }
 
-    fn remove_symlink(&self, path: &WhPath) -> std::io::Result<()> {
-        std::fs::remove_file(path)
+    fn remove_symlink(&self, _path: &WhPath) -> std::io::Result<()> {
+        // temporarily unavailable on windows
     }
 }
