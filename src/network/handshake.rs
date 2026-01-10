@@ -13,7 +13,7 @@ use tokio_tungstenite::{
 };
 
 use crate::{
-    config::{GlobalConfig, LocalConfig},
+    config::GlobalConfig,
     error::WhError,
     pods::{itree::ITree, network::network_interface::NetworkInterface},
 };
@@ -198,8 +198,6 @@ pub async fn accept(
         Ok(Handshake::Connect(mut connect)) => {
             (async || {
                 // closures to capture ? process
-                let hostname = network.hostname()?;
-                let url = network.url.clone();
                 let url_pairs = network
                     .peers
                     .read()
@@ -207,7 +205,7 @@ pub async fn accept(
                     .map(|peer| (peer.hostname.clone(), peer.url.clone()))
                     .collect::<Vec<_>>();
 
-                let (hosts, urls) = [(hostname.clone(), url)]
+                let (hosts, urls) = [(network.hostname.clone(), network.public_url.clone())]
                     .into_iter()
                     .chain(url_pairs.into_iter())
                     .inspect(|(h, u)| log::trace!("accept:h{h}, u{u:?}"))
@@ -222,7 +220,7 @@ pub async fn accept(
                     urls,
                     hosts,
                     rename,
-                    hostname,
+                    hostname: network.hostname.clone(),
                     config: network.global_config.read().clone(),
                     itree: (*network.itree.read()).clone(),
                 };
@@ -237,7 +235,7 @@ pub async fn accept(
             (async || {
                 // closures to capture ? process
                 let wave_back = Wave {
-                    hostname: network.hostname()?,
+                    hostname: network.hostname.clone(),
                     url: None,
                     blame: wave.hostname.clone(),
                 };
@@ -305,12 +303,13 @@ where
 pub async fn connect(
     stream: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     sink: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
-    local_config: &LocalConfig,
+    hostname: String,
+    url: Option<String>,
 ) -> Result<Accept, HandshakeError> {
     let connect = Connect {
-        hostname: local_config.general.hostname.clone(),
+        hostname,
         magic_version: GIT_HASH.into(),
-        url: local_config.general.url.clone(),
+        url,
     };
 
     let serialized = bincode::serialize(&Handshake::Connect(connect))?;

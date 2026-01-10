@@ -102,12 +102,11 @@ impl FsInterface {
     /// returns Ok(Some(file)) if the file is tracked
     /// returns Ok(None) if the file is not tracked
     pub fn get_local_file(&self, ino: Ino) -> Result<Option<File>, ReadError> {
-        let hostname = self.network_interface.hostname()?;
         let mut buf = Vec::new();
         let itree = self.itree.read();
         let size = itree.get_inode(ino).and_then(|inode| match &inode.entry {
             FsEntry::File(hosts) => Ok(hosts
-                .contains(&hostname)
+                .contains(&self.network_interface.hostname)
                 .then_some(inode.meta.size as usize)),
             FsEntry::Directory(_) => Err(WhError::InodeIsADirectory),
         })?;

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     cli::ConfigType,
-    config::{types::Config, GlobalConfig, LocalConfig},
+    config::{local_file::LocalConfigFile, types::Config, GlobalConfig},
     ipc::{
         answers::CheckConfigAnswer,
         commands::PodId,
@@ -39,7 +39,7 @@ where
             }
 
             match (
-                LocalConfig::read(local_path)
+                LocalConfigFile::read(local_path)
                     .err()
                     .filter(|_| config_type.is_local()),
                 GlobalConfig::read(global_path)
