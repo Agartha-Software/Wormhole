@@ -10,25 +10,27 @@ use crate::{
             make_inode::{CreateError, MakeInodeError},
             open::OpenError,
             read::ReadError,
-            readdir::ReadDirError,
+            readdir::{ReadDirError, ReadLinkError},
             remove_inode::{RemoveFileError, RemoveInodeError},
             rename::RenameError,
             write::WriteError,
         },
-        itree::Metadata,
+        itree::{FsEntry, Inode, Metadata},
         network::pull_file::PullError,
         whpath::{InodeNameError, WhPathError},
     },
 };
 use nt_time::FileTime;
+use winapi::um::winnt::IO_REPARSE_TAG_SYMLINK;
 use windows::Win32::{
     Foundation::{
         GENERIC_EXECUTE, GENERIC_READ, GENERIC_WRITE, STATUS_ACCESS_DENIED, STATUS_DATA_ERROR,
         STATUS_DIRECTORY_NOT_EMPTY, STATUS_FILE_IS_A_DIRECTORY, STATUS_ILLEGAL_CHARACTER,
         STATUS_INTERNAL_ERROR, STATUS_INVALID_DEVICE_REQUEST, STATUS_INVALID_HANDLE,
         STATUS_INVALID_PARAMETER, STATUS_NETWORK_UNREACHABLE, STATUS_NOT_A_DIRECTORY,
-        STATUS_NO_MEMORY, STATUS_OBJECT_NAME_EXISTS, STATUS_OBJECT_NAME_NOT_FOUND,
-        STATUS_OBJECT_PATH_NOT_FOUND, STATUS_PENDING, STATUS_POSSIBLE_DEADLOCK,
+        STATUS_NOT_A_REPARSE_POINT, STATUS_NO_MEMORY, STATUS_OBJECT_NAME_EXISTS,
+        STATUS_OBJECT_NAME_NOT_FOUND, STATUS_OBJECT_PATH_NOT_FOUND, STATUS_PENDING,
+        STATUS_POSSIBLE_DEADLOCK,
     },
     Storage::FileSystem::{
         FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT,
@@ -48,30 +50,43 @@ fn io2fsp(e: &std::io::Error) -> FspError {
     }
 }
 
-impl From<Metadata> for FileInfo {
-    fn from(value: Metadata) -> Self {
-        (&value).into()
-    }
-}
+// impl From<Metadata> for FileInfo {
+//     fn from(value: Metadata) -> Self {
+//         (&value).into()
+//     }
+// }
 
-impl From<&Metadata> for FileInfo {
-    fn from(value: &Metadata) -> Self {
-        let attributes = match value.kind {
-            SimpleFileType::File => FILE_ATTRIBUTE_ARCHIVE,
-            SimpleFileType::Directory => FILE_ATTRIBUTE_DIRECTORY,
-            SimpleFileType::Symlink => FILE_ATTRIBUTE_REPARSE_POINT,
+impl From<&Inode> for FileInfo {
+    fn from(inode: &Inode) -> Self {
+        let (attributes, reparse_tag) = match &inode.entry {
+            FsEntry::File(_) => (FILE_ATTRIBUTE_ARCHIVE, 0),
+            FsEntry::Directory(_) => (FILE_ATTRIBUTE_DIRECTORY, 0),
+            FsEntry::Symlink(symlink) => (
+                match &symlink.hint {
+                    Some(SimpleFileType::Directory) => {
+                        FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY
+                    }
+                    Some(SimpleFileType::File) => {
+                        FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_ARCHIVE
+                    }
+                    _ => FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_ARCHIVE,
+                },
+                IO_REPARSE_TAG_SYMLINK,
+            ),
         };
         let now = FileTime::now();
         FileInfo {
             file_attributes: attributes.0,
-            reparse_tag: 0,
-            allocation_size: value.size as u64,
-            file_size: value.size as u64,
-            creation_time: FileTime::try_from(value.crtime).unwrap_or(now).to_raw(),
-            last_access_time: FileTime::try_from(value.atime).unwrap_or(now).to_raw(),
-            last_write_time: FileTime::try_from(value.mtime).unwrap_or(now).to_raw(),
-            change_time: FileTime::try_from(value.ctime).unwrap_or(now).to_raw(),
-            index_number: value.ino,
+            reparse_tag,
+            allocation_size: inode.meta.size as u64,
+            file_size: inode.meta.size as u64,
+            creation_time: FileTime::try_from(inode.meta.crtime)
+                .unwrap_or(now)
+                .to_raw(),
+            last_access_time: FileTime::try_from(inode.meta.atime).unwrap_or(now).to_raw(),
+            last_write_time: FileTime::try_from(inode.meta.mtime).unwrap_or(now).to_raw(),
+            change_time: FileTime::try_from(inode.meta.ctime).unwrap_or(now).to_raw(),
+            index_number: inode.meta.ino,
             hard_links: 0,
             ea_size: 0,
         }
@@ -245,6 +260,14 @@ impl From<RemoveFileError> for FspError {
     }
 }
 
+impl From<ReadLinkError> for FspError {
+    fn from(value: ReadLinkError) -> Self {
+        match value {
+            ReadLinkError::WhError { source } => source.into(),
+            ReadLinkError::NotALink => STATUS_NOT_A_REPARSE_POINT.into(),
+        }
+    }
+}
 
 impl From<SetAttrError> for FspError {
     fn from(value: SetAttrError) -> Self {

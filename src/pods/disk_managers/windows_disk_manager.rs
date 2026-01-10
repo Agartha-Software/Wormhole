@@ -1,4 +1,5 @@
 use std::{
+    fs::FileType,
     os::windows::prelude::FileExt,
     path::{Path, PathBuf},
 };
@@ -8,6 +9,7 @@ use std::os::windows::fs as os_fs;
 use tokio::io;
 
 use crate::{
+    config::types::{SymlinkMode, SystemLocalConfig},
     pods::{filesystem::fs_interface::SimpleFileType, itree::EntrySymlink, whpath::WhPath},
     winfsp::winfsp_impl::aliased_path,
 };
@@ -35,6 +37,7 @@ impl WindowsDiskManager {
         Ok(Self {
             mount_point: system_mount_point,
             original_location: mount_point.to_owned(),
+            // symlinks: config.symlinks,
             stopped: false,
         })
     }
@@ -121,10 +124,13 @@ impl DiskManager for WindowsDiskManager {
     fn new_symlink(
         &self,
         path: &WhPath,
-        permissions: u16,
+        _permissions: u16,
         link: &EntrySymlink,
     ) -> std::io::Result<()> {
-        let target = link.target.realize(&self.mount_point, path);
+        // if self.symlinks == SymlinkMode::Hidden {
+        //     return Ok(());
+        // }
+        let target = link.target.realize(&self.mount_point);
 
         let hint = match std::fs::exists(&target) {
             Ok(true) => {
@@ -138,13 +144,23 @@ impl DiskManager for WindowsDiskManager {
         };
 
         if let Some(SimpleFileType::Directory) = hint {
-            os_fs::symlink_dir(&target, path)
+            os_fs::symlink_dir(&target, &self.mount_point.join(path))
         } else {
-            os_fs::symlink_file(&target, path)
+            os_fs::symlink_file(&target, &self.mount_point.join(path))
         }
     }
 
     fn remove_symlink(&self, path: &WhPath) -> std::io::Result<()> {
-        std::fs::remove_file(path)
+        let path = self.mount_point.join(path);
+        if std::fs::metadata(&path)?.is_dir() {
+            std::fs::remove_dir(&path)
+        } else if std::fs::metadata(&path)?.is_file() {
+            std::fs::remove_file(&path)
+        } else {
+            panic!("not file nor dir")
+        }
+        // if self.symlinks == SymlinkMode::Hidden {
+        //     return Ok(());
+        // }
     }
 }

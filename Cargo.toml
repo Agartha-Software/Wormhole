@@ -60,6 +60,7 @@ windows-permissions = "0.2.4"
 winapi = "0.3.9"
 ntapi = "0.4.1"
 nt-time = "0.10.6"
+widestring = "*"
 windows = { version = "0.56.0", features = [
     "Win32_Foundation",
     "Win32_Storage_FileSystem",

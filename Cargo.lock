@@ -2241,6 +2241,7 @@ dependencies = [
  "tokio-tungstenite",
  "toml",
  "walkdir",
+ "widestring",
  "winapi",
  "windows 0.56.0",
  "windows-permissions",

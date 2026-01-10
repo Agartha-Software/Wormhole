@@ -1,6 +1,6 @@
 use std::{
     ffi::OsString,
-    io::ErrorKind,
+    io::{ErrorKind, Write},
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
     time::SystemTime,
@@ -10,15 +10,25 @@ use custom_error::custom_error;
 use futures::io;
 use nt_time::FileTime;
 use ntapi::ntioapi::FILE_DIRECTORY_FILE;
-use winapi::shared::{ntstatus::STATUS_INVALID_DEVICE_REQUEST, winerror::ERROR_ALREADY_EXISTS};
-use windows::Win32::Foundation::{NTSTATUS, STATUS_OBJECT_NAME_NOT_FOUND};
+use winapi::shared::winerror::ERROR_ALREADY_EXISTS;
+use windows::Win32::Foundation::{
+    STATUS_FILE_IS_A_DIRECTORY, STATUS_INVALID_DEVICE_REQUEST, STATUS_NOT_A_DIRECTORY,
+    STATUS_NOT_A_REPARSE_POINT, STATUS_OBJECT_NAME_NOT_FOUND,
+};
 use winfsp::{
     filesystem::{DirInfo, FileInfo, FileSecurity, FileSystemContext, WideNameInfo},
     host::{FileSystemHost, VolumeParams},
 };
 use winfsp_sys::{FspCleanupDelete, FILE_ACCESS_RIGHTS};
 
-use crate::pods::filesystem::file_handle::{AccessMode, FileHandleManager, OpenFlags};
+use crate::{
+    config::types::SymlinkMode,
+    pods::{
+        filesystem::file_handle::{AccessMode, FileHandleManager, OpenFlags},
+        itree::{EntrySymlink, FsEntry},
+    },
+    winfsp::reparse_data::ReparseDataBuffer,
+};
 use crate::{
     error::WhError,
     pods::{
@@ -37,7 +47,7 @@ pub struct WormholeHandle {
 pub struct FSPController {
     pub volume_label: Arc<RwLock<String>>,
     pub fs_interface: Arc<FsInterface>,
-    pub mount_point: PathBuf,
+    pub symlink_mode: SymlinkMode,
     // pub provider: Arc<RwLock<Provider<WindowsFolderHandle>>>,
 }
 
@@ -81,18 +91,27 @@ impl FSPController {
         let itree = ITree::read_lock(&self.fs_interface.itree, "winfsp::get_file_info")?;
 
         let inode = itree.get_inode(context.ino)?;
-        *file_info = (&inode.meta).into();
+        *file_info = inode.into();
         Ok(())
     }
 }
 
 pub fn mount_fsp(fs_interface: Arc<FsInterface>) -> Result<WinfspHost, std::io::Error> {
-    let volume_params = VolumeParams::default();
+    let mut volume_params = VolumeParams::default();
+    volume_params.reparse_points(true);
+
     let mountpoint = fs_interface.mountpoint.clone();
+    let symlink_mode = fs_interface
+        .network_interface
+        .local_config
+        .read()
+        .system
+        .symlinks;
 
     let wormhole_context = FSPController {
         volume_label: Arc::new(RwLock::new("wormhole_fs".into())),
         fs_interface,
+        symlink_mode,
     };
     let mut host = FileSystemHost::<FSPController>::new(volume_params, wormhole_context)
         .map_err(|_| std::io::Error::new(ErrorKind::Other, "WinFSP FileSystemHost::new error"))?;
@@ -131,12 +150,11 @@ impl FileSystemContext for FSPController {
 
         let path = WhPath::from_fake_absolute(file_name)?;
 
-        let file_info: FileInfo =
-            (&ITree::read_lock(&self.fs_interface.itree, "get_security_by_name")?
-                .get_inode_from_path(&path)
-                .inspect_err(|e| log::trace!("{:?}:{:?}", &path, e))?
-                .meta)
-                .into();
+        let inode = ITree::read_lock(&self.fs_interface.itree, "get_security_by_name")?
+            .get_inode_from_path(&path)
+            .inspect_err(|e| log::trace!("get_security_by_name({}):{:?}", &path, e))?
+            .clone();
+        let file_info: FileInfo = (&inode).into();
         // let mut descriptor_size = 0;
         // let option_sd = if security_descriptor.is_some() {
         //     Some(
@@ -160,6 +178,7 @@ impl FileSystemContext for FSPController {
         // }
         let sec = FileSecurity {
             reparse: false,
+            // reparse: meta.kind == SimpleFileType::Symlink,
             sz_security_descriptor: 0,
             attributes: file_info.file_attributes,
         };
@@ -183,7 +202,7 @@ impl FileSystemContext for FSPController {
             .get_inode_from_path(&path)
             .inspect_err(|e| log::warn!("open({display_name})::{e};"))?
             .clone();
-        *file_info.as_mut() = (&inode.meta).into();
+        *file_info.as_mut() = (&inode).into();
         file_info.set_normalized_name(file_name.as_slice(), None);
         let handle = self
             .fs_interface
@@ -208,10 +227,28 @@ impl FileSystemContext for FSPController {
         _file_attributes: winfsp_sys::FILE_FLAGS_AND_ATTRIBUTES,
         _security_descriptor: Option<&[std::ffi::c_void]>,
         _allocation_size: u64,
-        _extra_buffer: Option<&[u8]>,
-        _extra_buffer_is_reparse_point: bool,
+        extra_buffer: Option<&[u8]>,
+        extra_buffer_is_reparse_point: bool,
         file_info: &mut winfsp::filesystem::OpenFileInfo,
     ) -> winfsp::Result<Self::FileContext> {
+        if extra_buffer_is_reparse_point {
+            log::trace!("create({:?}, extra_buffer_is_reparse_point)", file_name);
+        } else {
+            log::trace!("create({:?})", file_name);
+        }
+
+        let entry = if let (Some(buffer), true) = (extra_buffer, extra_buffer_is_reparse_point) {
+            FsEntry::Symlink(EntrySymlink::from_reparse_data_buffer(
+                ReparseDataBuffer::from_buffer(buffer)?,
+                &self.fs_interface.mountpoint,
+            )?)
+        } else {
+            if create_options & FILE_DIRECTORY_FILE != 0 {
+                FsEntry::new_directory()
+            } else {
+                FsEntry::new_file()
+            }
+        };
         log::trace!("create({:?})", file_name);
         let entry =  if create_options & FILE_DIRECTORY_FILE != 0 {
             FsEntry::new_directory()
@@ -251,7 +288,7 @@ impl FileSystemContext for FSPController {
                 WINDOWS_DEFAULT_PERMS_MODE,
             )
             .inspect_err(|e| log::error!("create::{e};"))?;
-        *file_info.as_mut() = (&inode.meta).into();
+        *file_info.as_mut() = (&inode).into();
         file_info.set_normalized_name(file_name.as_slice(), None);
 
         Ok(WormholeHandle {
@@ -653,45 +690,139 @@ impl FileSystemContext for FSPController {
     //     Err(NTSTATUS(STATUS_INVALID_DEVICE_REQUEST).into())
     // }
 
-    // fn get_reparse_point_by_name(
-    //     &self,
-    //     file_name: &winfsp::U16CStr,
-    //     is_directory: bool,
-    //     buffer: &mut [u8],
-    // ) -> winfsp::Result<u64> {
-    //     log::info!("get_reparse_point_by_name({:?})", file_name);
+    fn get_reparse_point_by_name(
+        &self,
+        file_name: &winfsp::U16CStr,
+        is_directory: bool,
+        mut buffer: &mut [u8],
+    ) -> winfsp::Result<u64> {
+        log::trace!("get_reparse_point_by_name({})", file_name.display(),);
+        // if self.symlink_mode == SymlinkMode::Hidden {
+        //     return Err(STATUS_INVALID_DEVICE_REQUEST.into())
+        // }
 
-    //     Err(NTSTATUS(STATUS_INVALID_DEVICE_REQUEST).into())
-    // }
+        let path = WhPath::try_from(file_name)?;
+        let inode = ITree::read_lock(
+            &self.fs_interface.itree,
+            "winfsp::get_reparse_point_by_name",
+        )?
+        .get_inode_from_path(&path)
+        .inspect_err(|e| log::warn!("get_reparse_point_by_name({file_name:?})::{e};"))?
+        .clone();
 
-    // fn get_reparse_point(
-    //     &self,
-    //     context: &Self::FileContext,
-    //     file_name: &winfsp::U16CStr,
-    //     buffer: &mut [u8],
-    // ) -> winfsp::Result<u64> {
-    //     log::info!("get_reparse_point({:?})", context);
+        match inode.entry {
+            crate::pods::itree::FsEntry::Symlink(symlink) => {
+                if matches!(symlink.hint, Some(SimpleFileType::Directory)) == is_directory {
+                    let b = symlink
+                        .as_reparse_data_buffer(&self.fs_interface.mountpoint)
+                        .as_boxed_buffer()
+                        .inspect_err(|e| log::warn!("get_reparse_point_by_name::{e}"))?;
+                    Ok(buffer.write(b.as_ref())? as u64).inspect(|n| log::info!("ok({n});"))
+                } else {
+                    if is_directory {
+                        Err(STATUS_NOT_A_DIRECTORY.into())
+                    } else {
+                        Err(STATUS_FILE_IS_A_DIRECTORY.into())
+                    }
+                }
+            }
+            _ => Err(STATUS_NOT_A_REPARSE_POINT.into()),
+        }
+        .inspect_err(|e| log::warn!("get_reparse_point_by_name::{e}"))
+    }
 
-    //     Err(NTSTATUS(STATUS_INVALID_DEVICE_REQUEST).into())
-    // }
+    fn get_reparse_point(
+        &self,
+        context: &Self::FileContext,
+        _file_name: &winfsp::U16CStr,
+        mut buffer: &mut [u8],
+    ) -> winfsp::Result<u64> {
+        log::trace!("get_reparse_point({})", context.ino,);
+        let symlink = self.fs_interface.readlink(context.ino)?;
+        let b = symlink
+            .as_reparse_data_buffer(&self.fs_interface.mountpoint)
+            .as_boxed_buffer()
+            .inspect_err(|e| log::warn!("get_reparse_point::{e}"))?;
 
-    // fn set_reparse_point(
-    //     &self,
-    //     context: &Self::FileContext,
-    //     file_name: &winfsp::U16CStr,
-    //     buffer: &[u8],
-    // ) -> winfsp::Result<()> {
-    //     Err(NTSTATUS(STATUS_INVALID_DEVICE_REQUEST).into())
-    // }
+        let checked =
+            ReparseDataBuffer::from_buffer(&b).expect("converted buffer should be valid!!!");
 
-    // fn delete_reparse_point(
-    //     &self,
-    //     context: &Self::FileContext,
-    //     file_name: &winfsp::U16CStr,
-    //     buffer: &[u8],
-    // ) -> winfsp::Result<()> {
-    //     Err(NTSTATUS(STATUS_INVALID_DEVICE_REQUEST).into())
-    // }
+        Ok(buffer
+            .write(b.as_ref())
+            .inspect_err(|e| log::warn!("get_reparse_point::{e}"))? as u64)
+        .inspect(|n| log::info!("ok({n});"))
+    }
+
+    fn set_reparse_point(
+        &self,
+        context: &Self::FileContext,
+        _file_name: &winfsp::U16CStr,
+        buffer: &[u8],
+    ) -> winfsp::Result<()> {
+        log::trace!("set_reparse_point({})", context.ino,);
+        // if self.symlink_mode == SymlinkMode::Hidden {
+        //     return Err(STATUS_INVALID_DEVICE_REQUEST.into())
+        // }
+        log::trace!("set_reparse_point({:?})", context);
+
+        let old = self
+            .fs_interface
+            .itree
+            .read()
+            .get_inode(context.ino)?
+            .clone();
+
+        let reparse = ReparseDataBuffer::from_buffer(buffer)?;
+
+        let entry = EntrySymlink::from_reparse_data_buffer(reparse, &self.fs_interface.mountpoint)
+            .inspect_err(|e| log::error!("set_reparse_point::{e};"))?;
+
+        self.fs_interface
+            .remove_inode(context.ino)
+            .inspect_err(|e| log::error!("set_reparse_point::{e};"))?;
+
+        self.fs_interface
+            .make_inode(old.parent, old.name, old.meta.perm, FsEntry::Symlink(entry))
+            .inspect_err(|e| log::error!("set_reparse_point::{e};"))?;
+        Ok(())
+    }
+
+    fn delete_reparse_point(
+        &self,
+        context: &Self::FileContext,
+        _file_name: &winfsp::U16CStr,
+        buffer: &[u8],
+    ) -> winfsp::Result<()> {
+        // if self.symlink_mode == SymlinkMode::Hidden {
+        //     return Err(STATUS_INVALID_DEVICE_REQUEST.into())
+        // }
+        log::trace!("delete_reparse_point({:?})", context);
+
+        let old = self
+            .fs_interface
+            .itree
+            .read()
+            .get_inode(context.ino)?
+            .clone();
+
+        let _ = ReparseDataBuffer::from_buffer(buffer)?;
+
+        let entry = match old.entry {
+            FsEntry::Symlink(symlink) => match symlink.hint {
+                Some(SimpleFileType::File) => FsEntry::new_file(),
+                Some(SimpleFileType::Directory) => FsEntry::new_directory(),
+                _ => FsEntry::new_file(), // default an unhinted symlink to a file,
+            },
+            _ => return Err(STATUS_NOT_A_REPARSE_POINT.into()),
+        };
+
+        self.fs_interface.remove_inode(context.ino)?;
+
+        self.fs_interface
+            .make_inode(old.parent, old.name, old.meta.perm, entry)
+            .inspect_err(|e| log::error!("delete_reparse_point::{e};"))?;
+        Ok(())
+    }
 
     // fn get_extended_attributes(
     //     &self,

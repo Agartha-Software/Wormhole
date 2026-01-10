@@ -264,6 +264,7 @@ impl Pod {
         let disk_manager = Box::new(UnixDiskManager::new(&proto.mountpoint)?);
         #[cfg(target_os = "windows")]
         let disk_manager = Box::new(WindowsDiskManager::new(&proto.mountpoint)?);
+        // let disk_manager = Box::new(WindowsDiskManager::new(&proto.mountpoint, &proto.local_config.system)?);
 
         create_all_shared(&proto.itree, ROOT, disk_manager.as_ref())
             .inspect_err(|e| log::error!("unable to create_all_shared: {e}"))

@@ -56,6 +56,7 @@ impl<T: Serialize + DeserializeOwned> Config for T {}
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct LocalConfig {
     pub general: GeneralLocalConfig,
+    pub system: SystemLocalConfig,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -63,6 +64,28 @@ pub struct GeneralLocalConfig {
     // pub name: String,
     pub hostname: String,
     pub url: Option<String>,
+}
+
+/// Whether or not to show symlinks on the filesystem.
+/// Filesystem must be restarted to apply this change
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SymlinkMode {
+    Hidden,
+    Native,
+}
+
+impl Default for SymlinkMode {
+    fn default() -> Self {
+        #[cfg(target_os = "windows")]
+        return Self::Hidden;
+        #[cfg(target_os = "linux")]
+        return Self::Native;
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct SystemLocalConfig {
+    pub symlinks: SymlinkMode,
 }
 
 impl LocalConfig {
