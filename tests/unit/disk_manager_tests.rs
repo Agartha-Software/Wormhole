@@ -1,11 +1,11 @@
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::PermissionsExt;
 
-#[cfg(target_os = "windows")]
-use wormhole::pods::disk_managers::windows_disk_manager::WindowsDiskManager;
+use assert_fs::{assert::PathAssert, prelude::PathChild};
 #[cfg(target_os = "linux")]
 use wormhole::pods::disk_managers::unix_disk_manager::UnixDiskManager;
-use assert_fs::{assert::PathAssert, prelude::PathChild};
+#[cfg(target_os = "windows")]
+use wormhole::pods::disk_managers::windows_disk_manager::WindowsDiskManager;
 
 use wormhole::pods::disk_managers::DiskManager;
 
