@@ -59,7 +59,7 @@ Wormhole can be visualized as a stack of layers, ranging from the user to the ne
 
 - **Storage**: This layer manages the real files that are present on the machine.
 
-- **Network**: Manages encrypted and reliable connections between machines to exchange data.
+- **Network**: Manages connections between machines to exchange data.
 
 ## 3. The Virtualization Concept (Metadata vs Data)
 

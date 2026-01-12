@@ -96,7 +96,7 @@ This is the "hand" of the Pod.
 
 This is the "voice" of the Pod.
 
-- If the Tree says "this file is not here, the neighbor has it", the Network Manager contacts the peer to download the data.
+- If the Tree says "this file is not here, that pod has it", the Network Manager contacts the peer to download the data.
 
 ## 4. Data Flow: Reading a File (Example)
 
