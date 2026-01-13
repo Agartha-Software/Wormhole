@@ -1,4 +1,5 @@
 use std::{net::IpAddr, path::PathBuf};
+use ts_rs::TS;
 
 use crate::{
     cli::config_clap::ConfigCommand,
@@ -153,8 +154,9 @@ pub struct NewArgs {
     pub additional_hosts: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ValueEnum)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ValueEnum, TS)]
 #[clap(rename_all = "lower")]
+#[ts(export)]
 pub enum Mode {
     /// Simply remove the pod from the network without losing any data from the network
     /// and leaving behind any data that was stored on the pod
