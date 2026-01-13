@@ -56,6 +56,12 @@ pub enum StatusAnswer {
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
+pub enum ListPodsAnswer {
+    Pods(Vec<String>),
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct PeerInfo {
     pub hostname: String,
     pub url: Option<String>,

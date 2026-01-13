@@ -4,7 +4,7 @@ use crate::{
     ipc::{
         commands::Command,
         service::commands::{
-            check, freeze, generate, gethosts, inspect, new, remove, show, status, tree, unfreeze,
+            check, freeze, generate, gethosts, inspect, new, remove, show, status, tree, unfreeze, list_pods
         },
     },
     pods::pod::Pod,
@@ -110,6 +110,7 @@ where
     match command {
         Command::Unfreeze(pod_id) => unfreeze(pod_id, stream).await,
         Command::Status => status(stream).await,
+        Command::ListPods => list_pods(pods, stream).await,
         Command::Freeze(pod_id) => freeze(pod_id, stream).await,
         Command::New(request) => new(request, pods, stream).await,
         Command::GetHosts(request) => gethosts(request, pods, stream).await,

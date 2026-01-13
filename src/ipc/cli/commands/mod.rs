@@ -7,6 +7,7 @@ mod remove;
 mod status;
 mod tree;
 mod unfreeze;
+mod list_pods;
 
 pub use config::check::check;
 pub use config::generate::generate;
@@ -17,3 +18,4 @@ pub use new::new;
 pub use remove::remove;
 pub use status::status;
 pub use tree::tree;
+pub use list_pods::list_pods;

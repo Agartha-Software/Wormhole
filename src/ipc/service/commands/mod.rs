@@ -5,6 +5,7 @@ mod inspect;
 mod new;
 mod remove;
 mod status;
+mod list_pods;
 mod tree;
 mod unfreeze;
 
@@ -17,6 +18,7 @@ pub use inspect::inspect;
 pub use new::new;
 pub use remove::remove;
 pub use status::status;
+pub use list_pods::list_pods;
 pub use tree::tree;
 pub use unfreeze::unfreeze;
 

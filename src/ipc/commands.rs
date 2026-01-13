@@ -77,4 +77,5 @@ pub enum Command {
     ShowConfig(PodId, ConfigType),
     CheckConfig(PodId, ConfigType),
     Status,
+    ListPods,
 }
