@@ -56,7 +56,8 @@ pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String
                 .map_or("Error".to_owned(), |s| s.free_size.to_string()),
             info.disk_space
                 .as_ref()
-                .map_or("Error".to_owned(), |s| (s.total_size - s.free_size).to_string()),
+                .map_or("Error".to_owned(), |s| (s.total_size - s.free_size)
+                    .to_string()),
             info.disk_space
                 .as_ref()
                 .map_or("Error".to_owned(), |s| s.total_size.to_string()),

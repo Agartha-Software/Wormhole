@@ -4,7 +4,8 @@ use crate::{
     ipc::{
         commands::Command,
         service::commands::{
-            check, freeze, generate, gethosts, inspect, new, remove, show, status, tree, unfreeze, list_pods, redundancy_status
+            check, freeze, generate, gethosts, inspect, list_pods, new, redundancy_status, remove,
+            show, status, tree, unfreeze,
         },
     },
     pods::pod::Pod,

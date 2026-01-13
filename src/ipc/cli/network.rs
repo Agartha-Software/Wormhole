@@ -2,7 +2,10 @@ use interprocess::local_socket::tokio::Stream;
 
 use crate::{
     cli::{CliCommand, ConfigCommand},
-    ipc::cli::commands::{check, generate, gethosts, inspect, list_pods, new, remove, show, status, tree, redundancy_status},
+    ipc::cli::commands::{
+        check, generate, gethosts, inspect, list_pods, new, redundancy_status, remove, show,
+        status, tree,
+    },
 };
 
 type Answer = String;

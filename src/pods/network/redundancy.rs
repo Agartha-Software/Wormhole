@@ -135,14 +135,16 @@ pub fn check_integrity(pod: &Pod) -> WhResult<HashMap<RedundancyStatus, u64>> {
             })
             .collect();
 
-    Ok(selected_files.into_iter().fold(HashMap::new(), |mut acc, f| {
-        if let Some(entry) = acc.get_mut(&f.1) {
-            *entry = *entry + 1;
-        } else {
-            acc.insert(f.1, 1);
-        }
-        acc
-    }))
+    Ok(selected_files
+        .into_iter()
+        .fold(HashMap::new(), |mut acc, f| {
+            if let Some(entry) = acc.get_mut(&f.1) {
+                *entry = *entry + 1;
+            } else {
+                acc.insert(f.1, 1);
+            }
+            acc
+        }))
 }
 
 async fn fix_integrity(
