@@ -5,14 +5,16 @@ use crate::{
     pods::{
         filesystem::fs_interface::FsInterface,
         itree::{FsEntry, ITree, Ino, InodeId},
+        pod::Pod,
     },
 };
 use futures_util::future::join_all;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use tokio::{
     sync::mpsc::{unbounded_channel, UnboundedReceiver},
     task::JoinSet,
 };
+use ts_rs::TS;
 
 custom_error::custom_error! {pub RedundancyError
     WhError{source: WhError} = "{source}",
@@ -50,7 +52,7 @@ pub async fn redundancy_worker(
                     .inspect_err(|e| log::error!("Redundancy error: {e}"));
             }
             RedundancyMessage::CheckIntegrity => {
-                let _ = check_integrity(&nw_interface, &fs_interface, &peers)
+                let _ = fix_integrity(&nw_interface, &fs_interface, &peers)
                     .await
                     .inspect_err(|e| log::error!("Redundancy error: {e}"));
             }
@@ -64,7 +66,7 @@ pub async fn redundancy_worker(
 /// - this node possesses the file
 /// - this node is first on the sorted hosts list (naive approach to avoid many hosts applying the same file)
 ///
-/// Intended for use in the check_intergrity function
+/// Intended for use in the fix_integrity function
 fn eligible_to_apply(
     ino: InodeId,
     entry: &FsEntry,
@@ -92,7 +94,57 @@ fn eligible_to_apply(
     }
 }
 
-async fn check_integrity(
+#[derive(Eq, Hash, PartialEq, TS)]
+#[ts(export)]
+pub enum RedundancyStatus {
+    NotRedundant,
+    BelowTarget,
+    OnTarget,
+    AboveTarget,
+}
+
+// Lists the number of files that goes into each RedundancyStatus field
+pub async fn check_integrity(pod: &Pod) -> WhResult<HashMap<RedundancyStatus, u64>> {
+    let target = pod.global_config.read().redundancy.number;
+
+    let selected_files: Vec<(Ino, RedundancyStatus)> =
+        ITree::read_lock(&pod.network_interface.itree, "redundancy: check_integrity")?
+            .iter()
+            .filter_map(|(ino, inode)| {
+                if ITree::is_local_only(*ino) {
+                    return None;
+                }
+                let hosts = if let FsEntry::File(hosts) = &inode.entry {
+                    hosts.len() as u64
+                } else {
+                    return None;
+                };
+
+                let status = if hosts <= 1 {
+                    RedundancyStatus::NotRedundant
+                } else if hosts < target {
+                    RedundancyStatus::BelowTarget
+                } else if hosts == target {
+                    RedundancyStatus::OnTarget
+                } else {
+                    RedundancyStatus::AboveTarget
+                };
+
+                Some((*ino, status))
+            })
+            .collect();
+
+    Ok(selected_files.into_iter().fold(HashMap::new(), |mut acc, f| {
+        if let Some(entry) = acc.get_mut(&f.1) {
+            *entry = *entry + 1;
+        } else {
+            acc.insert(f.1, 1);
+        }
+        acc
+    }))
+}
+
+async fn fix_integrity(
     nw_interface: &Arc<NetworkInterface>,
     fs_interface: &Arc<FsInterface>,
     peers: &Vec<Address>,
@@ -101,7 +153,7 @@ async fn check_integrity(
 
     // Applies redundancy to needed files
     let selected_files: Vec<Ino> =
-        ITree::read_lock(&nw_interface.itree, "redundancy: check_integrity")?
+        ITree::read_lock(&nw_interface.itree, "redundancy: fix_integrity")?
             .iter()
             .filter_map(|(ino, inode)| {
                 eligible_to_apply(
@@ -113,6 +165,7 @@ async fn check_integrity(
                 )
             })
             .collect();
+
     let futures = selected_files
         .iter()
         .map(|ino| apply_to(nw_interface, fs_interface, peers, ino.clone()))
@@ -129,7 +182,7 @@ async fn check_integrity(
 
     if errors.len() > 0 {
         log::error!(
-            "Redundancy::check_integrity: {} errors reported ! See below:",
+            "Redundancy::fix_integrity: {} errors reported ! See below:",
             errors.len()
         );
         errors.iter().for_each(|e| log::error!("{e}"));
