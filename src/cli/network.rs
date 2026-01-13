@@ -1,8 +1,8 @@
 use interprocess::local_socket::tokio::Stream;
 
 use crate::{
+    cli::commands::{check, generate, gethosts, inspect, new, remove, show, status, tree},
     cli::{CliCommand, ConfigCommand},
-    ipc::cli::commands::{check, generate, gethosts, inspect, new, remove, show, status, tree},
 };
 
 type Answer = String;

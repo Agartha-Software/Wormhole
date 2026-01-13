@@ -1,12 +1,11 @@
+use interprocess::local_socket::tokio::Stream;
 use std::io;
 
-use interprocess::local_socket::tokio::Stream;
-
 use crate::{
+    cli::connection::{recieve_answer, send_command},
     cli::IdentifyPodArgs,
     ipc::{
         answers::TreeAnswer,
-        cli::connection::{recieve_answer, send_command},
         commands::{Command, PodId},
     },
 };

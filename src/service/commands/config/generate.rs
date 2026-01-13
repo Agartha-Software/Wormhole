@@ -5,11 +5,9 @@ use crate::cli::ConfigType;
 use crate::config::local_file::LocalConfigFile;
 use crate::config::types::Config;
 use crate::config::GlobalConfig;
-use crate::ipc::service::commands::find_pod;
-use crate::ipc::{
-    answers::GenerateConfigAnswer, commands::PodId, service::connection::send_answer,
-};
+use crate::ipc::{answers::GenerateConfigAnswer, commands::PodId};
 use crate::pods::pod::Pod;
+use crate::service::{commands::find_pod, connection::send_answer};
 
 fn write_defaults(
     path: PathBuf,

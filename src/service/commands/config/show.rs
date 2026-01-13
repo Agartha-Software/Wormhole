@@ -5,12 +5,9 @@ use serde::Serialize;
 
 use crate::{
     cli::ConfigType,
-    ipc::{
-        answers::ShowConfigAnswer,
-        commands::PodId,
-        service::{commands::find_pod, connection::send_answer},
-    },
+    ipc::{answers::ShowConfigAnswer, commands::PodId},
     pods::{itree::LOCK_TIMEOUT, pod::Pod},
+    service::{commands::find_pod, connection::send_answer},
 };
 
 async fn locking_config_to_string<Conf>(

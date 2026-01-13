@@ -3,10 +3,10 @@ use std::io;
 use interprocess::local_socket::tokio::Stream;
 
 use crate::{
+    cli::connection::{recieve_answer, send_command},
     cli::{ConfigType, GenerateConfigArgs},
     ipc::{
         answers::GenerateConfigAnswer,
-        cli::connection::{recieve_answer, send_command},
         commands::{Command, PodId},
     },
 };

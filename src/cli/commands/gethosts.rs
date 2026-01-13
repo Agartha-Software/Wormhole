@@ -1,12 +1,9 @@
+use interprocess::local_socket::tokio::Stream;
 use std::io;
 
-use crate::{cli::GetHostsArgs, ipc::answers::GetHostsAnswer, ipc::commands::GetHostsRequest};
-use interprocess::local_socket::tokio::Stream;
-
-use crate::ipc::{
-    cli::connection::{recieve_answer, send_command},
-    commands::Command,
-};
+use crate::cli::connection::{recieve_answer, send_command};
+use crate::ipc::commands::{Command, GetHostsRequest};
+use crate::{cli::GetHostsArgs, ipc::answers::GetHostsAnswer};
 
 pub async fn gethosts(args: GetHostsArgs, mut stream: Stream) -> Result<String, io::Error> {
     send_command(

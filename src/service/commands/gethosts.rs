@@ -2,11 +2,10 @@ use std::collections::HashMap;
 use std::io;
 
 use crate::ipc::error::IoError;
-use crate::ipc::{
-    answers::GetHostsAnswer, commands::GetHostsRequest, service::connection::send_answer,
-};
+use crate::ipc::{answers::GetHostsAnswer, commands::GetHostsRequest};
 use crate::pods::pod::{Pod, PodInfoError};
 use crate::pods::whpath::WhPath;
+use crate::service::connection::send_answer;
 
 pub async fn gethosts<Stream>(
     req: GetHostsRequest,

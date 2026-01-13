@@ -3,12 +3,9 @@ use std::collections::HashMap;
 use crate::{
     cli::ConfigType,
     config::{local_file::LocalConfigFile, types::Config, GlobalConfig},
-    ipc::{
-        answers::CheckConfigAnswer,
-        commands::PodId,
-        service::{commands::find_pod, connection::send_answer},
-    },
+    ipc::{answers::CheckConfigAnswer, commands::PodId},
     pods::pod::Pod,
+    service::{commands::find_pod, connection::send_answer},
 };
 
 pub async fn check<Stream>(

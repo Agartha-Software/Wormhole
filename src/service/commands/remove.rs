@@ -1,12 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    ipc::{
-        answers::RemoveAnswer,
-        commands::RemoveRequest,
-        service::{commands::find_pod, connection::send_answer},
-    },
+    ipc::{answers::RemoveAnswer, commands::RemoveRequest},
     pods::{pod::Pod, save::delete_saved_pod},
+    service::{commands::find_pod, connection::send_answer},
 };
 
 pub async fn remove<Stream>(

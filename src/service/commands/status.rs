@@ -1,4 +1,5 @@
-use crate::ipc::{answers::StatusAnswer, service::connection::send_answer};
+use crate::ipc::answers::StatusAnswer;
+use crate::service::connection::send_answer;
 
 pub async fn status<Stream>(
     stream: &mut either::Either<&mut Stream, &mut String>,

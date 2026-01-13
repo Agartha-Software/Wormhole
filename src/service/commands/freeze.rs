@@ -1,4 +1,5 @@
-use crate::ipc::{answers::FreezeAnswer, commands::PodId, service::connection::send_answer};
+use crate::ipc::{answers::FreezeAnswer, commands::PodId};
+use crate::service::connection::send_answer;
 
 pub async fn freeze<Stream>(
     _: PodId,
