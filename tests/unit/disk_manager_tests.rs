@@ -2,7 +2,12 @@
 use std::os::unix::fs::PermissionsExt;
 
 use assert_fs::{assert::PathAssert, prelude::PathChild};
-use wormhole::pods::disk_managers::{unix_disk_manager::UnixDiskManager, DiskManager};
+#[cfg(target_os = "linux")]
+use wormhole::pods::disk_managers::unix_disk_manager::UnixDiskManager;
+#[cfg(target_os = "windows")]
+use wormhole::pods::disk_managers::windows_disk_manager::WindowsDiskManager;
+
+use wormhole::pods::disk_managers::DiskManager;
 
 pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::path::Path>>(
     disk: &D,
@@ -170,6 +175,7 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 pub fn test_unix_disk() {
     let temp_dir = assert_fs::TempDir::new().expect("creating temp dir");
     let disk = UnixDiskManager::new(&temp_dir.path()).expect("creating disk manager");
@@ -179,12 +185,12 @@ pub fn test_unix_disk() {
 
 #[test]
 #[cfg(target_os = "windows")]
-pub fn test_unix_disk() {
+pub fn test_windows_disk() {
     let temp_dir = assert_fs::TempDir::new().expect("creating temp dir");
 
     let mountpoint = temp_dir.child("wormhole");
-    mountpoint.create_dir_all();
-    let disk = UnixDiskManager::new(&mountpoint.path()).expect("creating disk manager");
+    assert_fs::prelude::PathCreateDir::create_dir_all(&mountpoint).expect("creating mounting dir");
+    let disk = WindowsDiskManager::new(&mountpoint.path()).expect("creating disk manager");
     let temp_dir = temp_dir.child(".wormhole");
 
     test_generic_disk(&disk, &temp_dir);

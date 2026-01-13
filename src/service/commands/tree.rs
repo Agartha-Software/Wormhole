@@ -24,7 +24,7 @@ fn get_tree(pod: &Pod, path: Option<&WhPath>) -> TreeAnswer {
 pub async fn tree<Stream>(
     args: PodId,
     pods: &HashMap<String, Pod>,
-    stream: &mut Stream,
+    stream: &mut either::Either<&mut Stream, &mut String>,
 ) -> std::io::Result<bool>
 where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,

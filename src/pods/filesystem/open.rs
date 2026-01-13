@@ -97,8 +97,8 @@ impl FsInterface {
         flags: OpenFlags,
         access: AccessMode,
     ) -> Result<UUID, OpenError> {
-        let meta = ITree::n_read_lock(&self.itree, "open")?
-            .n_get_inode(ino)?
+        let meta = ITree::read_lock(&self.itree, "open")?
+            .get_inode(ino)?
             .meta
             .clone();
 

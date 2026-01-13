@@ -2,9 +2,11 @@ use crate::cli::{IdentifyNewPodGroup, IdentifyPodGroup};
 use clap::{ArgAction, ValueEnum};
 use clap::{Args, Subcommand};
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ValueEnum)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ValueEnum, TS)]
 #[clap(rename_all = "lower")]
+#[ts(export)]
 pub enum ConfigType {
     Local,
     Global,

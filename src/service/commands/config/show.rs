@@ -35,7 +35,7 @@ pub async fn show<Stream>(
     args: PodId,
     config_type: ConfigType,
     pods: &HashMap<String, Pod>,
-    stream: &mut Stream,
+    stream: &mut either::Either<&mut Stream, &mut String>,
 ) -> std::io::Result<bool>
 where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
