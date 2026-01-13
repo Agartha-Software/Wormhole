@@ -1,9 +1,9 @@
-use std::{net::SocketAddr, path::PathBuf};
+use std::{collections::HashMap, net::SocketAddr, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::{cli::ConfigType, ipc::error::IoError, pods::{disk_managers::DiskSizeInfo, itree::Hosts}};
+use crate::{cli::ConfigType, ipc::error::IoError, pods::{disk_managers::DiskSizeInfo, itree::Hosts, network::redundancy::RedundancyStatus}};
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -138,4 +138,13 @@ pub enum CheckConfigAnswer {
     InvalidGlobal(String),
     InvalidLocal(String),
     InvalidBoth(String, String),
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub enum RedundancyStatusAnswer {
+    // Status(<RedundancyStatus, total_of_files_for_this_status>)
+    Status(HashMap<RedundancyStatus, u64>),
+    PodNotFound,
+    InternalError,
 }

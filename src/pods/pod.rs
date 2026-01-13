@@ -8,7 +8,7 @@ use crate::data::tree_hosts::CliHostTree;
 use crate::error::{WhError, WhResult};
 #[cfg(target_os = "linux")]
 use crate::fuse::fuse_impl::mount_fuse;
-use crate::ipc::answers::{InspectInfo, PeerInfo, RedundancyInfo};
+use crate::ipc::answers::{InspectInfo, PeerInfo};
 use crate::network::message::{FromNetworkMessage, MessageContent, ToNetworkMessage};
 use crate::network::HandshakeError;
 #[cfg(target_os = "linux")]
@@ -556,9 +556,5 @@ impl Pod {
             mount: self.mountpoint.clone(),
             disk_space: self.fs_interface.disk.size_info().ok()
         }
-    }
-
-    pub fn get_redundancy_status() -> RedundancyInfo {
-
     }
 }

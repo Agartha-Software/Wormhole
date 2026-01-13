@@ -78,4 +78,5 @@ pub enum Command {
     CheckConfig(PodId, ConfigType),
     Status,
     ListPods,
+    RedundancyStatus(PodId),
 }

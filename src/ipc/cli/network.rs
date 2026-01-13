@@ -2,7 +2,7 @@ use interprocess::local_socket::tokio::Stream;
 
 use crate::{
     cli::{CliCommand, ConfigCommand},
-    ipc::cli::commands::{check, generate, gethosts, inspect, list_pods, new, remove, show, status, tree},
+    ipc::cli::commands::{check, generate, gethosts, inspect, list_pods, new, remove, show, status, tree, redundancy_status},
 };
 
 type Answer = String;
@@ -19,5 +19,6 @@ pub async fn command_network(cmd: CliCommand, stream: Stream) -> Result<Answer, 
         CliCommand::Config(ConfigCommand::Check(args)) => check(args, stream).await,
         CliCommand::Status => status(stream).await,
         CliCommand::ListPods => list_pods(stream).await,
+        CliCommand::RedundancyStatus(args) => redundancy_status(args, stream).await,
     }
 }

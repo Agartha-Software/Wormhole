@@ -4,7 +4,7 @@ use crate::{
     ipc::{
         commands::Command,
         service::commands::{
-            check, freeze, generate, gethosts, inspect, new, remove, show, status, tree, unfreeze, list_pods
+            check, freeze, generate, gethosts, inspect, new, remove, show, status, tree, unfreeze, list_pods, redundancy_status
         },
     },
     pods::pod::Pod,
@@ -122,5 +122,6 @@ where
         }
         Command::ShowConfig(pod_id, config_type) => show(pod_id, config_type, pods, stream).await,
         Command::CheckConfig(data, config_type) => check(data, config_type, pods, stream).await,
+        Command::RedundancyStatus(pod_id) => redundancy_status(pod_id, pods, stream).await,
     }
 }

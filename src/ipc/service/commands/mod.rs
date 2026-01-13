@@ -8,6 +8,7 @@ mod status;
 mod list_pods;
 mod tree;
 mod unfreeze;
+mod redundancy_status;
 
 pub use config::check::check;
 pub use config::generate::generate;
@@ -21,6 +22,7 @@ pub use status::status;
 pub use list_pods::list_pods;
 pub use tree::tree;
 pub use unfreeze::unfreeze;
+pub use redundancy_status::redundancy_status;
 
 use crate::ipc::commands::PodId;
 use crate::pods::pod::Pod;

@@ -9,6 +9,7 @@ use crate::{
     },
 };
 use futures_util::future::join_all;
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use tokio::{
     sync::mpsc::{unbounded_channel, UnboundedReceiver},
@@ -94,7 +95,7 @@ fn eligible_to_apply(
     }
 }
 
-#[derive(Eq, Hash, PartialEq, TS)]
+#[derive(Eq, Hash, PartialEq, Serialize, Deserialize, Debug, TS)]
 #[ts(export)]
 pub enum RedundancyStatus {
     NotRedundant,
@@ -104,7 +105,7 @@ pub enum RedundancyStatus {
 }
 
 // Lists the number of files that goes into each RedundancyStatus field
-pub async fn check_integrity(pod: &Pod) -> WhResult<HashMap<RedundancyStatus, u64>> {
+pub fn check_integrity(pod: &Pod) -> WhResult<HashMap<RedundancyStatus, u64>> {
     let target = pod.global_config.read().redundancy.number;
 
     let selected_files: Vec<(Ino, RedundancyStatus)> =
