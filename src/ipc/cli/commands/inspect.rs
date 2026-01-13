@@ -41,13 +41,25 @@ pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String
             \x20  Hostname:\t\t{}\n\
             \x20  Url:\t\t\t{}\n\
             \x20  Bound Address:\t{}\n\
-            \x20  Connected peers:\t{}",
+            \x20  Connected peers:\t{}\n\
+            \x20  Free space:\t{}\n\
+            \x20  Used space:\t{}\n\
+            \x20  Total space:\t{}",
             info.name,
             info.mount,
             info.hostname,
             info.public_url.unwrap_or("[ None ]".to_string()),
             info.bound_socket,
-            display_peers(info.connected_peers)
+            display_peers(info.connected_peers),
+            info.disk_space
+                .as_ref()
+                .map_or("Error".to_owned(), |s| s.free_size.to_string()),
+            info.disk_space
+                .as_ref()
+                .map_or("Error".to_owned(), |s| (s.total_size - s.free_size).to_string()),
+            info.disk_space
+                .as_ref()
+                .map_or("Error".to_owned(), |s| s.total_size.to_string()),
         )),
         InspectAnswer::PodNotFound => Err(io::Error::new(
             io::ErrorKind::NotFound,

@@ -3,7 +3,7 @@ use std::{net::SocketAddr, path::PathBuf};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::{cli::ConfigType, ipc::error::IoError, pods::itree::Hosts};
+use crate::{cli::ConfigType, ipc::error::IoError, pods::{disk_managers::DiskSizeInfo, itree::Hosts}};
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -81,6 +81,7 @@ pub struct InspectInfo {
     pub name: String,
     pub connected_peers: Vec<PeerInfo>,
     pub mount: PathBuf,
+    pub disk_space: Option<DiskSizeInfo>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
