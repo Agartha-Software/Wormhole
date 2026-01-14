@@ -6,8 +6,7 @@ use crate::{
     network::message::Address,
     pods::{
         itree::{
-            inode::{Ino, Inode, Metadata, ROOT},
-            FsEntry,
+            EntrySymlink, FsEntry, inode::{Ino, Inode, Metadata, ROOT}
         },
         whpath::{InodeName, InodeNameError, WhPath},
     },
@@ -435,15 +434,17 @@ fn index_folder_recursive(
     parent: Ino,
     path: &Path,
     host: &String,
+    mountpoint: &Path,
 ) -> io::Result<()> {
     for entry in fs::read_dir(path)? {
         let entry = entry.expect("error in filesystem indexion (1)");
-        let ftype = entry.file_type().expect("error in filesystem indexion (2)");
         let fname: InodeName = entry
             .file_name()
             .try_into()
             .map_err(|e: InodeNameError| e.to_io())?;
         let meta = entry.metadata()?;
+
+        let ftype = meta.file_type();
 
         let special_ino = ITree::get_special(fname.as_ref(), parent);
 
@@ -466,16 +467,27 @@ fn index_folder_recursive(
         #[cfg(target_os = "windows")]
         let perm_mode = WINDOWS_DEFAULT_PERMS_MODE;
 
+        let fs_entry = match ftype.try_into()? {
+            SimpleFileType::Directory => FsEntry::new_directory(),
+            SimpleFileType::File => FsEntry::new_directory(),
+            SimpleFileType::Symlink => {
+                let target = std::fs::read_link(entry.path());
+                log::info!("->: {target:#?}");
+                let link = EntrySymlink::parse(&target?, mountpoint);
+                match &link {
+                    Ok(link) => log::info!("->: {link:#?})"),
+                    Err(link) => log::info!("(fallback) ->: {link:#?})"),
+                }
+                FsEntry::Symlink(link.unwrap_or_else(|e| e))
+            },
+        };
+
         itree
             .add_inode(Inode::new(
                 fname.clone(),
                 parent,
                 used_ino,
-                if ftype.is_file() {
-                    FsEntry::File(vec![host.clone()])
-                } else {
-                    FsEntry::Directory(Vec::new())
-                },
+                fs_entry,
                 perm_mode,
             ))
             .map_err(io::Error::other)?;
@@ -486,20 +498,20 @@ fn index_folder_recursive(
             .map_err(io::Error::other)?;
 
         if ftype.is_dir() {
-            index_folder_recursive(itree, used_ino, &path.join(&fname), host)
+            index_folder_recursive(itree, used_ino, &path.join(&fname), host, mountpoint)
                 .expect("error in filesystem indexion (3)");
         };
     }
     Ok(())
 }
 
-pub fn generate_itree(path: &Path, host: &String) -> io::Result<ITree> {
-    if let Some(itree) = recover_serialized_itree(path) {
+pub fn generate_itree(mountpoint: &Path, host: &String) -> io::Result<ITree> {
+    if let Some(itree) = recover_serialized_itree(mountpoint) {
         Ok(itree)
     } else {
         let mut itree = ITree::new();
 
-        index_folder_recursive(&mut itree, ROOT, path, host)?;
+        index_folder_recursive(&mut itree, ROOT, mountpoint, host, mountpoint)?;
         Ok(itree)
     }
 }

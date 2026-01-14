@@ -46,6 +46,18 @@ impl From<&FsEntry> for SimpleFileType {
     }
 }
 
+impl TryFrom<std::fs::FileType> for SimpleFileType {
+    type Error = std::io::Error;
+    fn try_from(entry: std::fs::FileType)-> Result<Self, Self::Error> {
+        match (entry.is_file(), entry.is_dir(), entry.is_symlink()) {
+            (true, false, false) => Ok(SimpleFileType::File),
+            (false, true, false) => Ok(SimpleFileType::Directory),
+            (false, false, true) => Ok(SimpleFileType::Symlink),
+            _ => Err(io::ErrorKind::PermissionDenied.into()),
+        }
+    }
+}
+
 /// Provides functions to allow primitive handlers like Fuse & WinFSP to
 /// interract with wormhole
 impl FsInterface {
