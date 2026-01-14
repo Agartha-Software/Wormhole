@@ -132,8 +132,8 @@ impl DiskManager for UnixDiskManager {
         link: &EntrySymlink,
     ) -> std::io::Result<()> {
         let target = link.target.resolve(&self.path, path);
-        self.handle.symlink(path, &target)?;
-        self.set_permisions(path, permissions)
+        self.handle.symlink(path, &target)
+        // self.set_permisions(path, permissions)
     }
 
     fn remove_symlink(&self, path: &WhPath) -> std::io::Result<()> {
