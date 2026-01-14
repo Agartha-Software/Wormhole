@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::{
     network::message::Address,
-    pods::{arbo::InodeId, whpath::WhPath},
+    pods::{itree::InodeId, whpath::WhPath},
 };
 
 pub type TreeLine = (u8, InodeId, WhPath, Vec<Address>); // (indentation_level, ino, path, hosts)

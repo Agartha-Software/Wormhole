@@ -2,7 +2,7 @@ use std::{ops::Deref, time::SystemTime};
 
 use fuser::{FileAttr, FileType, TimeOrNow};
 
-use crate::pods::{arbo::Metadata, filesystem::fs_interface::SimpleFileType};
+use crate::pods::{filesystem::fs_interface::SimpleFileType, itree::Metadata};
 
 impl Into<FileType> for SimpleFileType {
     fn into(self) -> FileType {

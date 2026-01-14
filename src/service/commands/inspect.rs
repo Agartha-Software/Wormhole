@@ -1,0 +1,24 @@
+use std::collections::HashMap;
+
+use crate::ipc::{answers::InspectAnswer, commands::PodId};
+use crate::pods::pod::Pod;
+use crate::service::commands::find_pod;
+use crate::service::connection::send_answer;
+
+pub async fn inspect<Stream>(
+    args: PodId,
+    pods: &HashMap<String, Pod>,
+    stream: &mut either::Either<&mut Stream, &mut String>,
+) -> std::io::Result<bool>
+where
+    Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
+{
+    match find_pod(&args, pods) {
+        Some((_, pod)) => {
+            send_answer(InspectAnswer::Information(pod.get_inspect_info()), stream).await?
+        }
+        None => send_answer(InspectAnswer::PodNotFound, stream).await?,
+    };
+
+    Ok(false)
+}

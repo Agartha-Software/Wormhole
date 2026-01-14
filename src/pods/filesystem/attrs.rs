@@ -5,12 +5,12 @@ use custom_error::custom_error;
 use crate::{
     error::WhError,
     pods::{
-        arbo::{Arbo, FsEntry, InodeId, Metadata, BLOCK_SIZE},
         filesystem::{
             file_handle::{AccessMode, FileHandleManager, UUID},
             fs_interface::FsInterface,
             permissions::has_write_perm,
         },
+        itree::{FsEntry, ITree, InodeId, Metadata, BLOCK_SIZE},
     },
 };
 
@@ -35,11 +35,11 @@ impl FsInterface {
         ino: InodeId,
         meta: Metadata,
     ) -> Result<(), AcknoledgeSetAttrError> {
-        let mut arbo = Arbo::n_write_lock(&self.arbo, "acknowledge_metadata")?;
-        let path = arbo.n_get_path_from_inode_id(ino)?;
-        let inode = arbo.n_get_inode_mut(ino)?;
+        let mut itree = ITree::write_lock(&self.itree, "acknowledge_metadata")?;
+        let path = itree.get_path_from_inode_id(ino)?;
+        let inode = itree.get_inode_mut(ino)?;
 
-        if meta.size != inode.meta.size || meta.perm != inode.meta.perm {
+        if meta != inode.meta {
             match &inode.entry {
                 FsEntry::Directory(_) if meta.size != inode.meta.size => {
                     return Err(AcknoledgeSetAttrError::WhError {
@@ -49,12 +49,27 @@ impl FsInterface {
                 FsEntry::Directory(_) => {
                     if meta.perm != inode.meta.perm {
                         self.disk
-                            .set_permisions(&path, meta.perm as u16)
+                            .set_permisions(&path, meta.perm)
                             .map_err(|io| AcknoledgeSetAttrError::SetFileSizeIoError { io })?;
                     }
                 }
                 FsEntry::File(hosts) => {
-                    if hosts.contains(&self.network_interface.hostname()?) {
+                    if hosts.contains(&self.network_interface.hostname) {
+                        let created = match &inode.entry {
+                            FsEntry::File(old_hosts) => {
+                                !old_hosts.contains(&self.network_interface.hostname)
+                            }
+                            _ => false,
+                        };
+                        if created {
+                            self.disk.new_file(&path, meta.perm).or_else(|io| {
+                                if io.kind() == std::io::ErrorKind::AlreadyExists {
+                                    Ok(())
+                                } else {
+                                    Err(AcknoledgeSetAttrError::SetFileSizeIoError { io })
+                                }
+                            })?;
+                        }
                         if meta.size != inode.meta.size {
                             self.disk
                                 .set_file_size(&path, meta.size as usize)
@@ -62,7 +77,7 @@ impl FsInterface {
                         }
                         if meta.perm != inode.meta.perm {
                             self.disk
-                                .set_permisions(&path, meta.perm as u16)
+                                .set_permisions(&path, meta.perm)
                                 .map_err(|io| AcknoledgeSetAttrError::SetFileSizeIoError { io })?;
                         }
                     }
@@ -70,10 +85,11 @@ impl FsInterface {
             }
         }
 
-        arbo.n_get_inode_mut(ino)?.meta = meta;
+        itree.get_inode_mut(ino)?.meta = meta;
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn setattr(
         &self,
         ino: InodeId,
@@ -87,10 +103,10 @@ impl FsInterface {
         file_handle: Option<UUID>,
         flags: Option<u32>,
     ) -> Result<Metadata, SetAttrError> {
-        let arbo = Arbo::n_read_lock(&self.arbo, "setattr")?;
-        let path = arbo.n_get_path_from_inode_id(ino)?;
-        let mut meta = arbo.n_get_inode(ino)?.meta.clone();
-        drop(arbo);
+        let itree = ITree::read_lock(&self.itree, "setattr")?;
+        let path = itree.get_path_from_inode_id(ino)?;
+        let mut meta = itree.get_inode(ino)?.meta.clone();
+        drop(itree);
 
         //Except for size, No permissions are required on the file itself, but permission is required on all of the directories in pathname that lead to the file.
 
@@ -125,7 +141,7 @@ impl FsInterface {
                         .set_file_size(&path, size as usize)
                         .map_err(|io| SetAttrError::SetFileSizeIoError { io })?;
                     meta.size = size;
-                    meta.blocks = (size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                    meta.blocks = size.div_ceil(BLOCK_SIZE);
                 }
             };
         }
@@ -168,6 +184,6 @@ impl FsInterface {
             meta.flags = flags;
         }
         self.network_interface.update_metadata(ino, meta.clone())?;
-        return Ok(meta);
+        Ok(meta)
     }
 }

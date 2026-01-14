@@ -1,6 +1,6 @@
 use std::{
     ffi::CString,
-    io::Read,
+    io::{Read, Seek, SeekFrom},
     os::{
         fd::{AsRawFd, RawFd},
         unix::fs::FileExt,
@@ -46,7 +46,7 @@ impl UnixDiskManager {
 
 impl UnixDiskManager {
     fn exist(&self, path: &WhPath) -> bool {
-        self.handle.metadata(path).is_ok()
+        path.as_str().is_empty() || self.handle.metadata(path).is_ok()
     }
 }
 
@@ -73,12 +73,12 @@ impl DiskManager for UnixDiskManager {
     }
 
     fn write_file(&self, path: &WhPath, binary: &[u8], offset: usize) -> io::Result<usize> {
-        let file = self.handle.append_file(path, 0o600)?; //  [openat::update_file]?
-        Ok(file.write_at(&binary, offset as u64)?) // NOTE - used "as" because into() is not supported
+        let file = self.handle.update_file(path, 0o600)?;
+        file.write_at(binary, offset as u64) // NOTE - used "as" because into() is not supported
     }
 
     fn set_file_size(&self, path: &WhPath, size: usize) -> io::Result<()> {
-        let file = self.handle.append_file(path, 0o600)?;
+        let file = self.handle.update_file(path, 0o600)?;
         file.set_len(size as u64)
     }
 
@@ -88,8 +88,9 @@ impl DiskManager for UnixDiskManager {
         self.handle.local_rename(path, new_path)
     }
 
-    fn read_file(&self, path: &WhPath, _offset: usize, buf: &mut [u8]) -> io::Result<usize> {
+    fn read_file(&self, path: &WhPath, offset: usize, buf: &mut [u8]) -> io::Result<usize> {
         let mut file = self.handle.open_file(path)?;
+        file.seek(SeekFrom::Start(offset as u64))?;
         file.read(buf)
     }
 
@@ -136,5 +137,18 @@ impl DiskManager for UnixDiskManager {
 
     fn file_exists(&self, path: &WhPath) -> bool {
         self.handle.open_file(path).is_ok()
+    }
+}
+
+mod test {
+    #[allow(unused_imports)] // clippy not properly detecting this is needed and used
+    use crate::pods::disk_managers::unix_disk_manager::UnixDiskManager;
+
+    #[test]
+    pub fn test_priv_unix_disk() {
+        let temp_dir = assert_fs::TempDir::new().expect("can't create temp dir");
+        let disk = UnixDiskManager::new(&temp_dir.path()).expect("creating disk manager");
+
+        assert!(disk.exist(&"".try_into().unwrap()));
     }
 }
