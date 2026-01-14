@@ -2,10 +2,12 @@ use interprocess::local_socket::tokio::Stream;
 use std::io;
 
 use crate::{
-    cli::connection::{recieve_answer, send_command},
-    cli::{ConfigType, IdentifyPodAndConfigArgs},
+    cli::{
+        connection::{recieve_answer, send_command},
+        ConfigType, IdentifyPodAndConfigArgs,
+    },
     ipc::{
-        answers::CheckConfigAnswer,
+        answers::{CheckConfigAnswer, ConfigFileError},
         commands::{Command, PodId},
     },
 };
@@ -27,27 +29,27 @@ pub async fn check(args: IdentifyPodAndConfigArgs, mut stream: Stream) -> io::Re
             io::ErrorKind::NotFound,
             "The given pod couldn't be found.",
         )),
-        CheckConfigAnswer::MissingGlobal => Err(io::Error::new(
+        CheckConfigAnswer::ConfigFileError(ConfigFileError::MissingGlobal) => Err(io::Error::new(
             io::ErrorKind::NotFound,
             "The given pod doesn't have a `global_config.toml` file to check.",
         )),
-        CheckConfigAnswer::MissingLocal => Err(io::Error::new(
+        CheckConfigAnswer::ConfigFileError(ConfigFileError::MissingLocal) => Err(io::Error::new(
             io::ErrorKind::NotFound,
             "The given pod doesn't have a `local_config.toml` file to check.",
         )),
-        CheckConfigAnswer::MissingBoth => Err(io::Error::new(
+        CheckConfigAnswer::ConfigFileError(ConfigFileError::MissingBoth) => Err(io::Error::new(
             io::ErrorKind::NotFound,
             "The given pod doesn't have a either a `local_config.toml` or a `global_config.toml` file to check.",
         )),
-        CheckConfigAnswer::InvalidGlobal(error) => Err(io::Error::new(
+        CheckConfigAnswer::ConfigFileError(ConfigFileError::InvalidGlobal(error)) => Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!("Global configuration validation failed:\n{error}"),
         )),
-        CheckConfigAnswer::InvalidLocal(error) => Err(io::Error::new(
+        CheckConfigAnswer::ConfigFileError(ConfigFileError::InvalidLocal(error)) => Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!("Local configuration validation failed:\n{error}"),
         )),
-        CheckConfigAnswer::InvalidBoth(local_error, global_error) => Err(io::Error::new(
+        CheckConfigAnswer::ConfigFileError(ConfigFileError::InvalidBoth(local_error, global_error)) => Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!("Local configuration validation failed:\n{local_error}\n\nGlobal configuration validation failed:\n{global_error}"),
         )),

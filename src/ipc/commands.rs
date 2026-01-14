@@ -77,5 +77,6 @@ pub enum Command {
     GenerateConfig(PodId, bool, ConfigType),
     ShowConfig(PodId, ConfigType),
     CheckConfig(PodId, ConfigType),
+    ApplyConfig(PodId, ConfigType),
     Status,
 }

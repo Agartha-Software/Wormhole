@@ -122,13 +122,27 @@ pub enum ShowConfigAnswer {
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub enum CheckConfigAnswer {
-    Success,
-    PodNotFound,
+pub enum ConfigFileError {
     MissingGlobal,
     MissingLocal,
     MissingBoth,
     InvalidGlobal(String),
     InvalidLocal(String),
     InvalidBoth(String, String),
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub enum CheckConfigAnswer {
+    Success,
+    PodNotFound,
+    ConfigFileError(ConfigFileError),
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub enum ApplyConfigAnswer {
+    Success,
+    PodNotFound,
+    ConfigFileError(ConfigFileError),
 }

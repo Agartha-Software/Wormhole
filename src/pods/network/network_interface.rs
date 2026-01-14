@@ -47,6 +47,7 @@ pub fn get_all_peers_address(peers: &Arc<RwLock<Vec<PeerIPC>>>) -> WhResult<Vec<
         .map(|peer| peer.hostname.clone())
         .collect::<Vec<String>>())
 }
+
 #[derive(Debug)]
 pub struct NetworkInterface {
     pub itree: Arc<RwLock<ITree>>,

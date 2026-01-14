@@ -6,6 +6,7 @@ use crate::config::local_file::LocalConfigFile;
 use crate::config::types::Config;
 use crate::config::GlobalConfig;
 use crate::ipc::{answers::GenerateConfigAnswer, commands::PodId};
+use crate::pods::itree::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME};
 use crate::pods::pod::Pod;
 use crate::service::{commands::find_pod, connection::send_answer};
 
@@ -16,7 +17,7 @@ fn write_defaults(
 ) -> Result<(), GenerateConfigAnswer> {
     if config_type.is_local() {
         let mut local_path = path.clone();
-        local_path.push(".local_config.toml");
+        local_path.push(LOCAL_CONFIG_FNAME);
 
         if !overwrite && local_path.exists() {
             return Err(GenerateConfigAnswer::CantOverwrite(ConfigType::Local));
@@ -28,7 +29,7 @@ fn write_defaults(
 
     if config_type.is_global() {
         let mut global_path = path.clone();
-        global_path.push(".global_config.toml");
+        global_path.push(GLOBAL_CONFIG_FNAME);
 
         if !overwrite && global_path.exists() {
             return Err(GenerateConfigAnswer::CantOverwrite(ConfigType::Global));
@@ -50,7 +51,7 @@ where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
 {
     let mut local_path = pod.get_mountpoint().clone();
-    local_path.push(".local_config.toml");
+    local_path.push(LOCAL_CONFIG_FNAME);
 
     if !overwrite && local_path.exists() {
         send_answer(
@@ -83,7 +84,7 @@ where
 {
     if let Ok(config) = GlobalConfig::read_lock(&pod.global_config, "Write global config command") {
         let mut global_path = pod.get_mountpoint().clone();
-        global_path.push(".global_config.toml");
+        global_path.push(GLOBAL_CONFIG_FNAME);
 
         if !overwrite && global_path.exists() {
             send_answer(
