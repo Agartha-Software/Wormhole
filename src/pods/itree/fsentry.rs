@@ -10,7 +10,11 @@ use serde::{Deserialize, Serialize};
 use crate::{
     error::{WhError, WhResult},
     network::message::Address,
-    pods::{filesystem::fs_interface::SimpleFileType, itree::Ino, whpath::WhPath},
+    pods::{
+        filesystem::fs_interface::SimpleFileType,
+        itree::Ino,
+        whpath::{WhPath, WhPathError},
+    },
 };
 
 pub type Hosts = Vec<Address>;
@@ -79,6 +83,30 @@ impl Default for EntrySymlink {
 }
 
 impl EntrySymlink {
+    /// Err(None) means the 'absolute' test failed
+    /// Err(Some(e)) is a parsing error of the target
+    pub fn from_absolute(target: &Path, mountpoint: &Path) -> Result<Self, Option<WhPathError>> {
+        target.is_absolute().then_some(()).ok_or_else(|| None)?;
+        let mut components = normalize(target);
+        let mut mp_components = mountpoint.iter();
+
+        // gradually matches each component of the mountpoint, untill only the internal portion remains
+        while let Some(m) = mp_components.next() {
+            if let Some(t) = components.next() {
+                if m == t {
+                    continue;
+                }
+            }
+            Err(None)?;
+        }
+        Ok(Self {
+            target: SymlinkPath::SymlinkPathAbsolute(
+                PathBuf::from_iter(components).try_into().map_err(Some)?,
+            ),
+            hint: None,
+        })
+    }
+
     /// Create a Symlink from a path, considering the mountpoint
     ///
     /// Note: because symlink targets are not checked, any failure results in
@@ -88,37 +116,18 @@ impl EntrySymlink {
     /// but the os will always treat it as an arbitrary OsString
     ///
     pub fn parse(target: &Path, mountpoint: &Path) -> Result<Self, Self> {
-        let failure = || Self {
+        let external = || Self {
             target: SymlinkPath::SymlinkPathExternal(target.to_owned()),
             hint: None,
         };
 
         if target.is_absolute() {
-            let components = normalize(target);
-            if components
-                .clone()
-                .zip(mountpoint.iter())
-                .all(|(a, b)| a == b)
-            {
-                Ok(Self {
-                    target: SymlinkPath::SymlinkPathAbsolute(
-                        WhPath::try_from(PathBuf::from_iter(
-                            components.skip(mountpoint.iter().count()),
-                        ))
-                        .map_err(|_| failure())?,
-                    ),
-                    hint: None,
-                })
-            } else {
-                Ok(Self {
-                    target: SymlinkPath::SymlinkPathExternal(target.into()),
-                    hint: None,
-                })
-            }
+            Self::from_absolute(target, mountpoint)
+                .or_else(|e| e.map(|_| external()).ok_or_else(|| external()))
         } else {
             Ok(Self {
                 target: SymlinkPath::SymlinkPathRelative(
-                    Utf8PathBuf::from_os_string(target.into()).map_err(|_| failure())?,
+                    Utf8PathBuf::from_os_string(target.into()).map_err(|_| external())?,
                 ),
                 hint: None,
             })
