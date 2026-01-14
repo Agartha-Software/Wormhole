@@ -89,7 +89,7 @@ where
         should_restart: local_config.general.restart.unwrap_or(true),
     };
 
-    let answer = match Pod::new(prototype, server).await {
+    let answer = match Pod::new(prototype, args.allow_other_users, server).await {
         Ok(pod) => {
             pods.insert(args.name, pod);
             println!("New pod created successfully, listening to '{bound_socket}'");

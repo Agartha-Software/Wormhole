@@ -624,15 +624,38 @@ impl Filesystem for FuseController {
             Err(OpenError::WhError { source }) => reply.error(source.to_libc()),
         };
     }
+
+    fn statfs(&mut self, _req: &Request<'_>, _ino: u64, reply: fuser::ReplyStatfs) {
+        match self.fs_interface.get_size_info() {
+            Ok(info) => {
+                let bsize = info.bsize as u64;
+                let blocks = (info.total_size as u64) / bsize;
+                let bfree = (info.free_size as u64) / bsize;
+
+                reply.statfs(
+                    blocks, bfree, bfree, info.files, // Total number of inodes (files)
+                    info.ffree, // Free inodes available
+                    info.bsize, // Block size in bytes
+                    255,        // namelen - maximum length of a file name
+                    info.bsize, // Fragment size (same as block size)
+                );
+            }
+            Err(e) => {
+                log::error!("statfs error: {}", e);
+                reply.error(libc::EIO);
+            }
+        }
+    }
 }
 
 pub fn mount_fuse(
     mount_point: &Path,
+    allow_other_users: bool,
     fs_interface: Arc<FsInterface>,
 ) -> io::Result<BackgroundSession> {
-    let options = vec![
+    let mut options = vec![
         MountOption::RW,
-        // MountOption::DefaultPermissions,
+        MountOption::DefaultPermissions,
         MountOption::FSName(format!(
             "wormhole@{}",
             mount_point
@@ -641,6 +664,9 @@ pub fn mount_fuse(
                 .to_string_lossy()
         )),
     ];
+    if allow_other_users {
+        options.push(MountOption::AllowOther);
+    };
     let ctrl = FuseController { fs_interface };
 
     fuser::spawn_mount2(ctrl, mount_point, &options)

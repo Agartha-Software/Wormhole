@@ -21,6 +21,7 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<String> {
         url,
         hostname,
         additional_hosts,
+        allow_other_users,
         listen_url,
         ip_address,
         port,
@@ -36,6 +37,7 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<String> {
         url,
         hostname,
         additional_hosts,
+        allow_other_users,
     };
     send_command(Command::New(request), &mut stream).await?;
 

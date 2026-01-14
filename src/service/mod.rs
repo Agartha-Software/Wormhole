@@ -52,7 +52,7 @@ impl Service {
                 .inspect_err(|err| eprintln!("Failed to delete saved pods: {:?}", err))
                 .ok()?;
         } else {
-            load_saved_pods(&mut pods, &socket)
+            load_saved_pods(&mut pods, args.allow_other_users, &socket)
                 .await
                 .inspect_err(|err| eprintln!("Failed to load saved pods: {:?}", err))
                 .ok()?;

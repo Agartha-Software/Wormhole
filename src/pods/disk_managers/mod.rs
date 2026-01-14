@@ -11,6 +11,9 @@ pub mod windows_disk_manager;
 pub struct DiskSizeInfo {
     pub free_size: usize,
     pub total_size: usize,
+    pub files: u64, // Total number of inodes (files)
+    pub ffree: u64, // Free inodes available
+    pub bsize: u32, // Block size in bytes
 }
 
 pub trait DiskManager: Send + Sync + Debug {

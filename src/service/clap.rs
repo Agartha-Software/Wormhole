@@ -11,4 +11,6 @@ pub struct ServiceArgs {
     pub socket: Option<String>,
     #[arg(short, long)]
     pub clean: bool,
+    #[arg(long)]
+    pub allow_other_users: bool,
 }

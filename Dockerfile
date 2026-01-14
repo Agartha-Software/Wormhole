@@ -9,14 +9,9 @@ ENV GIT_HASH=1
 
 RUN cargo build --release
 
-
-FROM debian
-
+FROM debian AS prod
 WORKDIR /wormhole
-
 COPY --from=builder /build/target/release/wormholed /bin/wormholed
 COPY --from=builder /build/target/release/wormhole /bin/wormhole
-
 RUN apt update && apt install -y fuse3
-
 CMD ["/bin/wormholed"]
