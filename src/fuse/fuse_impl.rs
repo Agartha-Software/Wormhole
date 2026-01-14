@@ -633,14 +633,11 @@ impl Filesystem for FuseController {
                 let bfree = (info.free_size as u64) / bsize;
 
                 reply.statfs(
-                    blocks,
-                    bfree,
-                    bfree,
-                    info.files,     // Total number of inodes (files)
-                    info.ffree,     // Free inodes available
-                    info.bsize,     // Block size in bytes
-                    255,         // namelen - maximum length of a file name
-                    info.bsize,  // Fragment size (same as block size)
+                    blocks, bfree, bfree, info.files, // Total number of inodes (files)
+                    info.ffree, // Free inodes available
+                    info.bsize, // Block size in bytes
+                    255,        // namelen - maximum length of a file name
+                    info.bsize, // Fragment size (same as block size)
                 );
             }
             Err(e) => {
