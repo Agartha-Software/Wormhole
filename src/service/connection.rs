@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use crate::service::{
     commands::{
-        check, freeze, generate, gethosts, inspect, new, remove, show, status, tree, unfreeze,
+        check, freeze, generate, gethosts, inspect, list_pods, new, redundancy_status, remove,
+        show, status, tree, unfreeze,
     },
     Service,
 };
@@ -107,6 +108,7 @@ where
     match command {
         Command::Unfreeze(pod_id) => unfreeze(pod_id, stream).await,
         Command::Status => status(stream).await,
+        Command::ListPods => list_pods(pods, stream).await,
         Command::Freeze(pod_id) => freeze(pod_id, stream).await,
         Command::New(request) => new(request, pods, stream).await,
         Command::GetHosts(request) => gethosts(request, pods, stream).await,
@@ -118,5 +120,6 @@ where
         }
         Command::ShowConfig(pod_id, config_type) => show(pod_id, config_type, pods, stream).await,
         Command::CheckConfig(data, config_type) => check(data, config_type, pods, stream).await,
+        Command::RedundancyStatus(pod_id) => redundancy_status(pod_id, pods, stream).await,
     }
 }

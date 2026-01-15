@@ -45,10 +45,14 @@ pub enum CliCommand {
     // Restore(PodConfArgs),
     /// Checks if the service is working
     Status,
+    // Lists all the pods
+    ListPods,
     // /// Start the service
     // Start,
     // /// Stops the service
     // Stop,
+    /// Display the redundancy status for all files
+    RedundancyStatus(IdentifyPodArgs),
 }
 
 fn canonicalize(path: PathBuf) -> std::io::Result<PathBuf> {

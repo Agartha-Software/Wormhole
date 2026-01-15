@@ -42,7 +42,7 @@ use super::itree::{InodeId, GLOBAL_CONFIG_INO, ITREE_FILE_FNAME, ITREE_FILE_INO}
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Pod {
-    network_interface: Arc<NetworkInterface>,
+    pub network_interface: Arc<NetworkInterface>,
     fs_interface: Arc<FsInterface>,
     mountpoint: PathBuf,
     pub peers: Arc<RwLock<Vec<PeerIPC>>>,
@@ -567,6 +567,7 @@ impl Pod {
             name: self.name.clone(),
             connected_peers: peers_data,
             mount: self.mountpoint.clone(),
+            disk_space: self.fs_interface.disk.size_info().ok(),
         }
     }
 }
