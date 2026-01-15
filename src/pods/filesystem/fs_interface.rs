@@ -48,7 +48,7 @@ impl From<&FsEntry> for SimpleFileType {
 
 impl TryFrom<std::fs::FileType> for SimpleFileType {
     type Error = std::io::Error;
-    fn try_from(entry: std::fs::FileType)-> Result<Self, Self::Error> {
+    fn try_from(entry: std::fs::FileType) -> Result<Self, Self::Error> {
         match (entry.is_file(), entry.is_dir(), entry.is_symlink()) {
             (true, false, false) => Ok(SimpleFileType::File),
             (false, true, false) => Ok(SimpleFileType::Directory),

@@ -6,7 +6,8 @@ use crate::{
     network::message::Address,
     pods::{
         itree::{
-            EntrySymlink, FsEntry, inode::{Ino, Inode, Metadata, ROOT}
+            inode::{Ino, Inode, Metadata, ROOT},
+            EntrySymlink, FsEntry,
         },
         whpath::{InodeName, InodeNameError, WhPath},
     },
@@ -479,7 +480,7 @@ fn index_folder_recursive(
                     Err(link) => log::info!("(fallback) ->: {link:#?})"),
                 }
                 FsEntry::Symlink(link.unwrap_or_else(|e| e))
-            },
+            }
         };
 
         itree
