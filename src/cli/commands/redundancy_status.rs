@@ -3,10 +3,10 @@ use std::{collections::HashMap, io};
 use interprocess::local_socket::tokio::Stream;
 
 use crate::{
+    cli::connection::{recieve_answer, send_command},
     cli::IdentifyPodArgs,
     ipc::{
         answers::RedundancyStatusAnswer,
-        cli::connection::{recieve_answer, send_command},
         commands::{Command, PodId},
     },
     pods::network::redundancy::RedundancyStatus,

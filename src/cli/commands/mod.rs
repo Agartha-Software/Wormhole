@@ -9,8 +9,6 @@ mod remove;
 mod status;
 mod tree;
 mod unfreeze;
-mod list_pods;
-mod redundancy_status;
 
 pub use config::check::check;
 pub use config::generate::generate;
@@ -23,5 +21,3 @@ pub use redundancy_status::redundancy_status;
 pub use remove::remove;
 pub use status::status;
 pub use tree::tree;
-pub use list_pods::list_pods;
-pub use redundancy_status::redundancy_status;
