@@ -22,7 +22,7 @@ impl fmt::Display for CliHostTree {
                         "{ident}[{ino}] {path:?}    ->    ({len}) {hosts:?}\n",
                     ));
                 }
-                FsEntry::Directory(_) => {},
+                FsEntry::Directory(_) => {}
                 FsEntry::Symlink(symlink) => {
                     let target = &symlink.target;
                     output.push_str(&format!("{ident}[{ino}] {path:?}    ->    {target}\n",));
