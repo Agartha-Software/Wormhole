@@ -5,6 +5,8 @@ const WRITE_BIT_FLAG: u16 = 0b010 << 6;
 // Inspired by [libc::S_IREAD]
 const READ_BIT_FLAG: u16 = 0b100 << 6;
 
+pub const SYMLINK_DEFAULT_PERMISSION: u16 = 0o777;
+
 pub fn has_execute_perm(perm: u16) -> bool {
     (perm & EXECUTE_BIT_FLAG) != 0
 }

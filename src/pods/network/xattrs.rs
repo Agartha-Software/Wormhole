@@ -2,13 +2,13 @@ use crate::{
     error::{WhError, WhResult},
     network::message::{MessageContent, ToNetworkMessage},
     pods::{
-        itree::{ITree, InodeId},
+        itree::{ITree, Ino},
         network::network_interface::NetworkInterface,
     },
 };
 
 impl NetworkInterface {
-    pub fn set_inode_xattr(&self, ino: InodeId, key: &str, data: Vec<u8>) -> WhResult<()> {
+    pub fn set_inode_xattr(&self, ino: Ino, key: &str, data: Vec<u8>) -> WhResult<()> {
         ITree::write_lock(&self.itree, "network_interface::get_inode_xattr")?.set_inode_xattr(
             ino,
             key,
@@ -24,12 +24,12 @@ impl NetworkInterface {
             }))
     }
 
-    pub fn recept_inode_xattr(&self, ino: InodeId, key: &str, data: Vec<u8>) -> WhResult<()> {
+    pub fn recept_inode_xattr(&self, ino: Ino, key: &str, data: Vec<u8>) -> WhResult<()> {
         ITree::write_lock(&self.itree, "network_interface::get_inode_xattr")?
             .set_inode_xattr(ino, key, data)
     }
 
-    pub fn remove_inode_xattr(&self, ino: InodeId, key: &str) -> WhResult<()> {
+    pub fn remove_inode_xattr(&self, ino: Ino, key: &str) -> WhResult<()> {
         ITree::write_lock(&self.itree, "network_interface::get_inode_xattr")?
             .remove_inode_xattr(ino, key)?;
 
@@ -42,7 +42,7 @@ impl NetworkInterface {
             }))
     }
 
-    pub fn recept_remove_inode_xattr(&self, ino: InodeId, key: &str) -> WhResult<()> {
+    pub fn recept_remove_inode_xattr(&self, ino: Ino, key: &str) -> WhResult<()> {
         ITree::write_lock(&self.itree, "network_interface::get_inode_xattr")?
             .remove_inode_xattr(ino, key)
     }

@@ -5,7 +5,10 @@ use std::{
 
 use tokio::io;
 
-use crate::{pods::whpath::WhPath, winfsp::winfsp_impl::aliased_path};
+use crate::{
+    pods::{filesystem::fs_interface::SimpleFileType, itree::EntrySymlink, whpath::WhPath},
+    winfsp::winfsp_impl::aliased_path,
+};
 
 use super::{DiskManager, DiskSizeInfo};
 
@@ -114,5 +117,30 @@ impl DiskManager for WindowsDiskManager {
 
     fn file_exists(&self, path: &WhPath) -> bool {
         std::fs::exists(&self.mount_point.join(path)).unwrap_or(false)
+    }
+
+    fn new_symlink(
+        &self,
+        path: &WhPath,
+        permissions: u16,
+        link: &EntrySymlink,
+    ) -> std::io::Result<()> {
+        // replace with a dummy file or folder
+        match link.hint {
+            Some(SimpleFileType::Directory) => self.new_dir(path, permissions),
+            _ => self.new_file(path, permissions),
+        }
+    }
+
+    fn remove_symlink(&self, path: &WhPath) -> std::io::Result<()> {
+        // replaced with a dummy file or folder
+        let path = self.mount_point.join(path);
+        if path.is_dir() {
+            std::fs::remove_dir(&path)
+        } else if path.is_file() {
+            std::fs::remove_file(&path)
+        } else {
+            Ok(())
+        }
     }
 }
