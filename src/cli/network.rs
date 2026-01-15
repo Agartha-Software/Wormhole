@@ -1,7 +1,10 @@
 use interprocess::local_socket::tokio::Stream;
 
 use crate::{
-    cli::commands::{check, generate, gethosts, inspect, new, remove, show, status, tree, list_pods, redundancy_status},
+    cli::commands::{
+        check, generate, gethosts, inspect, list_pods, new, redundancy_status, remove, show,
+        status, tree,
+    },
     cli::{CliCommand, ConfigCommand},
 };
 

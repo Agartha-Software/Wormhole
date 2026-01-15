@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use crate::service::{
     commands::{
-        check, freeze, generate, gethosts, inspect, new, remove, show, status, tree, unfreeze, redundancy_status, list_pods,
+        check, freeze, generate, gethosts, inspect, list_pods, new, redundancy_status, remove,
+        show, status, tree, unfreeze,
     },
     Service,
 };
