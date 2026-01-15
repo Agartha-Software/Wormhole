@@ -1,9 +1,10 @@
 use std::{net::IpAddr, path::PathBuf};
+use ts_rs::TS;
 
 use crate::{
     cli::config_clap::ConfigCommand,
-    ipc::service::socket::SOCKET_DEFAULT_NAME,
     pods::itree::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
+    service::socket::SOCKET_DEFAULT_NAME,
 };
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
@@ -151,10 +152,14 @@ pub struct NewArgs {
     /// Additional hosts to try to join from as a backup
     #[arg(raw = true)]
     pub additional_hosts: Vec<String>,
+    /// Allow other users to access the mounted pod
+    #[arg(short, long, default_value_t = false)]
+    pub allow_other_users: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ValueEnum)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ValueEnum, TS)]
 #[clap(rename_all = "lower")]
+#[ts(export)]
 pub enum Mode {
     /// Simply remove the pod from the network without losing any data from the network
     /// and leaving behind any data that was stored on the pod

@@ -78,6 +78,7 @@ pub fn delete_saved_pods(socket_address: &String) -> io::Result<()> {
 
 pub async fn load_saved_pods(
     pods: &mut HashMap<String, Pod>,
+    allow_other_users: bool,
     socket_address: &String,
 ) -> io::Result<()> {
     let path = local_data_path(socket_address);
@@ -120,7 +121,7 @@ pub async fn load_saved_pods(
         };
 
         let name = proto.name.clone();
-        match Pod::new(proto, server).await {
+        match Pod::new(proto, allow_other_users, server).await {
             Ok(pod) => pods.insert(name, pod),
             Err(err) => {
                 log::trace!("Failed to create the pod '{name}': {err}");

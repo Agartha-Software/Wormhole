@@ -1,0 +1,39 @@
+name: XFSTests
+
+on:
+  workflow_dispatch:
+    
+jobs:
+  run-xfstests:
+    name: Run XFS Tests inside Docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Tests with Docker Compose
+        run: |
+          docker compose -f docker-compose.test.yml up \
+            --build \
+            --attach xfstests-runner \
+            --exit-code-from xfstests-runner
+
+      - name: Extract Test Results on Failure
+        if: failure()
+        run: |
+          CONTAINER_ID=$(docker compose -f docker-compose.test.yml ps -q xfstests-runner)
+          docker cp $CONTAINER_ID:/opt/xfstests-dev/results ./test-results
+
+      - name: Upload Test Logs Artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xfstests-logs
+          path: ./test-results
+          retention-days: 5
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v

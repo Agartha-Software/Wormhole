@@ -17,6 +17,7 @@ use super::DiskManager;
 
 #[derive(Debug)]
 pub struct UnixDiskManager {
+    mountpoint: PathBuf,
     handle: Dir,
     path: PathBuf,
 }
@@ -38,6 +39,7 @@ impl UnixDiskManager {
         })?;
 
         Ok(Self {
+            mountpoint: mount_point.to_owned(),
             handle: Dir::open(mount_point)?,
             path: mount_point.into(),
         })
@@ -118,7 +120,21 @@ impl DiskManager for UnixDiskManager {
     }
 
     fn size_info(&self) -> std::io::Result<super::DiskSizeInfo> {
-        todo!()
+        let parent = &self.mountpoint.parent().unwrap_or(&self.mountpoint);
+
+        // FIXME - xfstests is crashing when using real mountpoint path and not parent path
+        // Should be investigated
+        let free = fs2::free_space(parent)?;
+        let total = fs2::total_space(parent)?;
+
+        Ok(super::DiskSizeInfo {
+            free_size: free as usize,
+            total_size: total as usize,
+            files: 0,    // Will be filled by FsInterface
+            ffree: 0,    // Will be filled by FsInterface
+            bsize: 4096, // Standard block size
+        })
+        .inspect_err(|e| log::error!("UnixDiskManager::size_info Error on {:?}: {e}", parent))
     }
 
     fn file_exists(&self, path: &WhPath) -> bool {

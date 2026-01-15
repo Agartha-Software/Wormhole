@@ -296,4 +296,29 @@ impl FsInterface {
             .map_err(|_| crate::error::WhError::InodeNotFound)?;
         Ok(buff)
     }
+
+    //REVIEW - I don't really like to lock the arbo here, but it's the only way to get the inode countwithout just using an arbitrary high number
+    /// Get complete filesystem size information including inode counts
+    pub fn get_size_info(&self) -> io::Result<crate::pods::disk_managers::DiskSizeInfo> {
+        let mut disk_info = self.disk.size_info()?;
+
+        let itree = ITree::read_lock(&self.itree, "fs_interface::get_size_info").map_err(|_| {
+            io::Error::other(crate::error::WhError::WouldBlock {
+                called_from: "fs_interface::get_size_info".to_string(),
+            })
+        })?;
+        let files = itree.iter().count() as u64;
+        let next_ino = itree.next_ino.start;
+
+        let ffree = if next_ino < u64::MAX / 2 {
+            u64::MAX - next_ino
+        } else {
+            1_000_000_000
+        };
+
+        disk_info.files = files;
+        disk_info.ffree = ffree;
+
+        Ok(disk_info)
+    }
 }
