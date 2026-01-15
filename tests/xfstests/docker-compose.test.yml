@@ -1,0 +1,15 @@
+services:
+  xfstests-runner:
+    build:
+      context: ../..
+      dockerfile: tests/xfstests/Dockerfile
+      target: test
+    
+    command: /tests/run_xfstests_docker.sh
+    
+    devices:
+      - '/dev/fuse:/dev/fuse'
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - "apparmor:unconfined"
