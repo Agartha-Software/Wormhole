@@ -81,7 +81,7 @@ impl FsInterface {
             if special_ino.is_some() {
                 return Err(MakeInodeError::ProtectedNameIsFolder);
             }
-            *hosts = vec![self.network_interface.hostname()?.clone()];
+            *hosts = vec![self.network_interface.hostname.clone()];
         }
 
         let new_inode_id = special_ino

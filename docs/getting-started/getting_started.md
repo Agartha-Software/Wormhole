@@ -1,106 +1,113 @@
-# Getting Started
+# Getting Started with Wormhole
 
 Follow these steps to set up a basic Wormhole network on your machine.
 
-Wormhole uses two binaries:
- - "wormholed" the node managing the different pods
- - "womrhole" the command line interface, acting as an interface with the node
+Wormhole comes with two binaries:
 
- Wormhole being still in heavy developpement, the project still require to build the project from source.
+- `wormholed`: the daemon (service) that manages pods and storage.
+- `wormhole`: the command-line interface (CLI) to interact with the daemon.
 
-## Install
-See the [install guide](./install.md). This is the simplest way to directly install Wormhole
+Since the project is still under active development, you need to build it from source.
 
-## Build for source
-If the [install guide](./install.md) does not cover your system.
+## Installation
+
+See the [Installation Guide](./install.md) for system-specific instructions.
+
+If you need to build manually:
+
 ### Prerequisites
 
-- [Rust](https://www.rust-lang.org/tools/install) installed.
-- Clone the source code.
-- Optional: [Docker](https://docs.docker.com/get-docker/) for containerized deployment.
+- **Rust** (latest stable).
+- **libfuse3-dev** and **pkg-config** (on Debian/Ubuntu: `apt install libfuse3-dev pkg-config`).
 
-### How to build
+### Building
 
-Run cargo build command:
-```
+Run the following command at the project root:
+
+```sh
 cargo build --release
 ```
 
-Move the binaries where needed, they can be found under `target/release/wormhole` and `target/release/wormholed`
+The resulting binaries will be located at:
 
-## How to run
+- `target/release/wormhole`
+- `target/release/wormholed`
 
-Launch a new service, the node is started automatically
-```
-wormholed
-^--------
-deamon   
-```
+## Running and Usage
 
-Create a new Wormhole network
-The new pod being created with any other connection it will automaticaly create a new network
-```
-./wormhole  new      my_pod    -m dir1/   -p 5555
-^---------  ^--      ^-----    ^-------   ^-----------------
-CLI helper  Command  Pod Name  optional   Pod port
-                               mount path
+### 1. Start the service
 
-```
+Start the daemon in a dedicated terminal. It must remain running.
 
-Join an existing Wormhole network
-```
-./wormhole new my_pod2 -m dir2/ -p 5556 -u 127.0.0.1:5555
-                                        ^-----------------
-                                        Existing pod url
-```
-
-Check help menus to see more:
 ```sh
-./wormhole --help # general help
-./wormhole new --help # help for command "new"
+./wormholed
 ```
 
-### For easy testing, go check the [Docker Guide](docs/getting-started/docker_guide.md).
+### 2. Create a network (First node)
 
----
+In another terminal, create your first "Pod". If you do not provide a URL for another pod, this initializes a new network.
 
-## CLI Commands Overview
-
-To continue going forward, you can check the cli help menu:
-
-```
-Usage: wormhole [OPTIONS] <COMMAND>
-
-Commands:
-  new        Create a new pod and if possible join a network, otherwise create a new one
-  inspect    Inspect the basic informations of a given pod
-  get-hosts  Get the hosts of a given file
-  tree       Display the file tree at a given pod or path and show the hosts for each files
-  remove     Remove a pod from its network and stop it
-  status     Checks if the service is working
-  help       Print this message or the help of the given subcommand(s)
-
-Options:
-  -s, --socket <SOCKET>  Specify a specific service socket in case of multiple services running [default: wormhole.sock]
-  -h, --help             Print help
-  -V, --version          Print version
+```sh
+# Syntax: wormhole new <POD_NAME> -m <MOUNT_POINT> -p <PORT>
+./wormhole new my_pod1 -m ./shared_folder1 -p 5555
 ```
 
-## More info
-Both the client and daemon programs are fully documented, you can pass --help to any command or subcommand for more info:
-```
-wormhole --help
-wormhole new --help
+### 3. Join an existing network
 
-wormholed --help
+To connect another machine (or another folder on the same machine) to the network, use the `-u` (url) option to point to the first pod.
+
+```sh
+./wormhole new my_pod2 -m ./shared_folder2 -p 5556 -u 127.0.0.1:5555
+```
+
+> **Note**: If testing locally, make sure to use different ports and mount folders.
+
+## CLI commands
+
+Available commands via the `wormhole` tool. Use `--help` on any command for details.
+
+| Command   | Description                                                              |
+| ---------- | ------------------------------------------------------------------------ |
+| new        | Create a new pod. Joins a network if `-u` is provided, otherwise creates one. |
+| status     | Check if the `wormholed` service responds correctly.                     |
+| inspect    | Show technical information about the current pod.                       |
+| tree       | Show the file tree and where files are stored (hosts).                  |
+| get-hosts  | Retrieve the list of machines that have a specific file.                |
+| freeze     | Freeze the pod: prevent file modifications (read-only).                 |
+| unfreeze   | Unfreeze the pod: allow modifications again.                            |
+| remove     | Remove a pod from the network and stop it cleanly.                      |
+
+### Example usage
+
+```sh
+./wormhole tree
+./wormhole freeze
 ```
 
 ## Configuration
 
-You network can by configured futher by the configuration file.
-
-You can configure the [local network configuration](../../docs/technical/configuration/local_conf.md) which is pod specific and not replicated.
-Or you can configure the [global network configuration](../../docs/technical/configuration/global_conf.md) which is for the whole network and replicated.
+You can configure your network using TOML files.
 
 > [!WARNING]
-> /!\ Not all of theses configuration settings are implemented yet /!\
+> Configuration is a work in progress. Some options may not yet be active.
+
+### Example configuration file (config.toml)
+
+Options currently supported by the code:
+
+```toml
+# Global configuration (shared on the network)
+[general]
+name = "MyWormholeNetwork"
+# List of known entry points to join the network
+entrypoints = ["127.0.0.1:5000", "192.168.1.15:5555"]
+
+# Redundancy configuration
+[redundancy]
+# Number of copies of each file to keep on the network
+number = 2
+```
+
+### Local configuration
+
+The local configuration (LocalConfig) handles machine-specific settings, like hostname or public URL, but these settings are usually handled automatically when creating the pod via the `new` command.

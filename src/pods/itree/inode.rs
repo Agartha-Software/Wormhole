@@ -64,7 +64,7 @@ impl Inode {
     }
 }
 
-pub const WINDOWS_DEFAULT_PERMS_MODE: u16 = 666;
+pub const WINDOWS_DEFAULT_PERMS_MODE: u16 = 0o666;
 
 /* NOTE
  * is currently made with fuse in sight. Will probably need to be edited to be windows compatible

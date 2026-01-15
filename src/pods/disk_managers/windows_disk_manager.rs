@@ -3,8 +3,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use std::os::windows::fs as os_fs;
-
 use tokio::io;
 
 use crate::{
@@ -124,27 +122,22 @@ impl DiskManager for WindowsDiskManager {
         permissions: u16,
         link: &EntrySymlink,
     ) -> std::io::Result<()> {
-        let target = link.target.realize(&self.mount_point, path);
-
-        let hint = match std::fs::exists(&target) {
-            Ok(true) => {
-                if target.is_dir() {
-                    &Some(SimpleFileType::Directory)
-                } else {
-                    &Some(SimpleFileType::File)
-                }
-            }
-            _ => &link.hint,
-        };
-
-        if let Some(SimpleFileType::Directory) = hint {
-            os_fs::symlink_dir(&target, path)
-        } else {
-            os_fs::symlink_file(&target, path)
+        // replace with a dummy file or folder
+        match link.hint {
+            Some(SimpleFileType::Directory) => self.new_dir(path, permissions),
+            _ => self.new_file(path, permissions),
         }
     }
 
     fn remove_symlink(&self, path: &WhPath) -> std::io::Result<()> {
-        std::fs::remove_file(path)
+        // replaced with a dummy file or folder
+        let path = self.mount_point.join(path);
+        if path.is_dir() {
+            std::fs::remove_dir(&path)
+        } else if path.is_file() {
+            std::fs::remove_file(&path)
+        } else {
+            Ok(())
+        }
     }
 }

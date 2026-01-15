@@ -11,6 +11,7 @@ use crate::{
             open::OpenError,
             read::ReadError,
             readdir::ReadDirError,
+            remove_inode::{RemoveFileError, RemoveInodeError},
             rename::RenameError,
             write::WriteError,
         },
@@ -30,8 +31,7 @@ use windows::Win32::{
         STATUS_OBJECT_PATH_NOT_FOUND, STATUS_PENDING, STATUS_POSSIBLE_DEADLOCK,
     },
     Storage::FileSystem::{
-        FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT,
-        FILE_WRITE_ATTRIBUTES, SYNCHRONIZE,
+        FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_DIRECTORY, FILE_WRITE_ATTRIBUTES, SYNCHRONIZE,
     },
 };
 use winfsp::{filesystem::FileInfo, FspError};
@@ -58,7 +58,7 @@ impl From<&Metadata> for FileInfo {
         let attributes = match value.kind {
             SimpleFileType::File => FILE_ATTRIBUTE_ARCHIVE,
             SimpleFileType::Directory => FILE_ATTRIBUTE_DIRECTORY,
-            SimpleFileType::Symlink => FILE_ATTRIBUTE_REPARSE_POINT,
+            SimpleFileType::Symlink => FILE_ATTRIBUTE_ARCHIVE, // pretend it's a .lnk link,
         };
         let now = FileTime::now();
         FileInfo {
@@ -220,6 +220,26 @@ impl From<CreateError> for FspError {
             CreateError::WhError { source } => source.into(),
             CreateError::MakeInode { source } => source.into(),
             CreateError::OpenError { source } => source.into(),
+        }
+    }
+}
+
+impl From<RemoveInodeError> for FspError {
+    fn from(value: RemoveInodeError) -> Self {
+        match value {
+            RemoveInodeError::WhError { source } => source.into(),
+            RemoveInodeError::NonEmpty => STATUS_DIRECTORY_NOT_EMPTY.into(),
+        }
+    }
+}
+
+impl From<RemoveFileError> for FspError {
+    fn from(value: RemoveFileError) -> Self {
+        match value {
+            RemoveFileError::WhError { source } => source.into(),
+            RemoveFileError::NonEmpty => STATUS_DIRECTORY_NOT_EMPTY.into(),
+            RemoveFileError::LocalDeletionFailed { io } => io.into(),
+            RemoveFileError::PermissionDenied => STATUS_ACCESS_DENIED.into(),
         }
     }
 }
