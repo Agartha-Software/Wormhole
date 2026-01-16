@@ -5,7 +5,7 @@ use crate::network::message::{MessageContent, ToNetworkMessage};
 use crate::pods::itree::{FsEntry, ITree};
 use crate::pods::network::callbacks::Request;
 use crate::pods::network::network_interface::NetworkInterface;
-use crate::{error::WhError, pods::itree::InodeId};
+use crate::{error::WhError, pods::itree::Ino};
 use custom_error::custom_error;
 use tokio::sync::mpsc;
 
@@ -33,7 +33,7 @@ impl NetworkInterface {
     /// This function panics if called within an asynchronous execution
     /// context.
     ///
-    pub fn pull_file_sync(&self, file: InodeId) -> Result<Option<Arc<Vec<u8>>>, PullError> {
+    pub fn pull_file_sync(&self, file: Ino) -> Result<Option<Arc<Vec<u8>>>, PullError> {
         let itree = ITree::read_lock(&self.itree, "pull file sync")?;
         let hosts = {
             if let FsEntry::File(hosts) = &itree.get_inode(file)?.entry {

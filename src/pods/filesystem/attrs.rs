@@ -7,10 +7,10 @@ use crate::{
     pods::{
         filesystem::{
             file_handle::{AccessMode, FileHandleManager, UUID},
-            fs_interface::FsInterface,
+            fs_interface::{FsInterface, SimpleFileType},
             permissions::has_write_perm,
         },
-        itree::{FsEntry, ITree, InodeId, Metadata, BLOCK_SIZE},
+        itree::{FsEntry, ITree, Ino, Metadata, BLOCK_SIZE},
     },
 };
 
@@ -28,11 +28,11 @@ custom_error! {pub AcknoledgeSetAttrError
 }
 
 impl FsInterface {
-    //fn get_inode_attributes(&self, ino: InodeId) -> WhResult<&Metadata> {}
+    //fn get_inode_attributes(&self, ino: Ino) -> WhResult<&Metadata> {}
 
     pub fn acknowledge_metadata(
         &self,
-        ino: InodeId,
+        ino: Ino,
         meta: Metadata,
     ) -> Result<(), AcknoledgeSetAttrError> {
         let mut itree = ITree::write_lock(&self.itree, "acknowledge_metadata")?;
@@ -45,13 +45,6 @@ impl FsInterface {
                     return Err(AcknoledgeSetAttrError::WhError {
                         source: WhError::InodeIsADirectory,
                     });
-                }
-                FsEntry::Directory(_) => {
-                    if meta.perm != inode.meta.perm {
-                        self.disk
-                            .set_permisions(&path, meta.perm)
-                            .map_err(|io| AcknoledgeSetAttrError::SetFileSizeIoError { io })?;
-                    }
                 }
                 FsEntry::File(hosts) => {
                     if hosts.contains(&self.network_interface.hostname) {
@@ -82,6 +75,13 @@ impl FsInterface {
                         }
                     }
                 }
+                _ => {
+                    if meta.perm != inode.meta.perm {
+                        self.disk
+                            .set_permisions(&path, meta.perm)
+                            .map_err(|io| AcknoledgeSetAttrError::SetFileSizeIoError { io })?;
+                    }
+                }
             }
         }
 
@@ -92,7 +92,7 @@ impl FsInterface {
     #[allow(clippy::too_many_arguments)]
     pub fn setattr(
         &self,
-        ino: InodeId,
+        ino: Ino,
         mode: Option<u32>,
         uid: Option<u32>,
         gid: Option<u32>,
@@ -129,6 +129,9 @@ impl FsInterface {
         }
         // Set size if size it's defined, take permission from the file handle if the
         if let Some(size) = size {
+            if meta.kind != SimpleFileType::File {
+                return Err(WhError::InodeIsADirectory.into());
+            }
             match fh_perm {
                 Some(perm) if perm != AccessMode::Write && perm != AccessMode::ReadWrite => {
                     return Err(SetAttrError::SizeNoPerm)

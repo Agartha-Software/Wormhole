@@ -3,19 +3,19 @@ use custom_error::custom_error;
 use crate::{
     error::WhError,
     pods::{
-        filesystem::permissions::has_write_perm,
         filesystem::{
             diffs::{Sig, Signature},
+            permissions::has_write_perm,
             File,
         },
-        itree::{FsEntry, ITree, Inode},
+        itree::{FsEntry, ITree, Ino, Inode},
         whpath::InodeName,
     },
 };
 
 use super::{
     file_handle::{AccessMode, FileHandleManager, OpenFlags, UUID},
-    fs_interface::{FsInterface, SimpleFileType},
+    fs_interface::FsInterface,
     open::{check_permissions, OpenError},
 };
 
@@ -38,14 +38,14 @@ custom_error! {pub CreateError
 impl FsInterface {
     pub fn create(
         &self,
-        parent_ino: u64,
+        parent_ino: Ino,
         name: InodeName,
-        kind: SimpleFileType,
+        entry: FsEntry,
         flags: OpenFlags,
         access: AccessMode,
         permissions: u16,
     ) -> Result<(Inode, UUID), CreateError> {
-        let inode = self.make_inode(parent_ino, name, permissions, kind)?;
+        let inode = self.make_inode(parent_ino, name, permissions, entry)?;
 
         let perm = check_permissions(flags, access, inode.meta.perm)?;
 
@@ -71,25 +71,24 @@ impl FsInterface {
     /// Immediately replicated to other peers
     pub fn make_inode(
         &self,
-        parent_ino: u64,
+        parent_ino: Ino,
         name: InodeName,
         permissions: u16,
-        kind: SimpleFileType,
+        mut entry: FsEntry,
     ) -> Result<Inode, MakeInodeError> {
-        let new_entry = match kind {
-            SimpleFileType::File => FsEntry::File(vec![self.network_interface.hostname.clone()]),
-            SimpleFileType::Directory => FsEntry::Directory(Vec::new()),
-        };
-
         let special_ino = ITree::get_special(name.as_ref(), parent_ino);
-        if special_ino.is_some() && kind != SimpleFileType::File {
-            return Err(MakeInodeError::ProtectedNameIsFolder);
+        if let FsEntry::File(hosts) = &mut entry {
+            if special_ino.is_some() {
+                return Err(MakeInodeError::ProtectedNameIsFolder);
+            }
+            *hosts = vec![self.network_interface.hostname.clone()];
         }
+
         let new_inode_id = special_ino
             .ok_or(())
             .or_else(|_| self.network_interface.get_next_inode())?;
 
-        let new_inode = Inode::new(name, parent_ino, new_inode_id, new_entry, permissions);
+        let new_inode = Inode::new(name, parent_ino, new_inode_id, entry, permissions);
 
         let new_path = {
             let itree = ITree::read_lock(&self.itree, "make inode")?;
@@ -110,14 +109,18 @@ impl FsInterface {
             new_path
         };
 
-        match kind {
-            SimpleFileType::File => self
+        match &new_inode.entry {
+            FsEntry::File(_) => self
                 .disk
                 .new_file(&new_path, new_inode.meta.perm)
                 .map_err(|io| MakeInodeError::LocalCreationFailed { io }),
-            SimpleFileType::Directory => self
+            FsEntry::Directory(_) => self
                 .disk
                 .new_dir(&new_path, new_inode.meta.perm)
+                .map_err(|io| MakeInodeError::LocalCreationFailed { io }),
+            FsEntry::Symlink(link) => self
+                .disk
+                .new_symlink(&new_path, new_inode.meta.perm, link)
                 .map_err(|io| MakeInodeError::LocalCreationFailed { io }),
         }?;
         self.network_interface
