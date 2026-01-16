@@ -1,11 +1,9 @@
 use std::collections::HashMap;
 
 use crate::service::{
-    commands::{
-        check, freeze, generate, gethosts, inspect, list_pods, new, redundancy_status, remove,
-        show, status, tree, unfreeze,
-    },
-    Service,
+    Service, commands::{
+        check, freeze, generate, gethosts, inspect, list_pods, new, redundancy_status, remove, show, stats_per_filetype, status, tree, unfreeze
+    }
 };
 use crate::{ipc::commands::Command, pods::pod::Pod};
 use either::Either;
@@ -121,5 +119,6 @@ where
         Command::ShowConfig(pod_id, config_type) => show(pod_id, config_type, pods, stream).await,
         Command::CheckConfig(data, config_type) => check(data, config_type, pods, stream).await,
         Command::RedundancyStatus(pod_id) => redundancy_status(pod_id, pods, stream).await,
+        Command::StatsPerFiletype(pod_id) => stats_per_filetype(pod_id, pods, stream).await,
     }
 }
