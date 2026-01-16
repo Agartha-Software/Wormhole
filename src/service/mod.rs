@@ -6,7 +6,7 @@ pub mod tcp;
 
 use crate::ipc::commands::Command;
 use crate::ipc::error::ListenerError;
-use crate::pods::pod::Pod;
+use crate::pods::pod::{Pod, PodPrototype};
 use crate::pods::save::{delete_saved_pods, load_saved_pods};
 use crate::service::clap::ServiceArgs;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
@@ -23,6 +23,7 @@ use tokio::sync::oneshot::{self, Sender};
 
 pub struct Service {
     pub pods: HashMap<String, Pod>,
+    pub frozen_pods: HashMap<String, PodPrototype>,
     pub socket: String,
     rest_service: tokio::task::JoinHandle<Result<(), std::io::Error>>,
     web_request_rx: Receiver<(Command, Sender<String>)>,
@@ -60,6 +61,7 @@ impl Service {
 
         Some(Service {
             pods,
+            frozen_pods: HashMap::new(),
             socket,
             rest_service,
             web_request_rx: rx,

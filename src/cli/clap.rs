@@ -24,10 +24,10 @@ pub struct Cli {
 pub enum CliCommand {
     /// Create a new pod and if possible join a network, otherwise create a new one
     New(NewArgs),
-    // /// Pause a given pod
-    // Freeze(IdentifyPodArgs),
-    // /// Restart a given pod
-    // UnFreeze(IdentifyPodArgs),
+    /// Pause a given pod
+    Freeze(IdentifyPodArgs),
+    /// Restart a given pod
+    UnFreeze(IdentifyPodArgs),
     /// Interact with the configuration of a pod (Write, Show, Validate)
     #[command(subcommand)]
     Config(ConfigCommand),

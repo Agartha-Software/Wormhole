@@ -147,7 +147,6 @@ impl PodPrototype {
 custom_error! {pub PodStopError
     WhError{source: WhError} = "{source}",
     ITreeSavingFailed{source: io::Error} = "Could not write itree to disk: {source}",
-    PodNotRunning = "No pod with this name was found running.",
     FileNotReadable{file: Ino, reason: String} = "Could not read file from disk: ({file}) {reason}",
     FileNotSent{file: Ino} = "No pod was able to receive this file before stopping: ({file})",
     #[cfg(target_os = "linux")]

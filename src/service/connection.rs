@@ -1,8 +1,6 @@
 use crate::ipc::commands::Command;
 use crate::service::{
-    commands::{
-        apply, check, freeze, generate, gethosts, inspect, new, show, status, tree, unfreeze,
-    },
+    commands::{apply, check, generate, gethosts, inspect, new, show, status, tree},
     Service,
 };
 use either::Either;
@@ -69,9 +67,9 @@ impl Service {
         Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
     {
         match command {
-            Command::Unfreeze(pod_id) => unfreeze(pod_id, stream).await,
+            Command::Unfreeze(pod_id) => self.unfreeze(pod_id, stream).await,
+            Command::Freeze(pod_id) => self.freeze(pod_id, stream).await,
             Command::Status => status(stream).await,
-            Command::Freeze(pod_id) => freeze(pod_id, stream).await,
             Command::New(request) => new(request, &mut self.pods, stream).await,
             Command::GetHosts(request) => gethosts(request, &mut self.pods, stream).await,
             Command::Inspect(pod_id) => inspect(pod_id, &mut self.pods, stream).await,

@@ -38,6 +38,10 @@ pub enum UnfreezeAnswer {
 #[ts(export)]
 pub enum FreezeAnswer {
     Success,
+    PodNotFound,
+    AlreadyFrozen,
+    PodBlock,
+    PodStopFailed(String),
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]

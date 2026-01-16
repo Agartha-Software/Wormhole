@@ -8,14 +8,29 @@ use crate::{
     ipc::commands::{Command, PodId},
 };
 
-pub async fn _freeze(args: IdentifyPodArgs, mut stream: Stream) -> Result<(), io::Error> {
+pub async fn freeze(args: IdentifyPodArgs, mut stream: Stream) -> io::Result<String> {
     let id = PodId::from(args);
 
-    send_command(Command::Unfreeze(id), &mut stream).await?;
+    send_command(Command::Freeze(id), &mut stream).await?;
     match recieve_answer::<FreezeAnswer>(&mut stream).await? {
         FreezeAnswer::Success => {
-            println!("Freeze is not yet implemented! You need to manually restart the service by hand... This feature is coming soon!");
-            Ok(())
+            Ok("Freeze is not yet implemented! You need to manually restart the service by hand... This feature is coming soon!".to_string())
         }
+        FreezeAnswer::PodNotFound => Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "The given pod couldn't be found.",
+        )),
+        FreezeAnswer::AlreadyFrozen => Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "The given pod is already frozen.",
+        )),
+        FreezeAnswer::PodBlock => Err(io::Error::new(
+            io::ErrorKind::WouldBlock,
+            "Failed to freeze pod, please retry.",
+        )),
+        FreezeAnswer::PodStopFailed(err) => Err(io::Error::new(
+            io::ErrorKind::Interrupted,
+            format!("The pod has been frozen but couldn't be stopped cleanly: {err}"),
+        )),
     }
 }

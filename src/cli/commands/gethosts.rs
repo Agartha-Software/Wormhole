@@ -5,7 +5,7 @@ use crate::cli::connection::{recieve_answer, send_command};
 use crate::ipc::commands::{Command, GetHostsRequest};
 use crate::{cli::GetHostsArgs, ipc::answers::GetHostsAnswer};
 
-pub async fn gethosts(args: GetHostsArgs, mut stream: Stream) -> Result<String, io::Error> {
+pub async fn gethosts(args: GetHostsArgs, mut stream: Stream) -> io::Result<String> {
     send_command(
         Command::GetHosts(GetHostsRequest { path: args.path }),
         &mut stream,
