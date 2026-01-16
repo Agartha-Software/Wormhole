@@ -157,7 +157,7 @@ pub struct Wave {
     pub blame: String,
 }
 
-fn unique_hostname(mut hostname: String, colliders: &Vec<String>) -> Option<String> {
+fn unique_hostname(mut hostname: String, colliders: &[String]) -> Option<String> {
     if !colliders.contains(&hostname) {
         return None;
     }
@@ -166,7 +166,7 @@ fn unique_hostname(mut hostname: String, colliders: &Vec<String>) -> Option<Stri
         if let Some((prefix, realname)) = hostname.split_once('.') {
             if let Ok(idx) = prefix.parse::<usize>() {
                 hostname = format!("{}.{}", idx + 1, realname);
-            } else if &prefix == &"" {
+            } else if prefix.is_empty() {
                 hostname = format!("1{}", hostname);
             } else {
                 hostname = format!("1.{}", hostname);
@@ -191,7 +191,7 @@ pub async fn accept(
     let handshake = match message {
         Ok(Message::Binary(bytes)) => bincode::deserialize::<Handshake>(&bytes).map_err(From::from),
         Ok(_) => Err(HandshakeError::InvalidHandshake),
-        Err(e) => Err(e.into()),
+        Err(e) => Err(e),
     };
 
     let result = match handshake {
@@ -205,11 +205,12 @@ pub async fn accept(
                     .map(|peer| (peer.hostname.clone(), peer.url.clone()))
                     .collect::<Vec<_>>();
 
-                let (hosts, urls) = [(network.hostname.clone(), network.public_url.clone())]
-                    .into_iter()
-                    .chain(url_pairs.into_iter())
-                    .inspect(|(h, u)| log::trace!("accept:h{h}, u{u:?}"))
-                    .unzip();
+                let (hosts, urls): (Vec<String>, _) =
+                    [(network.hostname.clone(), network.public_url.clone())]
+                        .into_iter()
+                        .chain(url_pairs.into_iter())
+                        .inspect(|(h, u)| log::trace!("accept:h{h}, u{u:?}"))
+                        .unzip();
                 let rename = unique_hostname(connect.hostname.clone(), &hosts);
 
                 if let Some(rename) = &rename {

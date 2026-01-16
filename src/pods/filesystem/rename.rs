@@ -41,7 +41,7 @@ impl FsInterface {
         let mut parent_path = itree.get_path_from_inode_id(parent)?;
 
         parent_path.push(name.into());
-        return Ok(parent_path);
+        Ok(parent_path)
     }
 
     fn rename_locally(
