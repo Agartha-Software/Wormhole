@@ -44,7 +44,7 @@ impl FsInterface {
         let inode = self.itree.read().get_inode(ino)?.clone();
         let tracking = match &inode.entry {
             FsEntry::File(tracking) => tracking,
-            FsEntry::Directory(_) => return Err(WhError::InodeIsADirectory.into()),
+            _ => return Err(WhError::InodeIsADirectory.into()),
         };
         if let Some((signature, dirty)) =
             handle.and_then(|h| h.signature.as_mut().map(|s| (s, &mut h.dirty)))

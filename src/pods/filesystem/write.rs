@@ -2,7 +2,7 @@ use std::{sync::Arc, time::SystemTime};
 
 use crate::{
     error::{WhError, WhResult},
-    pods::itree::{ITree, InodeId, Metadata, BLOCK_SIZE},
+    pods::itree::{ITree, Ino, Metadata, BLOCK_SIZE},
 };
 use custom_error::custom_error;
 use parking_lot::RwLockWriteGuard;
@@ -59,7 +59,7 @@ impl FsInterface {
     /// marks the file handle as dirty, but does not immediately send the change to other peers
     pub fn write(
         &self,
-        id: InodeId,
+        id: Ino,
         data: &[u8],
         offset: usize,
         file_handle: UUID,
@@ -80,7 +80,7 @@ impl FsInterface {
         Ok(written)
     }
 
-    fn affect_write_locally(&self, id: InodeId, new_size: usize) -> WhResult<Metadata> {
+    fn affect_write_locally(&self, id: Ino, new_size: usize) -> WhResult<Metadata> {
         let mut itree = ITree::write_lock(&self.itree, "network_interface.affect_write_locally")?;
         let inode = itree.get_inode_mut(id)?;
         let new_size = (new_size as u64).max(inode.meta.size);

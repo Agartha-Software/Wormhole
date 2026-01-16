@@ -3,12 +3,27 @@ use custom_error::custom_error;
 use crate::error::{WhError, WhResult};
 use crate::pods::filesystem::fs_interface::FsInterface;
 use crate::pods::filesystem::permissions::has_read_perm;
-use crate::pods::itree::{FsEntry, ITree, Ino, Metadata};
+use crate::pods::itree::{EntrySymlink, FsEntry, ITree, Ino, Metadata};
 
 custom_error! {
     pub ReadDirError
     PermissionError = "No permission to read",
     WhError{ source: WhError} = "{source}",
+}
+
+custom_error! {
+    pub ReadLinkError
+    NotALink = "Inode is not a link",
+    WhError{ source: WhError} = "{source}",
+}
+
+impl ReadLinkError {
+    pub fn to_libc(&self) -> i32 {
+        match self {
+            ReadLinkError::NotALink => libc::EINVAL,
+            ReadLinkError::WhError { source } => source.to_libc(),
+        }
+    }
 }
 
 impl FsInterface {
@@ -39,5 +54,15 @@ impl FsInterface {
         links.push((parent.id, "..".to_owned(), parent.meta));
         links.extend(children);
         Ok(links)
+    }
+
+    pub fn readlink(&self, ino: Ino) -> Result<EntrySymlink, ReadLinkError> {
+        let itree = ITree::read_lock(&self.itree, "fs_interface.read_dir")?;
+        let inode = itree.get_inode(ino)?;
+
+        match &inode.entry {
+            FsEntry::Symlink(symlink) => Ok(symlink.clone()),
+            _ => Err(ReadLinkError::NotALink),
+        }
     }
 }
