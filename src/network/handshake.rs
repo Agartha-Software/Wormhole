@@ -80,7 +80,7 @@ impl From<bincode::Error> for HandshakeError {
     }
 }
 
-const GIT_HASH: &'static str = env!("GIT_HASH");
+const GIT_HASH: &str = env!("GIT_HASH");
 
 #[derive(Deserialize, Serialize)]
 pub enum Handshake {

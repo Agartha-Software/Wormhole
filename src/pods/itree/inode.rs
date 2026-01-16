@@ -55,9 +55,9 @@ impl Inode {
 
         Self {
             parent: parent_ino,
-            id: id,
-            name: name,
-            entry: entry,
+            id,
+            name,
+            entry,
             meta,
             xattrs,
         }

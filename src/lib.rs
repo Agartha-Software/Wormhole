@@ -25,6 +25,6 @@ pub mod winfsp;
 pub const INSTANCE_PATH: &str = "%APPDATA%/local/wormhole";
 
 #[cfg(target_os = "linux")]
-pub const INSTANCE_PATH: &'static str = "/usr/local/share/wormhole/";
+pub const INSTANCE_PATH: &str = "/usr/local/share/wormhole/";
 #[cfg(target_os = "linux")]
 pub mod fuse;

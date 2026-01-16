@@ -96,8 +96,8 @@ impl From<std::io::Error> for IoError {
     }
 }
 
-impl Into<std::io::Error> for IoError {
-    fn into(self) -> std::io::Error {
-        std::io::Error::new(self.kind, self.error)
+impl From<IoError> for std::io::Error {
+    fn from(value: IoError) -> std::io::Error {
+        std::io::Error::new(value.kind, value.error)
     }
 }
