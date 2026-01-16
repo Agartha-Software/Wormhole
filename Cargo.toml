@@ -108,6 +108,7 @@ ts-rs = "11.1.0"
 axum = "0.8.8"
 either = "1.15.0"
 directories = "6.0.0"
+tower-http = {version = "0.6.8", features = ["cors"] }
 
 [dev-dependencies]
 assert_fs = "1.1.2"

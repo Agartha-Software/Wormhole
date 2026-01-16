@@ -9,6 +9,7 @@ use crate::ipc::error::ListenerError;
 use crate::pods::pod::Pod;
 use crate::pods::save::{delete_saved_pods, load_saved_pods};
 use crate::service::clap::ServiceArgs;
+use axum::http::Method;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use interprocess::local_socket::tokio::Listener;
 use interprocess::local_socket::traits::tokio::Listener as TokioListenerExt;
@@ -20,6 +21,7 @@ use tcp::new_tcp_listener;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::mpsc::{self, Receiver};
 use tokio::sync::oneshot::{self, Sender};
+use tower_http::cors::{Any, CorsLayer};
 
 pub struct Service {
     pub pods: HashMap<String, Pod>,
@@ -36,9 +38,14 @@ impl Service {
             .inspect_err(|err| eprintln!("{err}"))
             .ok()?;
         let (tx, rx) = mpsc::channel::<(Command, oneshot::Sender<String>)>(100);
+        let cors = CorsLayer::new()
+            .allow_methods([Method::GET, Method::POST])
+            .allow_origin(Any)
+            .allow_headers(Any);
         let rest_app: axum::Router = axum::Router::new()
             .route("/", axum::routing::post(rest_app_handler))
-            .with_state(tx);
+            .with_state(tx)
+            .layer(cors);
         let rest_service: tokio::task::JoinHandle<Result<(), std::io::Error>> =
             tokio::spawn(axum::serve(tcp_listener, rest_app).into_future());
 
