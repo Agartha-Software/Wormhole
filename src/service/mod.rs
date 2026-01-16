@@ -37,7 +37,7 @@ impl Service {
             .ok()?;
         let (tx, rx) = mpsc::channel::<(Command, oneshot::Sender<String>)>(100);
         let rest_app: axum::Router = axum::Router::new()
-            .route("/", axum::routing::get(rest_app_handler))
+            .route("/", axum::routing::post(rest_app_handler))
             .with_state(tx);
         let rest_service: tokio::task::JoinHandle<Result<(), std::io::Error>> =
             tokio::spawn(axum::serve(tcp_listener, rest_app).into_future());
