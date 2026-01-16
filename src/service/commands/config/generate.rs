@@ -51,7 +51,7 @@ where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
 {
     let mut local_path = pod.get_mountpoint().clone();
-    local_path.push(".local_config.toml");
+    local_path.push(LOCAL_CONFIG_FNAME);
 
     if !overwrite && local_path.exists() {
         send_answer(
