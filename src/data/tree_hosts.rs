@@ -1,11 +1,14 @@
 use std::fmt;
 
-use crate::{
-    network::message::Address,
-    pods::{itree::InodeId, whpath::WhPath},
-};
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
-pub type TreeLine = (u8, InodeId, WhPath, Vec<Address>); // (indentation_level, ino, path, hosts)
+use crate::{network::message::Address, pods::itree::InodeId};
+
+pub type TreeLine = (u8, InodeId, String, Vec<Address>); // (indentation_level, ino, path, hosts)
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct CliHostTree {
     pub lines: Vec<TreeLine>,
 }

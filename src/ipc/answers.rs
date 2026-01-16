@@ -5,6 +5,7 @@ use ts_rs::TS;
 
 use crate::{
     cli::ConfigType,
+    data::tree_hosts::CliHostTree,
     ipc::error::IoError,
     pods::{disk_managers::DiskSizeInfo, itree::Hosts, network::redundancy::RedundancyStatus},
 };
@@ -104,7 +105,7 @@ pub enum InspectAnswer {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub enum TreeAnswer {
-    Tree(String),
+    Tree(CliHostTree),
     PodNotFound,
     PodTreeFailed(IoError),
 }

@@ -490,7 +490,7 @@ impl ITree {
         let entry = &self.get_inode(ino)?.entry;
         let path = self.get_path_from_inode_id(ino)?;
         match entry {
-            FsEntry::File(hosts) => Ok(vec![(indentation, ino, path, hosts.clone())]),
+            FsEntry::File(hosts) => Ok(vec![(indentation, ino, path.to_string(), hosts.clone())]),
             FsEntry::Directory(children) => Ok(children
                 .iter()
                 .map(|c| self.recurse_tree(*c, indentation + 1))

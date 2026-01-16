@@ -10,7 +10,7 @@ fn get_tree(pod: &Pod, path: Option<&WhPath>) -> TreeAnswer {
     let tree = pod.get_file_tree_and_hosts(path);
 
     match tree {
-        Ok(tree) => TreeAnswer::Tree(tree.to_string()),
+        Ok(tree) => TreeAnswer::Tree(tree),
         Err(err) => {
             log::error!("Failed in an unexpected way when getting tree: {err}");
             TreeAnswer::PodTreeFailed(IoError {

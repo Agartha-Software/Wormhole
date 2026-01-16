@@ -16,7 +16,7 @@ pub async fn tree(args: IdentifyPodArgs, mut stream: Stream) -> io::Result<Strin
     send_command(Command::Tree(pod), &mut stream).await?;
 
     match recieve_answer::<TreeAnswer>(&mut stream).await? {
-        TreeAnswer::Tree(tree) => Ok(tree),
+        TreeAnswer::Tree(tree) => Ok(tree.to_string()),
         TreeAnswer::PodNotFound => Err(io::Error::new(
             io::ErrorKind::NotFound,
             "The given pod couldn't be found.",
