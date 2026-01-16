@@ -54,14 +54,14 @@ impl From<FromPathBufError> for WhPathError {
 impl WhPathError {
     pub fn to_io(&self) -> io::Error {
         match self {
-            WhPathError::NotRelative => io::Error::new(io::ErrorKind::Other, self.to_string()),
+            WhPathError::NotRelative => io::Error::other(self.to_string()),
             WhPathError::ConversionError { source } => {
                 io::Error::new(io::ErrorKind::InvalidData, source.to_string())
             }
             WhPathError::NotNormalized => {
                 io::Error::new(io::ErrorKind::InvalidFilename, self.to_string())
             }
-            WhPathError::InvalidOperation => io::Error::new(io::ErrorKind::Other, self.to_string()),
+            WhPathError::InvalidOperation => io::Error::other(self.to_string()),
         }
     }
 }
@@ -137,7 +137,7 @@ impl TryFrom<&Utf8Path> for WhPath {
     type Error = WhPathError;
 
     fn try_from(p: &Utf8Path) -> Result<Self, Self::Error> {
-        is_valid_for_whpath(&p)?;
+        is_valid_for_whpath(p)?;
 
         Ok(Self { inner: p.into() })
     }
@@ -161,9 +161,9 @@ impl TryFrom<&winfsp::U16CStr> for WhPath {
     }
 }
 
-impl Into<String> for WhPath {
-    fn into(self) -> String {
-        self.inner.into_string()
+impl From<WhPath> for String {
+    fn from(val: WhPath) -> String {
+        val.inner.into_string()
     }
 }
 
@@ -186,7 +186,7 @@ impl Deref for WhPath {
 }
 
 #[cfg(target_os = "linux")]
-impl<'a> AsPath for &'a WhPath {
+impl AsPath for &WhPath {
     type Buffer = CString;
     fn to_path(self) -> Option<CString> {
         CString::new(self.inner.as_str().as_bytes()).ok()
@@ -333,9 +333,9 @@ impl TryFrom<OsString> for InodeName {
     }
 }
 
-impl Into<String> for InodeName {
-    fn into(self) -> String {
-        self.0
+impl From<InodeName> for String {
+    fn from(val: InodeName) -> String {
+        val.0
     }
 }
 

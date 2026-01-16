@@ -43,6 +43,7 @@ pub const LOCAL_CONFIG_INO: u64 = 3;
 pub const LOCAL_CONFIG_FNAME: &str = ".local_config.toml";
 pub const ITREE_FILE_INO: u64 = 4;
 pub const ITREE_FILE_FNAME: &str = ".itree";
+pub const FIRST_INO: u64 = 11;
 
 // SECTION types
 pub type ITreeIndex = HashMap<Ino, Inode>;
@@ -58,14 +59,10 @@ pub const BLOCK_SIZE: u64 = 512;
 // !SECTION
 
 impl ITree {
-    pub fn first_ino() -> Ino {
-        return 11;
-    }
-
     pub fn new() -> Self {
         let mut itree: Self = Self {
             entries: HashMap::new(),
-            next_ino: Self::first_ino()..,
+            next_ino: FIRST_INO..,
         };
 
         itree.entries.insert(
@@ -158,7 +155,7 @@ impl ITree {
         self.iter()
             .filter_map(move |(_, inode)| match &inode.entry {
                 FsEntry::File(hosts) => {
-                    if hosts.len() == 1 && hosts.contains(&host) {
+                    if hosts.len() == 1 && hosts.contains(host) {
                         Some(inode)
                     } else {
                         None
@@ -168,7 +165,6 @@ impl ITree {
             })
     }
 
-    #[must_use]
     /// Insert a given [Inode] inside the local itree
     pub fn add_inode(&mut self, inode: Inode) -> Result<(), MakeInodeError> {
         if self.entries.contains_key(&inode.id) {
@@ -193,7 +189,6 @@ impl ITree {
         }
     }
 
-    #[must_use]
     /// Create a new [Inode] from the given parameters and insert it inside the local itree
     pub fn add_inode_from_parameters(
         &mut self,
@@ -236,7 +231,7 @@ impl ITree {
     pub fn remove_inode(&mut self, id: Ino) -> Result<Inode, RemoveInodeError> {
         let inode = self.get_inode(id)?;
         match &inode.entry {
-            FsEntry::Directory(children) if children.len() > 0 => {
+            FsEntry::Directory(children) if !children.is_empty() => {
                 return Err(RemoveInodeError::NonEmpty)
             }
             _ => {}
@@ -298,7 +293,6 @@ impl ITree {
         Ok(parent_path)
     }
 
-    #[must_use]
     pub fn get_inode_child_by_name(&self, parent: &Inode, name: &str) -> WhResult<&Inode> {
         if let Ok(children) = parent.entry.get_children() {
             for child in children.iter() {
@@ -314,12 +308,11 @@ impl ITree {
         }
     }
 
-    #[must_use]
     pub fn get_inode_from_path(&self, path: &WhPath) -> WhResult<&Inode> {
         let mut actual_inode = self.entries.get(&ROOT).expect("inode_from_path: NO ROOT");
 
         for name in path.iter() {
-            actual_inode = self.get_inode_child_by_name(&actual_inode, name)?;
+            actual_inode = self.get_inode_child_by_name(actual_inode, name)?;
         }
 
         Ok(actual_inode)
@@ -417,6 +410,12 @@ impl ITree {
                 .collect::<Vec<TreeLine>>()),
             entry => Ok(vec![(indentation, ino, path, entry.clone())]),
         }
+    }
+}
+
+impl Default for ITree {
+    fn default() -> ITree {
+        ITree::new()
     }
 }
 

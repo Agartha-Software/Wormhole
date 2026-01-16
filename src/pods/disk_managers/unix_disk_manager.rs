@@ -164,7 +164,7 @@ mod test {
     #[test]
     pub fn test_priv_unix_disk() {
         let temp_dir = assert_fs::TempDir::new().expect("can't create temp dir");
-        let disk = UnixDiskManager::new(&temp_dir.path()).expect("creating disk manager");
+        let disk = UnixDiskManager::new(temp_dir.path()).expect("creating disk manager");
 
         assert!(disk.exist(&"".try_into().unwrap()));
     }

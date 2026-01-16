@@ -4,7 +4,10 @@ use crate::{
     cli::ConfigType,
     config::{local_file::LocalConfigFile, types::Config, GlobalConfig},
     ipc::{answers::CheckConfigAnswer, commands::PodId},
-    pods::pod::Pod,
+    pods::{
+        itree::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
+        pod::Pod,
+    },
     service::{commands::find_pod, connection::send_answer},
 };
 
@@ -20,10 +23,10 @@ where
     match find_pod(&args, pods) {
         Some((_, pod)) => {
             let mut local_path = pod.get_mountpoint().clone();
-            local_path.push(".local_config.toml");
+            local_path.push(LOCAL_CONFIG_FNAME);
 
             let mut global_path = pod.get_mountpoint().clone();
-            global_path.push(".global_config.toml");
+            global_path.push(GLOBAL_CONFIG_FNAME);
 
             match (
                 local_path.exists() || !config_type.is_local(),

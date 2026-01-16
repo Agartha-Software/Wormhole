@@ -625,8 +625,10 @@ impl Filesystem for FuseController {
             }
         };
 
-        let mut flags = OpenFlags::default();
-        flags.exec = (mask & libc::X_OK) != 0;
+        let flags = OpenFlags {
+            exec: (mask & libc::X_OK) != 0,
+            ..Default::default()
+        };
         let mode = match mask & (libc::R_OK | libc::W_OK) {
             libc::F_OK => Ok(AccessMode::Void),
             libc::R_OK => Ok(AccessMode::Read),

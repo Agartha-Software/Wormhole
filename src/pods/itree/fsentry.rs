@@ -228,29 +228,25 @@ mod test {
         let internal_file2 = mount_point.child(folder).child("internal_file2");
 
         let external_file = std::path::absolute(&temp_dir)
-            .expect(&format!("{:?} should exist", temp_dir.path()))
+            .unwrap_or_else(|_| panic!("{:?} should exist", temp_dir.path()))
             .join("external_file");
 
         mount_point
-            .child(&link_path.parent().unwrap_or(WhPath::root()))
+            .child(link_path.parent().unwrap_or(WhPath::root()))
             .create_dir_all()
-            .expect(&format!(
-                "{:?} should be a valid path",
-                mount_point.child(&link_path).path()
-            ));
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{:?} should be a valid path",
+                    mount_point.child(&link_path).path()
+                )
+            });
 
-        std::fs::write(&internal_file, []).expect(&format!(
-            "parent of {:?} should exist",
-            internal_file.path()
-        ));
-        std::fs::write(&internal_file2, []).expect(&format!(
-            "parent of {:?} should exist",
-            internal_file.path()
-        ));
-        std::fs::write(&external_file, []).expect(&format!(
-            "parent of {:?} should exist",
-            external_file.as_path()
-        ));
+        std::fs::write(&internal_file, [])
+            .unwrap_or_else(|_| panic!("parent of {:?} should exist", internal_file.path()));
+        std::fs::write(&internal_file2, [])
+            .unwrap_or_else(|_| panic!("parent of {:?} should exist", internal_file2.path()));
+        std::fs::write(&external_file, [])
+            .unwrap_or_else(|_| panic!("parent of {:?} should exist", external_file.as_path()));
 
         let relative_link = EntrySymlink {
             target: SymlinkPath::SymlinkPathRelative("../internal_file".into()),

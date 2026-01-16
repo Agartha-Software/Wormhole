@@ -138,7 +138,6 @@ impl NetworkInterface {
         // Ok(())
     }
 
-    #[must_use]
     /// Add the requested entry to the itree and inform the network
     pub fn register_new_inode(&self, inode: Inode) -> Result<(), MakeInodeError> {
         ITree::write_lock(&self.itree, "register_new_inode")?.add_inode(inode.clone())?;
@@ -530,7 +529,9 @@ impl NetworkInterface {
                     peers_tx.iter().for_each(|(channel, address)| {
                         channel
                             .send((message_content.clone(), None))
-                            .expect(&format!("failed to send message to peer {}", address))
+                            .unwrap_or_else(|_| {
+                                panic!("failed to send message to peer {}", address)
+                            })
                     });
                 }
                 ToNetworkMessage::SpecificMessage((message_content, status_tx), origins) => {
@@ -540,7 +541,9 @@ impl NetworkInterface {
                         .map(|(channel, address)| {
                             channel
                                 .send((message_content.clone(), status_tx.clone())) // warning: only the first peer channel can set a status
-                                .expect(&format!("failed to send message to peer {}", address))
+                                .unwrap_or_else(|_| {
+                                    panic!("failed to send message to peer {}", address)
+                                })
                         })
                         .count();
                     if count == 0 {

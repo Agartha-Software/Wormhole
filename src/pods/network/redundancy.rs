@@ -43,7 +43,7 @@ pub async fn redundancy_worker(
             }
         };
 
-        let _ = match message {
+        match message {
             RedundancyMessage::ApplyTo(ino) => {
                 let _ = apply_to(&nw_interface, &fs_interface, &peers, ino)
                     .await
@@ -84,7 +84,7 @@ fn eligible_to_apply(
     };
     if hosts.len() < target_redundancy as usize
         && available_peers > hosts.len()
-        && hosts.get(0) == Some(self_addr)
+        && hosts.first() == Some(self_addr)
     {
         Some(ino)
     } else {
@@ -95,7 +95,7 @@ fn eligible_to_apply(
 async fn check_integrity(
     nw_interface: &Arc<NetworkInterface>,
     fs_interface: &Arc<FsInterface>,
-    peers: &Vec<Address>,
+    peers: &[Address],
 ) -> WhResult<()> {
     let available_peers = peers.len() + 1;
 
@@ -115,19 +115,16 @@ async fn check_integrity(
             .collect();
     let futures = selected_files
         .iter()
-        .map(|ino| apply_to(nw_interface, fs_interface, peers, ino.clone()))
+        .map(|ino| apply_to(nw_interface, fs_interface, peers, *ino))
         .collect::<Vec<_>>();
 
     let errors: Vec<WhError> = join_all(futures)
         .await
         .into_iter()
-        .filter_map(|status| match status {
-            Err(e) => Some(e),
-            _ => None,
-        })
+        .filter_map(Result::err)
         .collect();
 
-    if errors.len() > 0 {
+    if !errors.is_empty() {
         log::error!(
             "Redundancy::check_integrity: {} errors reported ! See below:",
             errors.len()
@@ -140,7 +137,7 @@ async fn check_integrity(
 async fn apply_to(
     nw_interface: &Arc<NetworkInterface>,
     fs_interface: &Arc<FsInterface>,
-    peers: &Vec<Address>,
+    peers: &[Address],
     ino: u64,
 ) -> WhResult<usize> {
     if ITree::is_local_only(ino) {
@@ -173,7 +170,7 @@ async fn apply_to(
 /// start download to others concurrently
 async fn push_redundancy(
     nw_interface: &Arc<NetworkInterface>,
-    all_peers: &Vec<String>,
+    all_peers: &[Address],
     ino: Ino,
     file_binary: Arc<Vec<u8>>,
     target_redundancy: usize,
@@ -181,10 +178,9 @@ async fn push_redundancy(
     let mut success_hosts: Vec<Address> = vec![nw_interface.hostname.clone()];
     let mut set: JoinSet<WhResult<Address>> = JoinSet::new();
 
-    for i in 0..target_redundancy {
+    for addr in all_peers.iter().take(target_redundancy).cloned() {
         let nwi_clone = Arc::clone(nw_interface);
         let bin_clone = file_binary.clone();
-        let addr = all_peers[i].clone();
 
         set.spawn(async move { nwi_clone.send_file_redundancy(ino, bin_clone, addr).await });
     }
