@@ -153,3 +153,11 @@ pub enum RedundancyStatusAnswer {
     PodNotFound,
     InternalError,
 }
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub enum StatsPerFiletypeAnswer {
+    Stats(HashMap<String, u64>),
+    PodNotFound,
+    InternalError,
+}
