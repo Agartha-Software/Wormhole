@@ -16,7 +16,6 @@ pub use freeze::freeze;
 pub use gethosts::gethosts;
 pub use inspect::inspect;
 pub use new::new;
-pub use remove::remove;
 pub use status::status;
 pub use tree::tree;
 pub use unfreeze::unfreeze;

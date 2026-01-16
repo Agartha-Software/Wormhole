@@ -1,13 +1,10 @@
-use std::collections::HashMap;
-
+use crate::ipc::commands::Command;
 use crate::service::{
     commands::{
-        apply, check, freeze, generate, gethosts, inspect, new, remove, show, status, tree,
-        unfreeze,
+        apply, check, freeze, generate, gethosts, inspect, new, show, status, tree, unfreeze,
     },
     Service,
 };
-use crate::{ipc::commands::Command, pods::pod::Pod};
 use either::Either;
 use interprocess::local_socket;
 use serde::Serialize;
@@ -33,17 +30,13 @@ impl Service {
             .expect("Failed to read recieved command, shouldn't be possible!");
 
         match bincode::deserialize::<Command>(&buffer) {
-            Ok(command) => handle_command(
-                command,
-                &mut self.pods,
-                &self.socket,
-                &mut Either::Left(&mut stream),
-            )
-            .await
-            .unwrap_or_else(|e| {
-                log::error!("Network Error: {e:?}"); // TODO verify relevance
-                false
-            }),
+            Ok(command) => self
+                .handle_command(command, &mut Either::Left(&mut stream))
+                .await
+                .unwrap_or_else(|e| {
+                    log::error!("Network Error: {e:?}"); // TODO verify relevance
+                    false
+                }),
             Err(err) => {
                 log::error!("Command recieved not recognized by the service: {err:?}");
                 eprintln!("Command recieved not recognized by the service.");
@@ -60,15 +53,43 @@ impl Service {
     ) -> bool {
         let mut buffer = String::new();
         let mut stream = Either::Right(&mut buffer);
-        let _ = handle_command::<local_socket::tokio::Stream>(
-            command,
-            &mut self.pods,
-            &self.socket,
-            &mut stream,
-        )
-        .await;
+        let _ = self
+            .handle_command::<local_socket::tokio::Stream>(command, &mut stream)
+            .await;
         let _ = reply_tx.send(buffer);
         false
+    }
+
+    pub async fn handle_command<Stream>(
+        &mut self,
+        command: Command,
+        stream: &mut either::Either<&mut Stream, &mut String>,
+    ) -> std::io::Result<bool>
+    where
+        Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
+    {
+        match command {
+            Command::Unfreeze(pod_id) => unfreeze(pod_id, stream).await,
+            Command::Status => status(stream).await,
+            Command::Freeze(pod_id) => freeze(pod_id, stream).await,
+            Command::New(request) => new(request, &mut self.pods, stream).await,
+            Command::GetHosts(request) => gethosts(request, &mut self.pods, stream).await,
+            Command::Inspect(pod_id) => inspect(pod_id, &mut self.pods, stream).await,
+            Command::Remove(request) => self.remove(request, stream).await,
+            Command::Tree(pod_id) => tree(pod_id, &mut self.pods, stream).await,
+            Command::GenerateConfig(pod_id, overwrite, config_type) => {
+                generate(pod_id, overwrite, config_type, &mut self.pods, stream).await
+            }
+            Command::ShowConfig(pod_id, config_type) => {
+                show(pod_id, config_type, &mut self.pods, stream).await
+            }
+            Command::CheckConfig(pod_id, config_type) => {
+                check(pod_id, config_type, &mut self.pods, stream).await
+            }
+            Command::ApplyConfig(pod_id, config_type) => {
+                apply(pod_id, config_type, &mut self.pods, stream).await
+            }
+        }
     }
 }
 
@@ -93,32 +114,5 @@ where
             **stream = serialized.to_string();
             Ok(())
         }
-    }
-}
-
-pub async fn handle_command<Stream>(
-    command: Command,
-    pods: &mut HashMap<String, Pod>,
-    socket_address: &String,
-    stream: &mut either::Either<&mut Stream, &mut String>,
-) -> std::io::Result<bool>
-where
-    Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
-{
-    match command {
-        Command::Unfreeze(pod_id) => unfreeze(pod_id, stream).await,
-        Command::Status => status(stream).await,
-        Command::Freeze(pod_id) => freeze(pod_id, stream).await,
-        Command::New(request) => new(request, pods, stream).await,
-        Command::GetHosts(request) => gethosts(request, pods, stream).await,
-        Command::Inspect(pod_id) => inspect(pod_id, pods, stream).await,
-        Command::Remove(request) => remove(request, socket_address, pods, stream).await,
-        Command::Tree(pod_id) => tree(pod_id, pods, stream).await,
-        Command::GenerateConfig(pod_id, overwrite, config_type) => {
-            generate(pod_id, overwrite, config_type, pods, stream).await
-        }
-        Command::ShowConfig(pod_id, config_type) => show(pod_id, config_type, pods, stream).await,
-        Command::CheckConfig(pod_id, config_type) => check(pod_id, config_type, pods, stream).await,
-        Command::ApplyConfig(pod_id, config_type) => apply(pod_id, config_type, pods, stream).await,
     }
 }
