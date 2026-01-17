@@ -57,6 +57,7 @@ pub struct Pod {
     pub global_config: Arc<RwLock<GlobalConfig>>,
     name: String,
     pub should_restart: bool,
+    allow_other_users: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -68,6 +69,7 @@ pub struct PodPrototype {
     pub bound_socket: SocketAddr,
     pub mountpoint: PathBuf,
     pub should_restart: bool,
+    pub allow_other_users: bool,
 }
 
 type ConnectionInfo = (ITree, Vec<PeerIPC>);
@@ -202,11 +204,7 @@ fn create_all_shared(itree: &ITree, from: Ino, disk: &dyn DiskManager) -> io::Re
 }
 
 impl Pod {
-    pub async fn new(
-        mut prototype: PodPrototype,
-        allow_other_users: bool,
-        server: Arc<Server>,
-    ) -> io::Result<Self> {
+    pub async fn new(mut prototype: PodPrototype, server: Arc<Server>) -> io::Result<Self> {
         log::trace!("mount point {:?}", prototype.mountpoint);
         let (receiver_in, receiver_out) = mpsc::unbounded_channel();
 
@@ -220,15 +218,7 @@ impl Pod {
             )
             .await?;
 
-        Self::realize(
-            prototype,
-            server,
-            receiver_in,
-            receiver_out,
-            itree,
-            peers,
-            allow_other_users,
-        )
+        Self::realize(prototype, server, receiver_in, receiver_out, itree, peers)
     }
 
     fn realize(
@@ -238,7 +228,6 @@ impl Pod {
         receiver_out: UnboundedReceiver<FromNetworkMessage>,
         itree: ITree,
         peers: Vec<PeerIPC>,
-        allow_other_users: bool,
     ) -> io::Result<Self> {
         let (senders_in, senders_out) = mpsc::unbounded_channel();
 
@@ -325,8 +314,12 @@ impl Pod {
             mountpoint: proto.mountpoint.clone(),
             peers,
             #[cfg(target_os = "linux")]
-            fuse_handle: mount_fuse(&proto.mountpoint, allow_other_users, fs_interface.clone())
-                .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fuse: {e}")))?,
+            fuse_handle: mount_fuse(
+                &proto.mountpoint,
+                proto.allow_other_users,
+                fs_interface.clone(),
+            )
+            .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fuse: {e}")))?,
             #[cfg(target_os = "windows")]
             fsp_host: mount_fsp(fs_interface.clone())
                 .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fsp: {e}")))?,
@@ -337,6 +330,7 @@ impl Pod {
             redundancy_worker_handle,
             name: proto.name,
             should_restart: proto.should_restart,
+            allow_other_users: proto.allow_other_users,
         })
     }
 
@@ -547,6 +541,7 @@ impl Pod {
             bound_socket: self.network_interface.bound_socket,
             mountpoint: self.mountpoint.clone(),
             should_restart: self.should_restart,
+            allow_other_users: self.allow_other_users,
         })
     }
 

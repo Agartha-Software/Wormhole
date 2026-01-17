@@ -13,9 +13,7 @@ pub async fn freeze(args: IdentifyPodArgs, mut stream: Stream) -> io::Result<Str
 
     send_command(Command::Freeze(id), &mut stream).await?;
     match recieve_answer::<FreezeAnswer>(&mut stream).await? {
-        FreezeAnswer::Success => {
-            Ok("Freeze is not yet implemented! You need to manually restart the service by hand... This feature is coming soon!".to_string())
-        }
+        FreezeAnswer::Success(name) => Ok(format!("Pod '{name}' frozen successfully!")),
         FreezeAnswer::PodNotFound => Err(io::Error::new(
             io::ErrorKind::NotFound,
             "The given pod couldn't be found.",

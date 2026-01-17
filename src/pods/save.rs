@@ -78,7 +78,6 @@ pub fn delete_saved_pods(socket_address: &String) -> io::Result<()> {
 
 pub async fn load_saved_pods(
     pods: &mut HashMap<String, Pod>,
-    allow_other_users: bool,
     socket_address: &String,
 ) -> io::Result<()> {
     let path = local_data_path(socket_address);
@@ -115,13 +114,13 @@ pub async fn load_saved_pods(
         let server = match Server::from_specific_address(proto.bound_socket) {
             Ok(server) => Arc::new(server),
             Err(err) => {
-                log::trace!("Couldnt bind address {:?}: {err}", proto.bound_socket);
+                log::trace!("Could'nt bind address {:?}: {err}", proto.bound_socket);
                 continue;
             }
         };
 
         let name = proto.name.clone();
-        match Pod::new(proto, allow_other_users, server).await {
+        match Pod::new(proto, server).await {
             Ok(pod) => pods.insert(name, pod),
             Err(err) => {
                 log::trace!("Failed to create the pod '{name}': {err}");

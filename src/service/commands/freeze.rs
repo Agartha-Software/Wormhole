@@ -24,8 +24,10 @@ impl Service {
             }
         };
 
+        let name = name.clone();
+
         match pod.try_generate_prototype() {
-            Some(proto) => self.frozen_pods.insert(proto.name.clone(), proto),
+            Some(proto) => self.frozen_pods.insert(name.clone(), proto),
             None => {
                 send_answer(FreezeAnswer::PodBlock, stream).await?;
                 return Ok(false);
@@ -34,11 +36,11 @@ impl Service {
 
         let pod = self
             .pods
-            .remove(&name.clone())
+            .remove(&name)
             .expect("Already checked that the pod exist");
 
         let answer = match pod.stop().await {
-            Ok(()) => FreezeAnswer::Success,
+            Ok(()) => FreezeAnswer::Success(name),
             Err(err) => FreezeAnswer::PodStopFailed(err.to_string()),
         };
 

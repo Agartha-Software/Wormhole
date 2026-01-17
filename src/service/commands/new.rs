@@ -87,9 +87,10 @@ where
         bound_socket,
         mountpoint: args.mountpoint,
         should_restart: local_config.general.restart.unwrap_or(true),
+        allow_other_users: args.allow_other_users,
     };
 
-    let answer = match Pod::new(prototype, args.allow_other_users, server).await {
+    let answer = match Pod::new(prototype, server).await {
         Ok(pod) => {
             pods.insert(args.name, pod);
             println!("New pod created successfully, listening to '{bound_socket}'");

@@ -2,8 +2,10 @@ use interprocess::local_socket::tokio::Stream;
 use std::io;
 
 use crate::{
-    cli::connection::{recieve_answer, send_command},
-    cli::NewArgs,
+    cli::{
+        connection::{recieve_answer, send_command},
+        print_err, NewArgs,
+    },
     ipc::{
         answers::NewAnswer,
         commands::{Command, NewRequest},
@@ -58,11 +60,11 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<String> {
             "Given port is already used, couldn't create.",
         )),
         NewAnswer::BindImpossible(e) => {
-            eprintln!("Failed to bind the given pod:");
+            print_err("Failed to bind the given pod:");
             Err(e.into())
         }
         NewAnswer::FailedToCreatePod(e) => {
-            eprintln!("Failed to create the given pod:");
+            print_err("Failed to create the given pod:");
             Err(e.into())
         }
         NewAnswer::InvalidUrlIp => Err(io::Error::new(

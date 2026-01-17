@@ -31,13 +31,17 @@ pub enum GetHostsAnswer {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub enum UnfreezeAnswer {
-    Success,
+    Success(String),
+    PodNotFound,
+    AlreadyUnfrozen,
+    CouldntBind(IoError),
+    PodCreationFailed(IoError),
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub enum FreezeAnswer {
-    Success,
+    Success(String),
     PodNotFound,
     AlreadyFrozen,
     PodBlock,
