@@ -4,6 +4,7 @@ mod gethosts;
 mod inspect;
 mod new;
 mod remove;
+mod restart;
 mod status;
 mod tree;
 mod unfreeze;

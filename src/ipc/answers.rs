@@ -50,6 +50,18 @@ pub enum FreezeAnswer {
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
+pub enum RestartAnswer {
+    Success(String),
+    PodNotFound,
+    PodFrozen,
+    PodBlock,
+    PodStopFailed(String),
+    CouldntBind(IoError),
+    PodCreationFailed(IoError),
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum RemoveAnswer {
     Success,
     PodNotFound,

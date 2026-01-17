@@ -69,6 +69,7 @@ impl Service {
         match command {
             Command::Unfreeze(pod_id) => self.unfreeze(pod_id, stream).await,
             Command::Freeze(pod_id) => self.freeze(pod_id, stream).await,
+            Command::Restart(pod_id) => self.restart(pod_id, stream).await,
             Command::Status => status(stream).await,
             Command::New(request) => new(request, &mut self.pods, stream).await,
             Command::GetHosts(request) => gethosts(request, &mut self.pods, stream).await,
