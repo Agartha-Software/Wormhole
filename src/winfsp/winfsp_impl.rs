@@ -406,7 +406,7 @@ impl FileSystemContext for FSPController {
         }
         DirInfo::<255>::finalize_buffer(buffer, &mut cursor);
         log::trace!("ok:{cursor};");
-        Ok(cursor as u32)
+        Ok(cursor)
     }
 
     fn rename(

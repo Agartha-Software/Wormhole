@@ -64,8 +64,8 @@ impl From<&Metadata> for FileInfo {
         FileInfo {
             file_attributes: attributes.0,
             reparse_tag: 0,
-            allocation_size: value.size as u64,
-            file_size: value.size as u64,
+            allocation_size: value.size,
+            file_size: value.size,
             creation_time: FileTime::try_from(value.crtime).unwrap_or(now).to_raw(),
             last_access_time: FileTime::try_from(value.atime).unwrap_or(now).to_raw(),
             last_write_time: FileTime::try_from(value.mtime).unwrap_or(now).to_raw(),
