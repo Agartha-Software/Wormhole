@@ -232,6 +232,7 @@ impl Pod {
         )
     }
 
+    #[allow(unused_variables)]
     fn realize(
         proto: PodPrototype,
         server: Arc<Server>,
@@ -239,7 +240,6 @@ impl Pod {
         receiver_out: UnboundedReceiver<FromNetworkMessage>,
         itree: ITree,
         peers: Vec<PeerIPC>,
-        #[allow(unused_variables)]
         allow_other_users: bool,
     ) -> io::Result<Self> {
         let (senders_in, senders_out) = mpsc::unbounded_channel();
