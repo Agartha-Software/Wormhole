@@ -195,74 +195,68 @@ pub async fn accept(
     };
 
     let result = match handshake {
-        Ok(Handshake::Connect(mut connect)) => {
-            (async || {
-                // closures to capture ? process
-                let url_pairs = network
-                    .peers
-                    .read()
-                    .iter()
-                    .map(|peer| (peer.hostname.clone(), peer.url.clone()))
-                    .collect::<Vec<_>>();
-
-                let (hosts, urls): (Vec<String>, _) =
-                    [(network.hostname.clone(), network.public_url.clone())]
-                        .into_iter()
-                        .chain(url_pairs.into_iter())
-                        .inspect(|(h, u)| log::trace!("accept:h{h}, u{u:?}"))
-                        .unzip();
-                let rename = unique_hostname(connect.hostname.clone(), &hosts);
-
-                if let Some(rename) = &rename {
-                    connect.hostname = rename.clone();
-                }
-
-                let accept = Accept {
-                    urls,
-                    hosts,
-                    rename,
-                    hostname: network.hostname.clone(),
-                    config: network.global_config.read().clone(),
-                    itree: (*network.itree.read()).clone(),
-                };
-                let data = bincode::serialize(&Handshake::Accept(accept))?;
-                sink.send(Message::Binary(data.into())).await?;
-
-                Ok(Either::Left(connect))
-            })()
-            .await
-        }
-        Ok(Handshake::Wave(wave)) => {
-            (async || {
-                // closures to capture ? process
-                let wave_back = Wave {
-                    hostname: network.hostname.clone(),
-                    url: None,
-                    blame: wave.hostname.clone(),
-                };
-                let data = bincode::serialize(&Handshake::Wave(wave_back))?;
-                sink.send(Message::Binary(data.into())).await?;
-
-                Ok(Either::Right(wave))
-            })()
-            .await
-        }
+        Ok(Handshake::Connect(connect)) => accept_connect(sink, network, connect).await,
+        Ok(Handshake::Wave(wave)) => accept_wave(sink, network, wave).await,
         Ok(_) => Err(HandshakeError::InvalidHandshake),
         Err(e) => Err(e),
     };
-    let result = if let Err(error) = result {
-        (async || {
-            sink.send(Message::Binary(
-                bincode::serialize(&Handshake::Refuse((&error).into()))?.into(),
-            ))
-            .await?;
+    match result {
+        Err(error) => {
+            let refuse = bincode::serialize(&Handshake::Refuse((&error).into()))?;
+            sink.send(Message::Binary(refuse.into())).await?;
             Err(error)
-        })()
-        .await
-    } else {
-        result
+        }
+        Ok(ok) => Ok(ok),
+    }
+}
+
+async fn accept_connect(
+    sink: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
+    network: &NetworkInterface,
+    mut connect: Connect,
+) -> Result<Either<Connect, Wave>, HandshakeError> {
+    let url_pairs = network
+        .peers
+        .read()
+        .iter()
+        .map(|peer| (peer.hostname.clone(), peer.url.clone()))
+        .collect::<Vec<_>>();
+    let (hosts, urls): (Vec<String>, _) = [(network.hostname.clone(), network.public_url.clone())]
+        .into_iter()
+        .chain(url_pairs.into_iter())
+        .inspect(|(h, u)| log::trace!("accept:h{h}, u{u:?}"))
+        .unzip();
+    let rename = unique_hostname(connect.hostname.clone(), &hosts);
+    if let Some(rename) = &rename {
+        connect.hostname = rename.clone();
+    }
+    let accept = Accept {
+        urls,
+        hosts,
+        rename,
+        hostname: network.hostname.clone(),
+        config: network.global_config.read().clone(),
+        itree: (*network.itree.read()).clone(),
     };
-    result
+    let data = bincode::serialize(&Handshake::Accept(accept))?;
+    sink.send(Message::Binary(data.into())).await?;
+    Ok(Either::Left(connect))
+}
+
+async fn accept_wave(
+    sink: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
+    network: &NetworkInterface,
+    wave: Wave,
+) -> Result<Either<Connect, Wave>, HandshakeError> {
+    let wave_back = Wave {
+        hostname: network.hostname.clone(),
+        url: None,
+        blame: wave.hostname.clone(),
+    };
+    let data = bincode::serialize(&Handshake::Wave(wave_back))?;
+    sink.send(Message::Binary(data.into())).await?;
+
+    Ok(Either::Right(wave))
 }
 
 pub async fn wave<T>(
