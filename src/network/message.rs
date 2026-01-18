@@ -10,7 +10,7 @@ use crate::{
     error::WhResult,
     pods::{
         filesystem::diffs::{Delta, Signature},
-        itree::{ITreeIndex, Ino, Inode, Metadata},
+        itree::{ITree, Ino, Inode, Metadata},
         whpath::InodeName,
     },
 };
@@ -50,7 +50,7 @@ pub enum MessageContent {
 
     RequestFs,
     // (ITree, peers, global_config)
-    FsAnswer(FileSystemSerialized, Vec<Address>, Vec<u8>),
+    FsAnswer(ITree, Vec<Address>, Vec<u8>),
 
     Disconnect,
 }
@@ -189,10 +189,4 @@ impl fmt::Display for ToNetworkMessage {
             }
         }
     }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct FileSystemSerialized {
-    pub fs_index: ITreeIndex,
-    pub next_inode: Ino,
 }
