@@ -9,7 +9,6 @@ mod status;
 mod tree;
 mod unfreeze;
 
-pub use config::apply::apply;
 pub use config::check::check;
 pub use config::generate::generate;
 pub use config::show::show;

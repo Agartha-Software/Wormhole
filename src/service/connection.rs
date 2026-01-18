@@ -85,9 +85,6 @@ impl Service {
             Command::CheckConfig(pod_id, config_type) => {
                 self.check(pod_id, config_type, stream).await
             }
-            Command::ApplyConfig(pod_id, config_type) => {
-                self.apply(pod_id, config_type, stream).await
-            }
         }?;
         Ok(stop)
     }

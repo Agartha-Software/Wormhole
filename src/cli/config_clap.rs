@@ -53,6 +53,4 @@ pub enum ConfigCommand {
     Show(IdentifyPodAndConfigArgs),
     /// Check the configuration files of a pod to be valid
     Check(IdentifyPodAndConfigArgs),
-    /// Apply the configuration file
-    Apply(IdentifyPodAndConfigArgs),
 }
