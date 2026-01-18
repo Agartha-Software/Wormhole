@@ -10,10 +10,7 @@ use crate::functionnal::environment_manager::{
 
 /// Returns `true` if the given services runs a pod on the given network
 pub fn service_has_pod_on_network(service: &Service, network: &String) -> bool {
-    service
-        .pods
-        .iter()
-        .any(|(nw, _, _)| nw == network)
+    service.pods.iter().any(|(nw, _, _)| nw == network)
 }
 
 // Returns `true` if the service is matching the requirements
@@ -139,9 +136,10 @@ pub fn assert_dirs_are_equal(dir1: impl AsRef<Path>, dir2: impl AsRef<Path>) {
         } else {
             let path2 = dir2.join(entry_name);
 
-            let file1 =
-                std::fs::read(entry.path()).unwrap_or_else(|e|panic!("{}:{e}", entry.path().to_string_lossy()));
-            let file2 = std::fs::read(&path2).unwrap_or_else(|e|panic!("{}:{e}", path2.to_string_lossy()));
+            let file1 = std::fs::read(entry.path())
+                .unwrap_or_else(|e| panic!("{}:{e}", entry.path().to_string_lossy()));
+            let file2 =
+                std::fs::read(&path2).unwrap_or_else(|e| panic!("{}:{e}", path2.to_string_lossy()));
             assert!(
                 file1 == file2,
                 "`{}` and `{}` have different content",
