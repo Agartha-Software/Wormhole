@@ -77,16 +77,8 @@ pub fn check_permissions(
             Err(OpenError::WrongPermissions)
         }
         AccessMode::ReadWrite => Ok(AccessMode::ReadWrite),
-        AccessMode::Execute => {
-            if has_read_perm(inode_perm) {
-                Err(OpenError::WrongPermissions)
-            //Behavior is undefined, but most filesystems return EACCES
-            } else if !has_execute_perm(inode_perm) {
-                Err(OpenError::WrongPermissions)
-            } else {
-                Ok(AccessMode::Execute)
-            }
-        }
+        AccessMode::Execute if !has_execute_perm(inode_perm) => Err(OpenError::WrongPermissions),
+        AccessMode::Execute => Ok(AccessMode::Execute),
     }
 }
 

@@ -1,5 +1,3 @@
-//// module for everything cli related except for ipc with the service
-
 mod clap;
 mod commands;
 mod config_clap;

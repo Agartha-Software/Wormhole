@@ -138,7 +138,7 @@ impl PodPrototype {
             }
         }
         Ok((
-            generate_itree(&self.mountpoint, &self.hostname).unwrap_or(ITree::new()),
+            generate_itree(&self.mountpoint, &self.hostname).unwrap_or_default(),
             vec![],
         ))
     }
@@ -446,19 +446,19 @@ impl Pod {
         // made after calling this function but before dropping the pod are undefined behavior.
 
         // drop(self.fuse_handle); // FIXME - do something like block the filesystem
+        let itree_bin = {
+            let itree = ITree::read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
 
-        let itree = ITree::read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
+            let peers: Vec<Address> = self
+                .peers
+                .read()
+                .iter()
+                .map(|peer| peer.hostname.clone())
+                .collect();
 
-        let peers: Vec<Address> = self
-            .peers
-            .read()
-            .iter()
-            .map(|peer| peer.hostname.clone())
-            .collect();
-
-        self.send_files_when_stopping(&itree, peers).await;
-        let itree_bin = bincode::serialize(&*itree).expect("can't serialize itree to bincode");
-        drop(itree);
+            self.send_files_when_stopping(&itree, peers).await;
+            bincode::serialize(&*itree).expect("can't serialize itree to bincode")
+        };
 
         self.network_interface
             .to_network_message_tx

@@ -128,3 +128,9 @@ impl Callbacks {
         }
     }
 }
+
+impl Default for Callbacks {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -32,7 +32,7 @@ pub enum SymlinkPath {
 impl SymlinkPath {
     /// Create a canonical path from a symlink
     pub fn resolve(&self, mount: &Path, self_path: &WhPath) -> PathBuf {
-        return match self {
+        match self {
             SymlinkPath::SymlinkPathRelative(path) => PathBuf::from_iter([
                 mount,
                 self_path
@@ -43,17 +43,17 @@ impl SymlinkPath {
             ]),
             SymlinkPath::SymlinkPathAbsolute(path) => mount.join(path),
             SymlinkPath::SymlinkPathExternal(path) => path.into(),
-        };
+        }
     }
 
     /// Create a system path from a symlink
     /// This doesn't resolve the symlink, only handles External vs Absolute distinction
     pub fn realize(&self, mount: &Path) -> PathBuf {
-        return match self {
+        match self {
             SymlinkPath::SymlinkPathRelative(path) => path.as_std_path().to_owned(),
             SymlinkPath::SymlinkPathAbsolute(path) => mount.join(path),
             SymlinkPath::SymlinkPathExternal(path) => path.into(),
-        };
+        }
     }
 }
 
@@ -86,12 +86,11 @@ impl EntrySymlink {
     /// Err(None) means the 'absolute' test failed
     /// Err(Some(e)) is a parsing error of the target
     pub fn from_absolute(target: &Path, mountpoint: &Path) -> Result<Self, Option<WhPathError>> {
-        target.is_absolute().then_some(()).ok_or_else(|| None)?;
+        target.is_absolute().then_some(()).ok_or(None)?;
         let mut components = normalize(target);
-        let mut mp_components = mountpoint.iter();
 
         // gradually matches each component of the mountpoint, untill only the internal portion remains
-        while let Some(m) = mp_components.next() {
+        for m in mountpoint.iter() {
             if let Some(t) = components.next() {
                 if m == t {
                     continue;
@@ -123,7 +122,7 @@ impl EntrySymlink {
 
         if target.is_absolute() {
             Self::from_absolute(target, mountpoint)
-                .or_else(|e| e.map(|_| external()).ok_or_else(|| external()))
+                .or_else(|e| e.map(|_| external()).ok_or_else(external))
         } else {
             Ok(Self {
                 target: SymlinkPath::SymlinkPathRelative(
@@ -147,7 +146,7 @@ fn normalize(path: &Path) -> std::vec::IntoIter<&OsStr> {
         match component.as_encoded_bytes() {
             DOT => {}
             DOTDOT => {
-                if result.len() > 0 {
+                if !result.is_empty() {
                     result.pop();
                 } else {
                     result.push(component)
@@ -159,7 +158,7 @@ fn normalize(path: &Path) -> std::vec::IntoIter<&OsStr> {
             }),
         }
     }
-    return result.into_iter();
+    result.into_iter()
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -228,29 +227,30 @@ mod test {
         let internal_file2 = mount_point.child(folder).child("internal_file2");
 
         let external_file = std::path::absolute(&temp_dir)
-            .expect(&format!("{:?} should exist", temp_dir.path()))
+            .unwrap_or_else(|e| panic!("{:?} should exist: {e:?}", temp_dir.path()))
             .join("external_file");
 
         mount_point
-            .child(&link_path.parent().unwrap_or(WhPath::root()))
+            .child(link_path.parent().unwrap_or(WhPath::root()))
             .create_dir_all()
-            .expect(&format!(
-                "{:?} should be a valid path",
-                mount_point.child(&link_path).path()
-            ));
+            .unwrap_or_else(|e| {
+                panic!(
+                    "{:?} should be a valid path: {e:?}",
+                    mount_point.child(&link_path).path()
+                )
+            });
 
-        std::fs::write(&internal_file, []).expect(&format!(
-            "parent of {:?} should exist",
-            internal_file.path()
-        ));
-        std::fs::write(&internal_file2, []).expect(&format!(
-            "parent of {:?} should exist",
-            internal_file.path()
-        ));
-        std::fs::write(&external_file, []).expect(&format!(
-            "parent of {:?} should exist",
-            external_file.as_path()
-        ));
+        std::fs::write(&internal_file, [])
+            .unwrap_or_else(|e| panic!("parent of {:?} should exist: {e:?}", internal_file.path()));
+        std::fs::write(&internal_file2, []).unwrap_or_else(|e| {
+            panic!("parent of {:?} should exist: {e:?}", internal_file2.path())
+        });
+        std::fs::write(&external_file, []).unwrap_or_else(|e| {
+            panic!(
+                "parent of {:?} should exist: {e:?}",
+                external_file.as_path()
+            )
+        });
 
         let relative_link = EntrySymlink {
             target: SymlinkPath::SymlinkPathRelative("../internal_file".into()),

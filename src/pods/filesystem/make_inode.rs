@@ -99,7 +99,7 @@ impl FsInterface {
                 return Err(MakeInodeError::PermissionDenied);
             }
             //check if already exist
-            match itree.get_inode_child_by_name(&parent, new_inode.name.as_ref()) {
+            match itree.get_inode_child_by_name(parent, new_inode.name.as_ref()) {
                 Ok(_) => return Err(MakeInodeError::AlreadyExist),
                 Err(WhError::InodeNotFound) => {}
                 Err(err) => return Err(MakeInodeError::WhError { source: err }),

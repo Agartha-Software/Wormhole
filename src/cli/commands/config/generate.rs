@@ -49,21 +49,15 @@ pub async fn generate(args: GenerateConfigArgs, mut stream: Stream) -> io::Resul
         )),
         GenerateConfigAnswer::CantOverwrite(ConfigType::Local) => Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
-            format!(
-                "Couldn't write the local configuration file, it already exist...\n`--force` to overwrite existing files"
-            ),
+                "Couldn't write the local configuration file, it already exist...\n`--force` to overwrite existing files",
         )),
         GenerateConfigAnswer::CantOverwrite(ConfigType::Global) => Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
-            format!(
-                "Couldn't write the global configuration file, it already exist...\n`--force` to overwrite existing files"
-            ),
+                "Couldn't write the global configuration file, it already exist...\n`--force` to overwrite existing files",
         )),
         GenerateConfigAnswer::CantOverwrite(ConfigType::Both) => Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
-            format!(
-                "Couldn't write the configuration files, they already exist...\n`--force` to overwrite existing files"
-            ),
+                "Couldn't write the configuration files, they already exist...\n`--force` to overwrite existing files",
         )),
     }
 }
