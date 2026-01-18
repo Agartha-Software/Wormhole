@@ -281,7 +281,7 @@ impl AccessMode {
         if access & (GENERIC_READ.0 & !SYNCHRONIZE.0) != 0 {
             return AccessMode::Read;
         }
-        return AccessMode::Void;
+        AccessMode::Void
     }
 }
 
