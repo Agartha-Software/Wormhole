@@ -96,8 +96,47 @@ impl ITree {
         itree
     }
 
+    /// Reserve an Ino
+    /// when this function returns, the Ino is permanently reserved
+    pub fn reserve_ino(&mut self) -> WhResult<Ino> {
+        self.next_ino
+            .next()
+            .ok_or(WhError::WouldBlock {
+                called_from: "reserve_ino".to_owned(),
+            })
+            .inspect_err(|_| log::error!("Ran out of Ino, returning Wh::WouldBlock"))
+    }
+
+    /// Mark Ino-s already reserved
+    /// This is for example if a peer reserves an Ino and we need to catch up
+    /// to not give this ino out again
+    pub fn mark_reserved_ino(&mut self, new: Ino) -> WhResult<()> {
+        let next = &mut self.next_ino;
+
+        if next.start < new {
+            return Err(WhError::WouldBlock {
+                called_from: "mark_reserved_ino: new is less than current".to_owned(),
+            });
+        }
+        *next = new..;
+        Ok(())
+    }
+
     pub fn overwrite_self(&mut self, entries: ITreeIndex) {
         self.entries = entries;
+    }
+
+    /// Removed 'local only' files from the tree
+    /// This takes and mutates self, so that it can't accidentally be used in place
+    /// only meant to create a 'clean' network copy of an itree for sharing
+    pub fn clean_local(mut self) -> Self {
+        self.entries.retain(|ino, _| !ITree::is_local_only(*ino));
+        self.entries.entry(1u64).and_modify(|inode| {
+            if let FsEntry::Directory(childrens) = &mut inode.entry {
+                childrens.retain(|x| !ITree::is_local_only(*x));
+            }
+        });
+        self
     }
 
     pub fn get_raw_entries(&self) -> ITreeIndex {

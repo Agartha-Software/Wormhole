@@ -119,6 +119,6 @@ fn test_inserting_and_retreiving_files() {
         },
         xattrs: HashMap::new(),
     };
-    itree_values(&itree.get_inode(10).unwrap(), result_one);
-    itree_values(&itree.get_inode(11).unwrap(), result_two);
+    itree_values(itree.get_inode(10).unwrap(), result_one);
+    itree_values(itree.get_inode(11).unwrap(), result_two);
 }

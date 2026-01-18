@@ -1,9 +1,7 @@
 use std::{
     ffi::OsString,
-    io::ErrorKind,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
-    time::SystemTime,
 };
 
 use custom_error::custom_error;
@@ -97,15 +95,15 @@ pub fn mount_fsp(fs_interface: Arc<FsInterface>) -> Result<WinfspHost, std::io::
         fs_interface,
     };
     let mut host = FileSystemHost::<FSPController>::new(volume_params, wormhole_context)
-        .map_err(|_| std::io::Error::new(ErrorKind::Other, "WinFSP FileSystemHost::new error"))?;
+        .map_err(|_| std::io::Error::other("WinFSP FileSystemHost::new error"))?;
 
     let path = mountpoint.to_string_lossy().to_string().replace("\\", "/");
     log::info!("WinFSP mounting host @ {:?} ...", &path);
     host.mount(&path)
-        .map_err(|_| io::Error::new(io::ErrorKind::Other, "WinFSP mount error"))?;
+        .map_err(|_| io::Error::other("WinFSP mount error"))?;
 
     host.start_with_threads(1)
-        .map_err(|_| io::Error::new(io::ErrorKind::Other, "WinFSP start_with_threads error"))?;
+        .map_err(|_| io::Error::other("WinFSP start_with_threads error"))?;
     Ok(WinfspHost(host))
 }
 
@@ -198,7 +196,7 @@ impl FileSystemContext for FSPController {
         log::trace!("ok:{};", inode.id);
         Ok(WormholeHandle {
             ino: inode.id,
-            handle: handle,
+            handle,
         })
     }
 
@@ -232,7 +230,7 @@ impl FileSystemContext for FSPController {
 
         let itree = ITree::read_lock(&self.fs_interface.itree, "winfsp::create")?;
 
-        if let Ok(_) = itree.get_inode_from_path(&path) {
+        if itree.get_inode_from_path(&path).is_ok() {
             return Err(STATUS_OBJECT_NAME_EXISTS.into());
         }
 
@@ -246,7 +244,7 @@ impl FileSystemContext for FSPController {
             .fs_interface
             .create(
                 parent,
-                name.into(),
+                name,
                 entry,
                 OpenFlags::from_win_u32(granted_access),
                 AccessMode::from_win_u32(granted_access),
@@ -406,7 +404,7 @@ impl FileSystemContext for FSPController {
         }
         DirInfo::<255>::finalize_buffer(buffer, &mut cursor);
         log::trace!("ok:{cursor};");
-        Ok(cursor as u32)
+        Ok(cursor)
     }
 
     fn rename(
@@ -456,14 +454,8 @@ impl FileSystemContext for FSPController {
         file_info: &mut winfsp::filesystem::FileInfo,
     ) -> winfsp::Result<()> {
         log::trace!("set_basic_info({})", context.ino);
-        let now = SystemTime::now();
-
         let atime = if last_access_time != 0 {
-            Some(
-                FileTime::new(last_access_time)
-                    .try_into()
-                    .unwrap_or_else(|_| now.clone()),
-            )
+            Some(FileTime::new(last_access_time).into())
         } else {
             None
         };
@@ -477,20 +469,12 @@ impl FileSystemContext for FSPController {
         //     None
         // };
         let mtime = if last_write_time != 0 {
-            Some(
-                FileTime::new(last_write_time)
-                    .try_into()
-                    .unwrap_or_else(|_| now.clone()),
-            )
+            Some(FileTime::new(last_write_time).into())
         } else {
             None
         };
         let ctime = if change_time != 0 {
-            Some(
-                FileTime::new(change_time)
-                    .try_into()
-                    .unwrap_or_else(|_| now.clone()),
-            )
+            Some(FileTime::new(change_time).into())
         } else {
             None
         };
