@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::{io, sync::Arc};
 
-use crate::config::local_file::{GeneralLocalConfig, LocalConfigFile};
+use crate::config::local_file::LocalConfigFile;
 use crate::config::GlobalConfig;
 use crate::data::tree_hosts::CliHostTree;
 use crate::error::{WhError, WhResult};
@@ -547,12 +547,10 @@ impl Pod {
 
     pub fn generate_local_config(&self) -> LocalConfigFile {
         LocalConfigFile {
-            general: GeneralLocalConfig {
-                name: Some(self.name.clone()),
-                hostname: Some(self.network_interface.hostname.clone()),
-                public_url: self.network_interface.public_url.clone(),
-                restart: Some(self.should_restart),
-            },
+            name: Some(self.name.clone()),
+            hostname: Some(self.network_interface.hostname.clone()),
+            public_url: self.network_interface.public_url.clone(),
+            restart: Some(self.should_restart),
         }
     }
 

@@ -46,7 +46,7 @@ where
         }
     };
 
-    let public_url = match (local_config.general.public_url, args.public_url) {
+    let public_url = match (local_config.public_url, args.public_url) {
         (None, None) => None,
         (None, Some(public_url)) => Some(public_url),
         (Some(public_url), None) => Some(public_url),
@@ -62,7 +62,7 @@ where
     };
     global_config = global_config.add_hosts(args.url, args.additional_hosts);
 
-    let hostname = match (local_config.general.hostname, args.hostname) {
+    let hostname = match (local_config.hostname, args.hostname) {
         (None, None) => gethostname::gethostname()
             .into_string()
             .unwrap_or("wormhole-default-hostname".into()),
@@ -86,7 +86,7 @@ where
         public_url,
         bound_socket,
         mountpoint: args.mountpoint,
-        should_restart: local_config.general.restart.unwrap_or(true),
+        should_restart: local_config.restart.unwrap_or(true),
         allow_other_users: args.allow_other_users,
     };
 
