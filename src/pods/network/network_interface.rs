@@ -529,8 +529,8 @@ impl NetworkInterface {
                     peers_tx.iter().for_each(|(channel, address)| {
                         channel
                             .send((message_content.clone(), None))
-                            .unwrap_or_else(|_| {
-                                panic!("failed to send message to peer {}", address)
+                            .unwrap_or_else(|e| {
+                                panic!("Failed to send message to peer {}: {e:?}", address)
                             })
                     });
                 }
@@ -541,8 +541,8 @@ impl NetworkInterface {
                         .map(|(channel, address)| {
                             channel
                                 .send((message_content.clone(), status_tx.clone())) // warning: only the first peer channel can set a status
-                                .unwrap_or_else(|_| {
-                                    panic!("failed to send message to peer {}", address)
+                                .unwrap_or_else(|e| {
+                                    panic!("Failed to send message to peer {}: {e:?}", address)
                                 })
                         })
                         .count();
