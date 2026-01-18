@@ -1,6 +1,5 @@
 use std::{
     ffi::OsString,
-    io::ErrorKind,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
     time::SystemTime,
@@ -97,15 +96,15 @@ pub fn mount_fsp(fs_interface: Arc<FsInterface>) -> Result<WinfspHost, std::io::
         fs_interface,
     };
     let mut host = FileSystemHost::<FSPController>::new(volume_params, wormhole_context)
-        .map_err(|_| std::io::Error::new(ErrorKind::Other, "WinFSP FileSystemHost::new error"))?;
+        .map_err(|_| std::io::Error::other("WinFSP FileSystemHost::new error"))?;
 
     let path = mountpoint.to_string_lossy().to_string().replace("\\", "/");
     log::info!("WinFSP mounting host @ {:?} ...", &path);
     host.mount(&path)
-        .map_err(|_| io::Error::new(io::ErrorKind::Other, "WinFSP mount error"))?;
+        .map_err(|_| io::Error::other("WinFSP mount error"))?;
 
     host.start_with_threads(1)
-        .map_err(|_| io::Error::new(io::ErrorKind::Other, "WinFSP start_with_threads error"))?;
+        .map_err(|_| io::Error::other("WinFSP start_with_threads error"))?;
     Ok(WinfspHost(host))
 }
 
