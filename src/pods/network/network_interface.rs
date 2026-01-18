@@ -10,8 +10,8 @@ use crate::{
     error::{WhError, WhResult},
     network::{
         message::{
-            Address, FileSystemSerialized, FromNetworkMessage, MessageAndStatus, MessageContent,
-            RedundancyMessage, ToNetworkMessage,
+            Address, FromNetworkMessage, MessageAndStatus, MessageContent, RedundancyMessage,
+            ToNetworkMessage,
         },
         peer_ipc::PeerIPC,
         server::Server,
@@ -85,59 +85,6 @@ impl NetworkInterface {
         }
     }
 
-    /** TODO: Doc when reviews are finished */
-    #[deprecated(note = "bad to preallocate inodes like this")]
-    pub fn get_next_inode(&self) -> WhResult<u64> {
-        self.itree
-            .write()
-            .next_ino
-            .next()
-            .ok_or(WhError::WouldBlock {
-                called_from: "get_next_inode".to_owned(),
-            })
-            .inspect_err(|_| log::error!("Ran out of Ino, returning Wh::WouldBlock"))
-
-        // let mut next_inode =
-        //     self.next_inode
-        //         .try_lock_for(LOCK_TIMEOUT)
-        //         .ok_or(WhError::WouldBlock {
-        //             called_from: "get_next_inode".to_string(),
-        //         })?;
-
-        // let available_inode = *next_inode;
-        // *next_inode += 1;
-
-        // Ok(available_inode)
-    }
-
-    #[deprecated(note = "probably bad to manipulate itree from the outside like this")]
-    pub fn promote_next_inode(&self, new: Ino) -> WhResult<()> {
-        let next = &mut self.itree.write().next_ino;
-        new.ge(&next.start)
-            .then_some(())
-            .ok_or(WhError::InodeNotFound)
-            .inspect_err(|_| log::error!("Ran out of Ino, returning Wh::WouldBlock"))?;
-        *next = new..;
-        // .next()
-        // .ok_or(WhError::WouldBlock { called_from: "get_next_inode".to_owned()} )
-        // .inspect_err(|e| log::error!("Ran out of Ino, returning Wh::WouldBlock"))
-        Ok(())
-
-        // let mut next_inode =
-        //     self.next_inode
-        //         .try_lock_for(LOCK_TIMEOUT)
-        //         .ok_or(WhError::WouldBlock {
-        //             called_from: "promote_next_inode".to_string(),
-        //         })?;
-
-        // // REVIEW: next_inode being behind a mutex is weird and
-        // // the function not taking a mutable ref feels weird, is next_inode behind a mutex just to allow a simple &self?
-        // if *next_inode < new {
-        //     *next_inode = new;
-        // };
-        // Ok(())
-    }
-
     /// Add the requested entry to the itree and inform the network
     pub fn register_new_inode(&self, inode: Inode) -> Result<(), MakeInodeError> {
         ITree::write_lock(&self.itree, "register_new_inode")?.add_inode(inode.clone())?;
@@ -192,8 +139,10 @@ impl NetworkInterface {
     }
 
     /// Get a new inode, add the requested entry to the itree and inform the network
-    pub fn acknowledge_new_file(&self, inode: Inode, _id: Ino) -> Result<(), MakeInodeError> {
+    /// marks as reserved the Ino range up to the new Inode id
+    pub fn acknowledge_new_file(&self, inode: Inode) -> Result<(), MakeInodeError> {
         let mut itree = ITree::write_lock(&self.itree, "acknowledge_new_file")?;
+        let _ = itree.mark_reserved_ino(inode.id); // this only happens in out-of-order handling of peer's inode creation, and isn't really an error
         itree.add_inode(inode)
     }
 
@@ -379,17 +328,9 @@ impl NetworkInterface {
     // }
 
     pub fn send_itree(&self, to: Address, global_config_bytes: Vec<u8>) -> WhResult<()> {
-        let itree = ITree::read_lock(&self.itree, "send_itree")?;
-        let mut entries = itree.get_raw_entries();
-
-        //Remove ignored entries
-        entries.retain(|ino, _| !ITree::is_local_only(*ino));
-        entries.entry(1u64).and_modify(|inode| {
-            if let FsEntry::Directory(childrens) = &mut inode.entry {
-                childrens.retain(|x| !ITree::is_local_only(*x));
-            }
-        });
-
+        let clean_itree = ITree::read_lock(&self.itree, "send_itree")?
+            .clone()
+            .clean_local();
         if let Some(peers) = self.peers.try_read_for(LOCK_TIMEOUT) {
             let peers_address_list = peers
                 .iter()
@@ -406,10 +347,7 @@ impl NetworkInterface {
                 .send(ToNetworkMessage::SpecificMessage(
                     (
                         MessageContent::FsAnswer(
-                            FileSystemSerialized {
-                                fs_index: entries,
-                                next_inode: self.get_next_inode()?,
-                            },
+                            clean_itree,
                             peers_address_list,
                             global_config_bytes,
                         ),

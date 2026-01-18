@@ -26,7 +26,7 @@ fn sync_start_state() {
 
     let check_path = env.services[1].pods[0].2.path().join("foo.txt");
     match std::fs::read_to_string(&check_path) {
-        Err(_) => assert!(false, "File doesn't exist"),
+        Err(_) => panic!("File doesn't exist"),
         Ok(content) => assert!(
             content == "Hello world!",   /*content == "Hello world!"*/
             "File content is incorrect"  // No support for file streaming yet
@@ -47,7 +47,7 @@ fn sync_start_state() {
     ] {
         let path = path.join("bar.txt");
         match std::fs::read_to_string(&path) {
-            Err(_) => assert!(false, "File {:?} doesn't exist", path),
+            Err(_) => panic!("File {:?} doesn't exist", path),
             Ok(content) => assert!(
                 content == "Goodbye world!", /*content == "Goodbye world!"*/
                 "File content is incorrect"  // No support for file streaming yet

@@ -42,7 +42,7 @@ fn base_files_before_mount() {
         &env.services[2].pods[0].2.path().to_owned(),
     ] {
         log::debug!("assert dirs are equal for {}", paths.to_string_lossy());
-        log::debug!("tree: {}", tree_command(&["-a", paths.to_str().unwrap()]));
+        log::debug!("tree: {}", tree_command(["-a", paths.to_str().unwrap()]));
         assert_dirs_are_equal(paths, test_data::SIMPLE_RECURSIVE);
     }
     std::thread::sleep(*SLEEP_TIME);

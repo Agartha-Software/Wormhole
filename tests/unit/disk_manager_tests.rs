@@ -67,7 +67,7 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
         .expect("write_file");
 
     assert_eq!(
-        std::fs::read(temp_dir.child(&"file").path())
+        std::fs::read(temp_dir.child("file").path())
             .expect("reading file")
             .as_slice(),
         contents,
@@ -94,7 +94,7 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
             .expect("set_file_size");
 
         assert_eq!(
-            std::fs::read(temp_dir.child(&"file").path())
+            std::fs::read(temp_dir.child("file").path())
                 .expect("reading file")
                 .as_slice(),
             &contents[..19],
@@ -108,7 +108,7 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
             .expect("set_file_size");
 
         assert_eq!(
-            std::fs::read(temp_dir.child(&"file2").path())
+            std::fs::read(temp_dir.child("file2").path())
                 .expect("reading file")
                 .as_slice(),
             &[0; 256],
@@ -134,7 +134,7 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
         .expect("mv_file");
 
         assert_eq!(
-            std::fs::read(temp_dir.child(&"folder").child(&"file").path())
+            std::fs::read(temp_dir.child("folder").child("file").path())
                 .expect("reading file")
                 .as_slice(),
             &contents[..19],
@@ -148,7 +148,7 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
         .expect("mv_file");
 
         assert_eq!(
-            std::fs::read(temp_dir.child(&"directory").child(&"file").path())
+            std::fs::read(temp_dir.child("directory").child("file").path())
                 .expect("reading file")
                 .as_slice(),
             &contents[..19],
@@ -203,7 +203,7 @@ pub fn test_windows_disk() {
 
     let mountpoint = temp_dir.child("wormhole");
     assert_fs::prelude::PathCreateDir::create_dir_all(&mountpoint).expect("creating mounting dir");
-    let disk = WindowsDiskManager::new(&mountpoint.path()).expect("creating disk manager");
+    let disk = WindowsDiskManager::new(mountpoint.path()).expect("creating disk manager");
     let temp_dir = temp_dir.child(".wormhole");
 
     test_generic_disk(&disk, &temp_dir);
