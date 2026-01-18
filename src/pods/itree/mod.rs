@@ -5,7 +5,7 @@ pub use fsentry::*;
 pub use inode::*;
 
 #[cfg(target_os = "windows")]
-use crate::pods::itree::WINDOWS_DEFAULT_PERMS_MODE;
+pub use crate::pods::itree::WINDOWS_DEFAULT_PERMS_MODE;
 use crate::{
     data::tree_hosts::TreeLine,
     error::WhResult,
