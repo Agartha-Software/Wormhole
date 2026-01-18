@@ -196,7 +196,7 @@ impl FileSystemContext for FSPController {
         log::trace!("ok:{};", inode.id);
         Ok(WormholeHandle {
             ino: inode.id,
-            handle: handle,
+            handle,
         })
     }
 
@@ -230,7 +230,7 @@ impl FileSystemContext for FSPController {
 
         let itree = ITree::read_lock(&self.fs_interface.itree, "winfsp::create")?;
 
-        if let Ok(_) = itree.get_inode_from_path(&path) {
+        if itree.get_inode_from_path(&path).is_ok() {
             return Err(STATUS_OBJECT_NAME_EXISTS.into());
         }
 
@@ -244,7 +244,7 @@ impl FileSystemContext for FSPController {
             .fs_interface
             .create(
                 parent,
-                name.into(),
+                name,
                 entry,
                 OpenFlags::from_win_u32(granted_access),
                 AccessMode::from_win_u32(granted_access),
