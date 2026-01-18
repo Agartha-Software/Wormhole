@@ -1,4 +1,3 @@
-use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::{io, sync::Arc};
 
@@ -10,7 +9,6 @@ use crate::error::{WhError, WhResult};
 use crate::fuse::fuse_impl::mount_fuse;
 use crate::ipc::answers::{InspectInfo, PeerInfo};
 use crate::network::message::{FromNetworkMessage, MessageContent, ToNetworkMessage};
-use crate::network::HandshakeError;
 #[cfg(target_os = "linux")]
 use crate::pods::disk_managers::unix_disk_manager::UnixDiskManager;
 #[cfg(target_os = "windows")]
@@ -18,6 +16,7 @@ use crate::pods::disk_managers::windows_disk_manager::WindowsDiskManager;
 use crate::pods::disk_managers::DiskManager;
 use crate::pods::itree::{FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_INO, LOCK_TIMEOUT, ROOT};
 use crate::pods::network::redundancy::redundancy_worker;
+use crate::pods::prototype::PodPrototype;
 use crate::pods::whpath::WhPath;
 #[cfg(target_os = "windows")]
 use crate::winfsp::winfsp_impl::{mount_fsp, WinfspHost};
@@ -25,15 +24,13 @@ use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use fuser;
 use parking_lot::RwLock;
-use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
 
 use crate::network::{message::Address, peer_ipc::PeerIPC, server::Server};
 
 use crate::pods::{
-    filesystem::fs_interface::FsInterface,
-    itree::{generate_itree, ITree},
+    filesystem::fs_interface::FsInterface, itree::ITree,
     network::network_interface::NetworkInterface,
 };
 
@@ -60,90 +57,10 @@ pub struct Pod {
     allow_other_users: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct PodPrototype {
-    pub global_config: GlobalConfig,
-    pub name: String,
-    pub hostname: String,
-    pub public_url: Option<String>,
-    pub bound_socket: SocketAddr,
-    pub mountpoint: PathBuf,
-    pub should_restart: bool,
-    pub allow_other_users: bool,
-}
-
-type ConnectionInfo = (ITree, Vec<PeerIPC>);
-
 custom_error! {pub PodInfoError
     WhError{source: WhError} = "{source}",
     WrongFileType{detail: String} = "PodInfoError: wrong file type: {detail}",
     FileNotFound = "PodInfoError: file not found",
-}
-
-impl PodPrototype {
-    async fn try_to_connect(
-        &mut self,
-        fail_on_network: bool,
-        receiver_in: &UnboundedSender<FromNetworkMessage>,
-    ) -> Result<ConnectionInfo, io::Error> {
-        if !self.global_config.general.entrypoints.is_empty() {
-            for first_contact in &self.global_config.general.entrypoints {
-                match PeerIPC::connect(
-                    first_contact.to_owned(),
-                    self.hostname.clone(),
-                    self.public_url.clone(),
-                    receiver_in,
-                )
-                .await
-                {
-                    Err(HandshakeError::CouldntConnect) => continue,
-                    Err(e) => log::error!("{first_contact}: {e}"),
-                    Ok((ipc, accept)) => {
-                        if let Some(urls) =
-                            accept
-                                .urls
-                                .into_iter()
-                                .skip(1)
-                                .try_fold(Vec::new(), |mut a, b| {
-                                    a.push(b?);
-                                    Some(a)
-                                })
-                        {
-                            let new_hostname = accept.rename.unwrap_or(self.hostname.clone());
-
-                            match PeerIPC::peer_startup(
-                                urls,
-                                new_hostname.clone(),
-                                accept.hostname,
-                                receiver_in,
-                            )
-                            .await
-                            {
-                                Ok(mut other_ipc) => {
-                                    other_ipc.insert(0, ipc);
-
-                                    self.hostname = new_hostname;
-                                    self.global_config = accept.config;
-
-                                    return Ok((accept.itree, other_ipc));
-                                }
-
-                                Err(e) => log::error!("a peer failed: {e}"),
-                            };
-                        }
-                    }
-                }
-            }
-            if fail_on_network {
-                log::error!("None of the specified peers could answer. Stopping.");
-                return Err(io::Error::other("None of the specified peers could answer"));
-            }
-        }
-        Ok((
-            generate_itree(&self.mountpoint, &self.hostname).unwrap_or(ITree::new()),
-            vec![],
-        ))
-    }
 }
 
 custom_error! {pub PodStopError

@@ -6,7 +6,8 @@ use crate::{
     network::server::Server,
     pods::{
         itree::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
-        pod::{Pod, PodPrototype},
+        pod::Pod,
+        prototype::PodPrototype,
     },
     service::connection::send_answer,
 };

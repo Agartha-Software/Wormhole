@@ -1,0 +1,104 @@
+use crate::config::local_file::LocalConfigFile;
+use crate::network::message::FromNetworkMessage;
+use crate::network::peer_ipc::PeerIPC;
+use crate::pods::itree::{generate_itree, ITree};
+use crate::{config::GlobalConfig, network::HandshakeError};
+use serde::{Deserialize, Serialize};
+use std::io;
+use std::{net::SocketAddr, path::PathBuf};
+use tokio::sync::mpsc::UnboundedSender;
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct PodPrototype {
+    pub global_config: GlobalConfig,
+    pub name: String,
+    pub hostname: String,
+    pub public_url: Option<String>,
+    pub bound_socket: SocketAddr,
+    pub mountpoint: PathBuf,
+    pub should_restart: bool,
+    pub allow_other_users: bool,
+}
+
+pub type ConnectionInfo = (ITree, Vec<PeerIPC>);
+
+impl PodPrototype {
+    pub fn apply_config(&mut self, local: LocalConfigFile) {
+        if let Some(name) = local.name {
+            self.name = name;
+        }
+        if let Some(hostname) = local.hostname {
+            self.hostname = hostname;
+        }
+        if let Some(public_url) = local.public_url {
+            self.public_url = Some(public_url);
+        }
+        if let Some(restart) = local.restart {
+            self.should_restart = restart;
+        }
+    }
+
+    pub async fn try_to_connect(
+        &mut self,
+        fail_on_network: bool,
+        receiver_in: &UnboundedSender<FromNetworkMessage>,
+    ) -> Result<ConnectionInfo, io::Error> {
+        if !self.global_config.general.entrypoints.is_empty() {
+            for first_contact in &self.global_config.general.entrypoints {
+                match PeerIPC::connect(
+                    first_contact.to_owned(),
+                    self.hostname.clone(),
+                    self.public_url.clone(),
+                    receiver_in,
+                )
+                .await
+                {
+                    Err(HandshakeError::CouldntConnect) => continue,
+                    Err(e) => log::error!("{first_contact}: {e}"),
+                    Ok((ipc, accept)) => {
+                        if let Some(urls) =
+                            accept
+                                .urls
+                                .into_iter()
+                                .skip(1)
+                                .try_fold(Vec::new(), |mut a, b| {
+                                    a.push(b?);
+                                    Some(a)
+                                })
+                        {
+                            let new_hostname = accept.rename.unwrap_or(self.hostname.clone());
+
+                            match PeerIPC::peer_startup(
+                                urls,
+                                new_hostname.clone(),
+                                accept.hostname,
+                                receiver_in,
+                            )
+                            .await
+                            {
+                                Ok(mut other_ipc) => {
+                                    other_ipc.insert(0, ipc);
+
+                                    self.hostname = new_hostname;
+                                    self.global_config = accept.config;
+
+                                    return Ok((accept.itree, other_ipc));
+                                }
+
+                                Err(e) => log::error!("a peer failed: {e}"),
+                            };
+                        }
+                    }
+                }
+            }
+            if fail_on_network {
+                log::error!("None of the specified peers could answer. Stopping.");
+                return Err(io::Error::other("None of the specified peers could answer"));
+            }
+        }
+        Ok((
+            generate_itree(&self.mountpoint, &self.hostname).unwrap_or(ITree::new()),
+            vec![],
+        ))
+    }
+}

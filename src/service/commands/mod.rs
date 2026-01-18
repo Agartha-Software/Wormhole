@@ -20,7 +20,7 @@ pub use status::status;
 pub use tree::tree;
 
 use crate::ipc::commands::PodId;
-use crate::pods::pod::{Pod, PodPrototype};
+use crate::pods::{pod::Pod, prototype::PodPrototype};
 use std::collections::HashMap;
 
 pub(self) fn find_pod<'a>(

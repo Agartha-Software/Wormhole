@@ -6,7 +6,8 @@ pub mod tcp;
 
 use crate::ipc::commands::Command;
 use crate::ipc::error::ListenerError;
-use crate::pods::pod::{Pod, PodPrototype};
+use crate::pods::pod::Pod;
+use crate::pods::prototype::PodPrototype;
 use crate::pods::save::{delete_saved_pods, load_saved_pods};
 use crate::service::clap::ServiceArgs;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
