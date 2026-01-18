@@ -2,7 +2,6 @@ use std::{
     ffi::OsString,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
-    time::SystemTime,
 };
 
 use custom_error::custom_error;
@@ -455,14 +454,8 @@ impl FileSystemContext for FSPController {
         file_info: &mut winfsp::filesystem::FileInfo,
     ) -> winfsp::Result<()> {
         log::trace!("set_basic_info({})", context.ino);
-        let now = SystemTime::now();
-
         let atime = if last_access_time != 0 {
-            Some(
-                FileTime::new(last_access_time)
-                    .try_into()
-                    .unwrap_or_else(|_| now.clone()),
-            )
+            Some(FileTime::new(last_access_time).into())
         } else {
             None
         };
@@ -476,20 +469,12 @@ impl FileSystemContext for FSPController {
         //     None
         // };
         let mtime = if last_write_time != 0 {
-            Some(
-                FileTime::new(last_write_time)
-                    .try_into()
-                    .unwrap_or_else(|_| now.clone()),
-            )
+            Some(FileTime::new(last_write_time).into())
         } else {
             None
         };
         let ctime = if change_time != 0 {
-            Some(
-                FileTime::new(change_time)
-                    .try_into()
-                    .unwrap_or_else(|_| now.clone()),
-            )
+            Some(FileTime::new(change_time).into())
         } else {
             None
         };
