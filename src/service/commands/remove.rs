@@ -9,16 +9,13 @@ impl Service {
         &mut self,
         args: RemoveRequest,
         stream: &mut either::Either<&mut Stream, &mut String>,
-    ) -> std::io::Result<bool>
+    ) -> std::io::Result<()>
     where
         Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
     {
         let name = match find_pod(&args.pod, &self.pods) {
             Some((name, _)) => name.clone(),
-            None => {
-                send_answer(RemoveAnswer::PodNotFound, stream).await?;
-                return Ok(false);
-            }
+            None => return send_answer(RemoveAnswer::PodNotFound, stream).await,
         };
 
         let answer = if let Some(pod) = self.pods.remove(&name) {
@@ -32,7 +29,6 @@ impl Service {
         } else {
             RemoveAnswer::PodNotFound
         };
-        send_answer(answer, stream).await?;
-        Ok(false)
+        send_answer(answer, stream).await
     }
 }

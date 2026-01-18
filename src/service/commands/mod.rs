@@ -9,19 +9,10 @@ mod status;
 mod tree;
 mod unfreeze;
 
-pub use config::apply::apply;
-pub use config::check::check;
-pub use config::generate::generate;
-pub use config::show::show;
-pub use gethosts::gethosts;
-pub use inspect::inspect;
-pub use new::new;
-pub use status::status;
-pub use tree::tree;
+use std::collections::HashMap;
 
 use crate::ipc::commands::PodId;
 use crate::pods::{pod::Pod, prototype::PodPrototype};
-use std::collections::HashMap;
 
 pub(self) fn find_pod<'a>(
     id: &'a PodId,

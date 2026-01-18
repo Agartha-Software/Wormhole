@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     cli::ConfigType,
     config::{local_file::LocalConfigFile, types::Config, GlobalConfig},
@@ -11,7 +9,7 @@ use crate::{
         itree::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
         pod::Pod,
     },
-    service::{commands::find_pod, connection::send_answer},
+    service::{commands::find_pod, connection::send_answer, Service},
 };
 
 pub fn get_config_from_file(
@@ -52,21 +50,22 @@ pub fn get_config_from_file(
     }
 }
 
-pub async fn check<Stream>(
-    args: PodId,
-    config_type: ConfigType,
-    pods: &HashMap<String, Pod>,
-    stream: &mut either::Either<&mut Stream, &mut String>,
-) -> std::io::Result<bool>
-where
-    Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
-{
-    match find_pod(&args, pods) {
-        Some((_, pod)) => match get_config_from_file(pod, &config_type) {
-            Ok(_) => send_answer(CheckConfigAnswer::Success, stream).await?,
-            Err(err) => send_answer(CheckConfigAnswer::ConfigFileError(err), stream).await?,
-        },
-        None => send_answer(CheckConfigAnswer::PodNotFound, stream).await?,
+impl Service {
+    pub async fn check<Stream>(
+        &self,
+        args: PodId,
+        config_type: ConfigType,
+        stream: &mut either::Either<&mut Stream, &mut String>,
+    ) -> std::io::Result<()>
+    where
+        Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
+    {
+        match find_pod(&args, &self.pods) {
+            Some((_, pod)) => match get_config_from_file(pod, &config_type) {
+                Ok(_) => send_answer(CheckConfigAnswer::Success, stream).await,
+                Err(err) => send_answer(CheckConfigAnswer::ConfigFileError(err), stream).await,
+            },
+            None => send_answer(CheckConfigAnswer::PodNotFound, stream).await,
+        }
     }
-    Ok(false)
 }

@@ -13,19 +13,18 @@ impl Service {
         &mut self,
         id: PodId,
         stream: &mut either::Either<&mut Stream, &mut String>,
-    ) -> std::io::Result<bool>
+    ) -> std::io::Result<()>
     where
         Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
     {
         let (name, pod) = match find_pod(&id, &self.pods) {
             Some(found) => found,
             None => {
-                match find_frozen_pod(&id, &self.frozen_pods) {
+                return match find_frozen_pod(&id, &self.frozen_pods) {
                     Some(_) => send_answer(RestartAnswer::PodFrozen, stream),
                     None => send_answer(RestartAnswer::PodNotFound, stream),
                 }
-                .await?;
-                return Ok(false);
+                .await;
             }
         };
 
@@ -34,8 +33,7 @@ impl Service {
         let proto = match pod.try_generate_prototype() {
             Some(proto) => proto,
             None => {
-                send_answer(RestartAnswer::PodBlock, stream).await?;
-                return Ok(false);
+                return send_answer(RestartAnswer::PodBlock, stream).await;
             }
         };
 
@@ -51,20 +49,16 @@ impl Service {
         let server = match Server::from_specific_address(proto.bound_socket) {
             Ok(server) => Arc::new(server),
             Err(err) => {
-                send_answer(RestartAnswer::CouldntBind(err.into()), stream).await?;
-                return Ok(false);
+                return send_answer(RestartAnswer::CouldntBind(err.into()), stream).await;
             }
         };
 
         match Pod::new(proto, server).await {
-            Ok(pod) => self.pods.insert(name.clone(), pod),
-            Err(err) => {
-                send_answer(RestartAnswer::PodCreationFailed(err.into()), stream).await?;
-                return Ok(false);
+            Ok(pod) => {
+                self.pods.insert(name.clone(), pod);
+                send_answer(RestartAnswer::Success(name), stream).await
             }
-        };
-
-        send_answer(RestartAnswer::Success(name), stream).await?;
-        Ok(false)
+            Err(err) => send_answer(RestartAnswer::PodCreationFailed(err.into()), stream).await,
+        }
     }
 }

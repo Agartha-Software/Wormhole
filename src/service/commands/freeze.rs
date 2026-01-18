@@ -8,19 +8,18 @@ impl Service {
         &mut self,
         id: PodId,
         stream: &mut either::Either<&mut Stream, &mut String>,
-    ) -> std::io::Result<bool>
+    ) -> std::io::Result<()>
     where
         Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
     {
         let (name, pod) = match find_pod(&id, &self.pods) {
             Some(found) => found,
             None => {
-                match find_frozen_pod(&id, &self.frozen_pods) {
+                return match find_frozen_pod(&id, &self.frozen_pods) {
                     Some(_) => send_answer(FreezeAnswer::AlreadyFrozen, stream),
                     None => send_answer(FreezeAnswer::PodNotFound, stream),
                 }
-                .await?;
-                return Ok(false);
+                .await;
             }
         };
 
@@ -29,8 +28,7 @@ impl Service {
         match pod.try_generate_prototype() {
             Some(proto) => self.frozen_pods.insert(name.clone(), proto),
             None => {
-                send_answer(FreezeAnswer::PodBlock, stream).await?;
-                return Ok(false);
+                return send_answer(FreezeAnswer::PodBlock, stream).await;
             }
         };
 
@@ -44,7 +42,6 @@ impl Service {
             Err(err) => FreezeAnswer::PodStopFailed(err.to_string()),
         };
 
-        send_answer(answer, stream).await?;
-        Ok(false)
+        send_answer(answer, stream).await
     }
 }

@@ -1,14 +1,12 @@
-use crate::ipc::commands::Command;
-use crate::service::{
-    commands::{apply, check, generate, gethosts, inspect, new, show, status, tree},
-    Service,
-};
 use either::Either;
 use interprocess::local_socket;
 use serde::Serialize;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::oneshot;
+
+use crate::ipc::commands::Command;
+use crate::service::Service;
 
 impl Service {
     pub async fn handle_connection<Stream>(&mut self, mut stream: Stream) -> bool
@@ -66,29 +64,32 @@ impl Service {
     where
         Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
     {
+        let stop = false;
+
         match command {
             Command::Unfreeze(pod_id) => self.unfreeze(pod_id, stream).await,
             Command::Freeze(pod_id) => self.freeze(pod_id, stream).await,
             Command::Restart(pod_id) => self.restart(pod_id, stream).await,
-            Command::Status => status(stream).await,
-            Command::New(request) => new(request, &mut self.pods, stream).await,
-            Command::GetHosts(request) => gethosts(request, &mut self.pods, stream).await,
-            Command::Inspect(pod_id) => inspect(pod_id, &mut self.pods, stream).await,
+            Command::Status => self.status(stream).await,
+            Command::New(request) => self.new_command(request, stream).await,
+            Command::GetHosts(request) => self.gethosts(request, stream).await,
+            Command::Inspect(pod_id) => self.inspect(pod_id, stream).await,
             Command::Remove(request) => self.remove(request, stream).await,
-            Command::Tree(pod_id) => tree(pod_id, &mut self.pods, stream).await,
+            Command::Tree(pod_id) => self.tree(pod_id, stream).await,
             Command::GenerateConfig(pod_id, overwrite, config_type) => {
-                generate(pod_id, overwrite, config_type, &mut self.pods, stream).await
+                self.generate(pod_id, overwrite, config_type, stream).await
             }
             Command::ShowConfig(pod_id, config_type) => {
-                show(pod_id, config_type, &mut self.pods, stream).await
+                self.show(pod_id, config_type, stream).await
             }
             Command::CheckConfig(pod_id, config_type) => {
-                check(pod_id, config_type, &mut self.pods, stream).await
+                self.check(pod_id, config_type, stream).await
             }
             Command::ApplyConfig(pod_id, config_type) => {
-                apply(pod_id, config_type, &mut self.pods, stream).await
+                self.apply(pod_id, config_type, stream).await
             }
-        }
+        }?;
+        Ok(stop)
     }
 }
 
