@@ -50,6 +50,7 @@ where
     let public_url = match (local_config.public_url, args.public_url) {
         (None, None) => None,
         (None, Some(public_url)) => Some(public_url),
+        (Some(public_url), None) if public_url.is_empty() => None,
         (Some(public_url), None) => Some(public_url),
         (Some(url_config), Some(url_args)) if url_config == url_args => Some(url_config),
         (Some(_), Some(_)) => {
@@ -61,6 +62,7 @@ where
             return Ok(false);
         }
     };
+
     global_config = global_config.add_hosts(args.url, args.additional_hosts);
 
     let hostname = match (local_config.hostname, args.hostname) {

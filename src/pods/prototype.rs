@@ -31,7 +31,11 @@ impl PodPrototype {
             self.hostname = hostname;
         }
         if let Some(public_url) = local.public_url {
-            self.public_url = Some(public_url);
+            if public_url.is_empty() {
+                self.public_url = None;
+            } else {
+                self.public_url = Some(public_url);
+            }
         }
         if let Some(restart) = local.restart {
             self.should_restart = restart;
