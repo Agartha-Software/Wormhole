@@ -452,7 +452,7 @@ impl Pod {
 
         // drop(self.fuse_handle); // FIXME - do something like block the filesystem
 
-        // moving the await task outside the scope needed to workaround https://github.com/rust-lang/rust-clippy/issues/6446 
+        // moving the await task outside the scope needed to workaround https://github.com/rust-lang/rust-clippy/issues/6446
         let (itree_bin, task) = {
             let itree = ITree::read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
 
