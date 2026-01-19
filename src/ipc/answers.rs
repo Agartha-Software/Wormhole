@@ -95,6 +95,7 @@ impl std::fmt::Display for PeerInfo {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct InspectInfo {
+    pub frozen: bool,
     pub public_url: Option<String>,
     pub bound_socket: SocketAddr,
     pub hostname: String,

@@ -1,4 +1,5 @@
 use crate::config::local_file::LocalConfigFile;
+use crate::ipc::answers::InspectInfo;
 use crate::network::message::FromNetworkMessage;
 use crate::network::peer_ipc::PeerIPC;
 use crate::pods::itree::{generate_itree, ITree};
@@ -39,6 +40,18 @@ impl PodPrototype {
         }
         if let Some(restart) = local.restart {
             self.should_restart = restart;
+        }
+    }
+
+    pub fn get_inspect_info(&self) -> InspectInfo {
+        InspectInfo {
+            frozen: true,
+            public_url: self.public_url.clone(),
+            bound_socket: self.bound_socket,
+            hostname: self.hostname.clone(),
+            name: self.name.clone(),
+            connected_peers: vec![],
+            mount: self.mountpoint.clone(),
         }
     }
 
