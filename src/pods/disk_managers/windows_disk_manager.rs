@@ -57,47 +57,44 @@ impl DiskManager for WindowsDiskManager {
     }
 
     fn new_file(&self, path: &WhPath, _permissions: u16) -> io::Result<()> {
-        std::fs::File::create(&self.mount_point.join(path))?;
+        std::fs::File::create(self.mount_point.join(path))?;
         Ok(())
     }
 
     fn remove_file(&self, path: &WhPath) -> io::Result<()> {
-        std::fs::remove_file(&self.mount_point.join(path))
+        std::fs::remove_file(self.mount_point.join(path))
     }
 
     fn remove_dir(&self, path: &WhPath) -> io::Result<()> {
-        std::fs::remove_dir(&self.mount_point.join(path))
+        std::fs::remove_dir(self.mount_point.join(path))
     }
 
     fn write_file(&self, path: &WhPath, binary: &[u8], offset: usize) -> io::Result<usize> {
         std::fs::File::options()
             .write(true)
-            .open(&self.mount_point.join(path))?
+            .open(self.mount_point.join(path))?
             .seek_write(binary, offset as u64)
     }
 
     fn set_file_size(&self, path: &WhPath, size: usize) -> io::Result<()> {
         std::fs::File::options()
             .write(true)
-            .open(&self.mount_point.join(path))?
+            .open(self.mount_point.join(path))?
             .set_len(size as u64)
     }
 
     fn mv_file(&self, path: &WhPath, new_path: &WhPath) -> io::Result<()> {
         // let mut original_path = path.clone(); // NOTE - Would be better if rename was non mutable
         // original_path.rename(new_name);
-        std::fs::rename(
-            &self.mount_point.join(path),
-            &self.mount_point.join(new_path),
-        )
+        std::fs::rename(self.mount_point.join(path), self.mount_point.join(new_path))
     }
 
     fn read_file(&self, path: &WhPath, offset: usize, buf: &mut [u8]) -> io::Result<usize> {
-        std::fs::File::open(&self.mount_point.join(path))?.seek_read(buf, offset as u64)
+        std::fs::File::open(self.mount_point.join(path))?.seek_read(buf, offset as u64)
     }
 
     fn new_dir(&self, path: &WhPath, _permissions: u16) -> io::Result<()> {
-        std::fs::create_dir(&self.mount_point.join(path))
+        std::fs::create_dir(self.mount_point.join(path))
     }
 
     fn size_info(&self) -> std::io::Result<super::DiskSizeInfo> {
@@ -116,7 +113,7 @@ impl DiskManager for WindowsDiskManager {
     }
 
     fn file_exists(&self, path: &WhPath) -> bool {
-        std::fs::exists(&self.mount_point.join(path)).unwrap_or(false)
+        std::fs::exists(self.mount_point.join(path)).unwrap_or(false)
     }
 
     fn new_symlink(
