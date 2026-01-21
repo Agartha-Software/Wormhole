@@ -27,7 +27,7 @@ pub enum CliCommand {
     /// Pause a given pod
     Freeze(IdentifyPodArgs),
     /// Unpause a given pod
-    UnFreeze(IdentifyPodArgs),
+    Unfreeze(IdentifyPodArgs),
     /// Restart a given pod
     Restart(IdentifyPodArgs),
     /// Remove a pod from its network and stop it
