@@ -484,6 +484,7 @@ impl Pod {
             .collect();
 
         InspectInfo {
+            frozen: false,
             public_url: self.network_interface.public_url.clone(),
             bound_socket: self.network_interface.bound_socket,
             hostname: self.network_interface.hostname.clone(),

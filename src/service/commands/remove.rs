@@ -1,6 +1,6 @@
 use crate::{
     ipc::{answers::RemoveAnswer, commands::RemoveRequest},
-    pods::save::delete_saved_pod,
+    service::save::delete_saved_pod,
     service::{commands::find_pod, connection::send_answer, Service},
 };
 
