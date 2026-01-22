@@ -16,6 +16,7 @@ impl Service {
     where
         Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
     {
+        log::error!("frozen: {:?}; pods: {:?}", self.frozen_pods, self.pods);
         let name = match find_frozen_pod(&id, &self.frozen_pods) {
             Some((name, _)) => name,
             None => {

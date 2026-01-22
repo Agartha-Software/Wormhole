@@ -9,7 +9,7 @@ use std::io;
 use std::{net::SocketAddr, path::PathBuf};
 use tokio::sync::mpsc::UnboundedSender;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PodPrototype {
     pub global_config: GlobalConfig,
     pub name: String,

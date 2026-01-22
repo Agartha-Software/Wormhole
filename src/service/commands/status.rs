@@ -1,4 +1,4 @@
-use crate::ipc::answers::StatusAnswer;
+use crate::ipc::answers::{StatusAnswer, StatusSuccess};
 use crate::service::connection::send_answer;
 use crate::service::Service;
 
@@ -10,6 +10,10 @@ impl Service {
     where
         Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
     {
-        send_answer(StatusAnswer::Success, stream).await
+        let data = StatusSuccess {
+            running: self.pods.keys().cloned().collect::<Vec<String>>(),
+            frozen: self.frozen_pods.keys().cloned().collect::<Vec<String>>(),
+        };
+        send_answer(StatusAnswer::Success(data), stream).await
     }
 }
