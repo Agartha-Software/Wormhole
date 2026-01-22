@@ -101,8 +101,9 @@ impl PodPrototype {
                         if let Some(urls) =
                             accept
                                 .urls
-                                .into_iter()
+                                .iter()
                                 .skip(1)
+                                .cloned()
                                 .try_fold(Vec::new(), |mut a, b| {
                                     a.push(b?);
                                     Some(a)
@@ -129,6 +130,14 @@ impl PodPrototype {
 
                                 Err(e) => log::error!("a peer failed: {e}"),
                             };
+                        } else {
+                            let peers = accept
+                                .hosts
+                                .iter()
+                                .zip(accept.urls.iter())
+                                .filter_map(|(a, b)| b.is_none().then_some(a))
+                                .collect::<Vec<_>>();
+                            log::error!("No reachable url for peers: {peers:#?}");
                         }
                     }
                 }
