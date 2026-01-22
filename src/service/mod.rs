@@ -7,7 +7,7 @@ pub mod tcp;
 use crate::ipc::commands::Command;
 use crate::ipc::error::ListenerError;
 use crate::pods::pod::Pod;
-use crate::pods::save::{delete_saved_pods, load_saved_pods};
+use crate::pods::save::{delete_saved_pods, load_saved_pods, ServiceKey};
 use crate::service::clap::ServiceArgs;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use interprocess::local_socket::tokio::Listener;
@@ -47,12 +47,13 @@ impl Service {
             .ok()?;
         let mut pods = HashMap::new();
 
+        let service_key = ServiceKey::from_path(&socket);
         if args.clean {
-            delete_saved_pods(&socket)
+            delete_saved_pods(&service_key)
                 .inspect_err(|err| eprintln!("Failed to delete saved pods: {:?}", err))
                 .ok()?;
         } else {
-            load_saved_pods(&mut pods, args.allow_other_users, &socket)
+            load_saved_pods(&mut pods, args.allow_other_users, &service_key)
                 .await
                 .inspect_err(|err| eprintln!("Failed to load saved pods: {:?}", err))
                 .ok()?;
@@ -68,11 +69,12 @@ impl Service {
     }
 
     pub async fn stop_all_pods(self) -> ExitCode {
+        let service_key = ServiceKey::from_path(&self.socket);
         let mut status = ExitCode::SUCCESS;
         for (name, pod) in self.pods.into_iter() {
             if pod.should_restart {
                 let _ = pod
-                    .save(&self.socket)
+                    .save(&service_key)
                     .await
                     .inspect_err(|err| log::error!("Couldn't save the pod data: {err}"));
             }

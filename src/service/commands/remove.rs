@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use crate::{
     ipc::{answers::RemoveAnswer, commands::RemoveRequest},
-    pods::{pod::Pod, save::delete_saved_pod},
+    pods::{
+        pod::Pod,
+        save::{delete_saved_pod, ServiceKey},
+    },
     service::{commands::find_pod, connection::send_answer},
 };
 
@@ -25,7 +28,7 @@ where
 
     let answer = if let Some(pod) = pods.remove(&name) {
         match pod.stop().await {
-            Ok(()) => match delete_saved_pod(socket_address, &name) {
+            Ok(()) => match delete_saved_pod(&ServiceKey::from_path(socket_address), &name) {
                 Ok(()) => RemoveAnswer::Success,
                 Err(err) => RemoveAnswer::PodStopFailed(err.to_string()),
             },
