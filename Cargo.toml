@@ -24,8 +24,8 @@ rust-version = "1.87.0"
 
 
 [patch.crates-io]
-librsync = { git = 'https://github.com/mbrt/librsync-rs.git'}
-librsync-sys = { git = 'https://github.com/mbrt/librsync-rs.git'}
+librsync = { git = 'https://github.com/mbrt/librsync-rs.git' }
+librsync-sys = { git = 'https://github.com/mbrt/librsync-rs.git' }
 
 
 [lib]
@@ -35,6 +35,10 @@ path = "src/lib.rs"
 [[bin]]
 name = "wormhole"
 path = "src/bin/cli.rs"
+
+[[bin]]
+name = "p2p-test"
+path = "src/bin/p2p-test.rs"
 
 [[bin]]
 name = "wormholed"
@@ -100,7 +104,7 @@ gethostname = "1.0.2"
 librsync = "0.2.4"
 rand = "0.9.2"
 interprocess = { version = "2.2.3", features = ["tokio"] }
-camino = {version = "1.2.1", features = ["serde1"] }
+camino = { version = "1.2.1", features = ["serde1"] }
 fs2 = "0.4.3"
 colored = "3.0.0"
 serde_json = "1.0.149"
@@ -108,6 +112,17 @@ ts-rs = "11.1.0"
 axum = "0.8.8"
 either = "1.15.0"
 directories = "6.0.0"
+libp2p = { version = "0.56.0", features = [
+    "tokio",
+    "websocket",
+    "dns",
+    "tcp",
+    "noise",
+    "yamux",
+    "macros",
+    "request-response",
+] }
+async-trait = "0.1.89"
 
 [dev-dependencies]
 assert_fs = "1.1.2"
@@ -123,8 +138,8 @@ systemd-units = { enable = true, start = true }
 
 [package.metadata.generate-rpm]
 assets = [
-    { source = "target/release/wormhole", dest = "/usr/bin/wormhole"},
-    { source = "target/release/wormholed", dest = "/usr/bin/wormholed"}
+    { source = "target/release/wormhole", dest = "/usr/bin/wormhole" },
+    { source = "target/release/wormholed", dest = "/usr/bin/wormholed" },
 ]
 [package.metadata.generate-rpm.requires]
 fuse3 = ">= 3.16"
