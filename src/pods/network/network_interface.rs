@@ -281,6 +281,12 @@ impl NetworkInterface {
             .expect("network_interface::apply_redundancy: tx error");
     }
 
+    pub fn check_integrity(&self) {
+        self.to_redundancy_tx
+            .send(RedundancyMessage::CheckIntegrity)
+            .expect("network_interface::apply_redundancy: tx error");
+    }
+
     // !SECTION ^ Redundancy related
 
     // SECTION Node related
@@ -513,11 +519,18 @@ impl NetworkInterface {
             .expect("Error during the websocket handshake occurred");
 
             match PeerIPC::accept(&network_interface, ws_stream, receiver_in.clone()).await {
-                Ok(new_peer) => network_interface
-                    .peers
-                    .try_write_for(LOCK_TIMEOUT)
-                    .expect("incoming_connections_watchdog: can't lock existing peers")
-                    .push(new_peer),
+                Ok(new_peer) => {
+                    network_interface
+                        .peers
+                        .try_write_for(LOCK_TIMEOUT)
+                        .expect("incoming_connections_watchdog: can't lock existing peers")
+                        .push(new_peer);
+                    // weird place to put it,
+                    // but we need to let the redundancy spread
+                    // to the new peer upon a new connection
+                    // todo: have redundancy worker keep track of things better...
+                    network_interface.check_integrity();
+                }
                 Err(e) => log::error!("incomming: accept: {e}"),
             }
         }
