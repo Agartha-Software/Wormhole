@@ -158,6 +158,7 @@ impl PeerIPC {
             Ok((stream, _)) => {
                 let (mut sink, mut stream) = stream.split();
                 let wave = handshake::wave(&mut stream, &mut sink, hostname, blame).await?;
+                let peer_name = wave.hostname.clone();
                 (
                     wave,
                     tokio::spawn(Self::work(
@@ -165,7 +166,7 @@ impl PeerIPC {
                         stream,
                         receiver_in.clone(),
                         sender_out,
-                        url.clone(),
+                        peer_name,
                     )),
                 )
             }
