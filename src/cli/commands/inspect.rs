@@ -40,15 +40,17 @@ pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String
             \x20  Url:\t\t\t{}\n\
             \x20  Bound Address:\t{}\n\
             \x20  Connected peers:\t{}",
-            info.frozen.then(|| "Running").unwrap_or("Frozen"),
+            if info.frozen { "Running" } else { "Frozen" },
             info.name,
             info.mount,
             info.hostname,
             info.public_url.unwrap_or("[ None ]".to_string()),
             info.bound_socket,
-            info.frozen
-                .then(|| display_peers(info.connected_peers))
-                .unwrap_or("Disconnected (Frozen)".to_string())
+            if info.frozen {
+                display_peers(info.connected_peers)
+            } else {
+                "Disconnected (Frozen)".to_string()
+            }
         )),
         InspectAnswer::PodNotFound => Err(io::Error::new(
             io::ErrorKind::NotFound,

@@ -23,7 +23,7 @@ fn find_pod<'a>(id: &'a PodId, pods: &'a HashMap<String, Pod>) -> Option<(&'a St
     }
 }
 
-pub(self) fn find_frozen_pod<'a>(
+pub fn find_frozen_pod<'a>(
     id: &'a PodId,
     pods: &'a HashMap<String, PodPrototype>,
 ) -> Option<(&'a String, &'a PodPrototype)> {

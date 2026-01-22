@@ -21,7 +21,7 @@ impl Service {
     where
         Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
     {
-        if self.pods.get(&args.name).is_some() {
+        if self.pods.contains_key(&args.name) {
             return send_answer(NewAnswer::AlreadyExist, stream).await;
         }
 

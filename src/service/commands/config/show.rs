@@ -13,12 +13,9 @@ async fn locking_config_to_string<Conf>(config: &Arc<RwLock<Conf>>) -> Option<St
 where
     Conf: Serialize + Clone,
 {
-    match config.try_read_for(LOCK_TIMEOUT) {
-        Some(config) => {
-            Some(toml::to_string(&config.clone()).expect("Serialization shouldn't be able to fail"))
-        }
-        None => return None,
-    }
+    config.try_read_for(LOCK_TIMEOUT).map(|config| {
+        toml::to_string(&config.clone()).expect("Serialization shouldn't be able to fail")
+    })
 }
 
 fn generate_local_config_file(pod: &Pod) -> String {

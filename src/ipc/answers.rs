@@ -71,8 +71,8 @@ pub enum RemoveAnswer {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct StatusSuccess {
-    pub(crate) running: Vec<String>,
-    pub(crate) frozen: Vec<String>,
+    pub running: Vec<String>,
+    pub frozen: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
