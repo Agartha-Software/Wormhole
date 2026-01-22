@@ -114,7 +114,7 @@ impl PodPrototype {
             }
         }
         Ok((
-            generate_itree(&self.mountpoint, &self.hostname).unwrap_or(ITree::new()),
+            generate_itree(&self.mountpoint, &self.hostname).unwrap_or_default(),
             vec![],
         ))
     }

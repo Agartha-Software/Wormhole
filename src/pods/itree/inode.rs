@@ -55,9 +55,9 @@ impl Inode {
 
         Self {
             parent: parent_ino,
-            id: id,
-            name: name,
-            entry: entry,
+            id,
+            name,
+            entry,
             meta,
             xattrs,
         }
@@ -149,11 +149,11 @@ impl TryInto<Metadata> for fs::Metadata {
                 SimpleFileType::Directory
             },
             perm: WINDOWS_DEFAULT_PERMS_MODE,
-            nlink: 0 as u32,
+            nlink: 0,
             uid: 0,
             gid: 0,
-            rdev: 0 as u32,
-            blksize: 0 as u32,
+            rdev: 0,
+            blksize: 0,
             flags: 0,
         })
     }

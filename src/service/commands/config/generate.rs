@@ -82,32 +82,37 @@ async fn write_global_config<Stream>(
 where
     Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
 {
-    if let Ok(config) = GlobalConfig::read_lock(&pod.global_config, "Write global config command") {
-        let mut global_path = pod.get_mountpoint().clone();
-        global_path.push(GLOBAL_CONFIG_FNAME);
+    let mut global_path = pod.get_mountpoint().clone();
+    global_path.push(GLOBAL_CONFIG_FNAME);
 
-        if !overwrite && global_path.exists() {
-            send_answer(
-                GenerateConfigAnswer::CantOverwrite(ConfigType::Global),
-                stream,
-            )
-            .await?;
-            return Ok(false);
-        }
+    if !overwrite && global_path.exists() {
+        send_answer(
+            GenerateConfigAnswer::CantOverwrite(ConfigType::Global),
+            stream,
+        )
+        .await?;
+        return Ok(false);
+    }
 
-        if let Err(err) = config.write(global_path) {
-            send_answer(
-                GenerateConfigAnswer::WriteFailed(err.to_string(), ConfigType::Global),
-                stream,
-            )
-            .await?;
-            return Ok(false);
-        };
+    let write_success = if let Ok(config) =
+        GlobalConfig::read_lock(&pod.global_config, "Write global config command")
+    {
+        config.write(global_path)
     } else {
         send_answer(GenerateConfigAnswer::ConfigBlock, stream).await?;
         return Ok(false);
     };
-    Ok(true)
+
+    if let Err(err) = write_success {
+        send_answer(
+            GenerateConfigAnswer::WriteFailed(err.to_string(), ConfigType::Global),
+            stream,
+        )
+        .await?;
+        Ok(false)
+    } else {
+        Ok(true)
+    }
 }
 
 impl Service {
@@ -134,10 +139,10 @@ impl Service {
                     }
                 }
                 ConfigType::Both => {
-                    if write_local_config(pod, stream, overwrite).await? {
-                        if write_global_config(pod, stream, overwrite).await? {
-                            send_answer(GenerateConfigAnswer::Success, stream).await?;
-                        }
+                    if write_local_config(pod, stream, overwrite).await?
+                        && write_global_config(pod, stream, overwrite).await?
+                    {
+                        send_answer(GenerateConfigAnswer::Success, stream).await?;
                     }
                 }
             },

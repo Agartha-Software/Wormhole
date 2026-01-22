@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::{io, sync::Arc};
 
@@ -138,6 +139,7 @@ impl Pod {
         Self::realize(prototype, server, receiver_in, receiver_out, itree, peers)
     }
 
+    #[allow(unused_variables)]
     fn realize(
         proto: PodPrototype,
         server: Arc<Server>,
@@ -325,25 +327,28 @@ impl Pod {
     }
 
     /// Gets every file hosted by this pod only and sends them to other pods
-    async fn send_files_when_stopping(&self, itree: &ITree, peers: Vec<Address>) {
-        futures_util::future::join_all(
-            itree
-                .files_hosted_only_by(&self.network_interface.hostname.clone())
-                .filter_map(|inode| {
-                    if inode.id == GLOBAL_CONFIG_INO
-                        || inode.id == LOCAL_CONFIG_INO
-                        || inode.id == ITREE_FILE_INO
-                    {
-                        None
-                    } else {
-                        Some(inode.id)
-                    }
-                })
-                .map(|id| self.send_file_to_possible_hosts(&peers, id)),
-        )
-        .await
-        .iter()
-        .for_each(|e| {
+    async fn send_files_when_stopping<T: Deref<Target = ITree>>(
+        &self,
+        itree: T,
+        peers: Vec<Address>,
+    ) {
+        let ids_to_send = itree
+            .files_hosted_only_by(&self.network_interface.hostname)
+            .filter_map(|inode| {
+                if inode.id == GLOBAL_CONFIG_INO
+                    || inode.id == LOCAL_CONFIG_INO
+                    || inode.id == ITREE_FILE_INO
+                {
+                    None
+                } else {
+                    Some(inode.id)
+                }
+            });
+        let tasks = futures_util::future::join_all(
+            ids_to_send.map(|id| self.send_file_to_possible_hosts(&peers, id)),
+        );
+        drop(itree);
+        tasks.await.iter().for_each(|e| {
             if let Err(e) = e {
                 log::warn!("{e:?}")
             }
@@ -357,18 +362,22 @@ impl Pod {
 
         // drop(self.fuse_handle); // FIXME - do something like block the filesystem
 
-        let itree = ITree::read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
+        // moving the await task outside the scope needed to workaround https://github.com/rust-lang/rust-clippy/issues/6446
+        let (itree_bin, task) = {
+            let itree = ITree::read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
 
-        let peers: Vec<Address> = self
-            .peers
-            .read()
-            .iter()
-            .map(|peer| peer.hostname.clone())
-            .collect();
+            let peers: Vec<Address> = self
+                .peers
+                .read()
+                .iter()
+                .map(|peer| peer.hostname.clone())
+                .collect();
 
-        self.send_files_when_stopping(&itree, peers).await;
-        let itree_bin = bincode::serialize(&*itree).expect("can't serialize itree to bincode");
-        drop(itree);
+            let bin = bincode::serialize(&*itree).expect("can't serialize itree to bincode");
+            let task = self.send_files_when_stopping(itree, peers);
+            (bin, task)
+        };
+        task.await;
 
         self.network_interface
             .to_network_message_tx

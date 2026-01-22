@@ -99,9 +99,7 @@ impl FsInterface {
 
     // SECTION - remote -> write
     pub fn recept_inode(&self, inode: Inode) -> Result<(), MakeInodeError> {
-        self.network_interface
-            .acknowledge_new_file(inode.clone(), inode.id)?;
-        self.network_interface.promote_next_inode(inode.id + 1)?;
+        self.network_interface.acknowledge_new_file(inode.clone())?;
 
         let new_path = {
             let itree = ITree::read_lock(&self.itree, "recept_inode")?;

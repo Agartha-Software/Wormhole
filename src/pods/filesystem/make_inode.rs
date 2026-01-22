@@ -84,22 +84,22 @@ impl FsInterface {
             *hosts = vec![self.network_interface.hostname.clone()];
         }
 
+        let mut itree = self.itree.upgradable_read();
+
         let new_inode_id = special_ino
             .ok_or(())
-            .or_else(|_| self.network_interface.get_next_inode())?;
+            .or_else(|_| itree.with_upgraded(|itree| itree.reserve_ino()))?;
 
         let new_inode = Inode::new(name, parent_ino, new_inode_id, entry, permissions);
 
         let new_path = {
-            let itree = ITree::read_lock(&self.itree, "make inode")?;
-
             let parent = itree.get_inode(parent_ino)?;
 
             if !has_write_perm(parent.meta.perm) || !has_write_perm(parent.meta.perm) {
                 return Err(MakeInodeError::PermissionDenied);
             }
             //check if already exist
-            match itree.get_inode_child_by_name(&parent, new_inode.name.as_ref()) {
+            match itree.get_inode_child_by_name(parent, new_inode.name.as_ref()) {
                 Ok(_) => return Err(MakeInodeError::AlreadyExist),
                 Err(WhError::InodeNotFound) => {}
                 Err(err) => return Err(MakeInodeError::WhError { source: err }),
@@ -108,6 +108,8 @@ impl FsInterface {
             new_path.push((&new_inode.name).into());
             new_path
         };
+
+        drop(itree);
 
         match &new_inode.entry {
             FsEntry::File(_) => self

@@ -4,9 +4,9 @@ use fuser::{FileAttr, FileType, TimeOrNow};
 
 use crate::pods::{filesystem::fs_interface::SimpleFileType, itree::Metadata};
 
-impl Into<FileType> for SimpleFileType {
-    fn into(self) -> FileType {
-        match self {
+impl From<SimpleFileType> for FileType {
+    fn from(val: SimpleFileType) -> FileType {
+        match val {
             SimpleFileType::File => FileType::RegularFile,
             SimpleFileType::Directory => FileType::Directory,
             SimpleFileType::Symlink => FileType::Symlink,
@@ -14,9 +14,9 @@ impl Into<FileType> for SimpleFileType {
     }
 }
 
-impl Into<FileType> for &SimpleFileType {
-    fn into(self) -> FileType {
-        match self {
+impl From<&SimpleFileType> for FileType {
+    fn from(val: &SimpleFileType) -> Self {
+        match val {
             SimpleFileType::File => FileType::RegularFile,
             SimpleFileType::Directory => FileType::Directory,
             SimpleFileType::Symlink => FileType::Symlink,
@@ -24,9 +24,9 @@ impl Into<FileType> for &SimpleFileType {
     }
 }
 
-impl Into<SimpleFileType> for FileType {
-    fn into(self) -> SimpleFileType {
-        match self {
+impl From<FileType> for SimpleFileType {
+    fn from(val: FileType) -> Self {
+        match val {
             FileType::RegularFile => SimpleFileType::File,
             FileType::Directory => SimpleFileType::Directory,
             FileType::Symlink => SimpleFileType::Symlink,
@@ -44,50 +44,50 @@ impl<'a> Deref for MetadataFileAttr<'a> {
     type Target = Metadata;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.0
     }
 }
 
-impl<'a> Into<FileAttr> for &MetadataFileAttr<'a> {
-    fn into(self) -> FileAttr {
+impl<'a> From<&MetadataFileAttr<'a>> for FileAttr {
+    fn from(val: &MetadataFileAttr<'a>) -> Self {
         FileAttr {
-            ino: self.ino,
-            size: self.size,
-            blocks: self.size,
-            atime: self.atime,
-            mtime: self.mtime,
-            ctime: self.ctime,
-            crtime: self.crtime,
-            kind: (&self.kind).into(),
-            perm: self.perm,
-            nlink: self.nlink,
-            uid: self.uid,
-            gid: self.gid,
-            rdev: self.rdev,
-            flags: self.flags,
-            blksize: self.blksize,
+            ino: val.ino,
+            size: val.size,
+            blocks: val.size,
+            atime: val.atime,
+            mtime: val.mtime,
+            ctime: val.ctime,
+            crtime: val.crtime,
+            kind: (&val.kind).into(),
+            perm: val.perm,
+            nlink: val.nlink,
+            uid: val.uid,
+            gid: val.gid,
+            rdev: val.rdev,
+            flags: val.flags,
+            blksize: val.blksize,
         }
     }
 }
 
-impl Into<Metadata> for FileAttr {
-    fn into(self) -> Metadata {
+impl From<FileAttr> for Metadata {
+    fn from(val: FileAttr) -> Self {
         Metadata {
-            ino: self.ino,
-            size: self.size,
-            blocks: self.blocks,
-            atime: self.atime,
-            mtime: self.mtime,
-            ctime: self.ctime,
-            crtime: self.crtime,
-            kind: self.kind.into(),
-            perm: self.perm,
-            nlink: self.nlink,
-            uid: self.uid,
-            gid: self.gid,
-            rdev: self.rdev,
-            flags: self.flags,
-            blksize: self.blksize,
+            ino: val.ino,
+            size: val.size,
+            blocks: val.blocks,
+            atime: val.atime,
+            mtime: val.mtime,
+            ctime: val.ctime,
+            crtime: val.crtime,
+            kind: val.kind.into(),
+            perm: val.perm,
+            nlink: val.nlink,
+            uid: val.uid,
+            gid: val.gid,
+            rdev: val.rdev,
+            flags: val.flags,
+            blksize: val.blksize,
         }
     }
 }

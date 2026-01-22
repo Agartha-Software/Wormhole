@@ -10,8 +10,8 @@ use crate::{
 };
 
 fn display_peers(peers: Vec<PeerInfo>) -> String {
-    if peers.len() == 0 {
-        format!("[ ]")
+    if peers.is_empty() {
+        "[ ]".to_string()
     } else {
         let mut string = String::from("[");
         for (idx, peer) in peers.iter().enumerate() {

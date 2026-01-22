@@ -14,10 +14,7 @@ use std::collections::HashMap;
 use crate::ipc::commands::PodId;
 use crate::pods::{pod::Pod, prototype::PodPrototype};
 
-pub(self) fn find_pod<'a>(
-    id: &'a PodId,
-    pods: &'a HashMap<String, Pod>,
-) -> Option<(&'a String, &'a Pod)> {
+fn find_pod<'a>(id: &'a PodId, pods: &'a HashMap<String, Pod>) -> Option<(&'a String, &'a Pod)> {
     match id {
         PodId::Name(name) => pods.get_key_value(name),
         PodId::Path(path) => pods
