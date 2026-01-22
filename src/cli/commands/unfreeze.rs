@@ -15,7 +15,7 @@ use crate::{
 pub async fn unfreeze(args: IdentifyPodArgs, mut stream: Stream) -> io::Result<String> {
     let id = PodId::from(args);
 
-    send_command(Command::Freeze(id), &mut stream).await?;
+    send_command(Command::Unfreeze(id), &mut stream).await?;
     match recieve_answer::<UnfreezeAnswer>(&mut stream).await? {
         UnfreezeAnswer::Success(name) => Ok(format!("Pod '{name}' unfrozen successfully!")),
         UnfreezeAnswer::PodNotFound => Err(io::Error::new(
