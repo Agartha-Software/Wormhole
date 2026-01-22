@@ -15,6 +15,12 @@ use crate::{
     },
 };
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum MessageAnswer {
+    /// Request a file delta from this base signature
+    DeltaRequest(Ino, Signature),
+}
+
 /// Message Content
 /// Represent the content of the intern message but is also the struct sent
 /// through the network

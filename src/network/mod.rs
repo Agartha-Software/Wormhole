@@ -7,3 +7,4 @@ mod handshake;
 pub mod server;
 pub use handshake::HandshakeError;
 // pub mod watchdogs;
+pub mod codec;
