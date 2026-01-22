@@ -141,6 +141,7 @@ pub struct NewArgs {
     #[arg(long, short = 'H')]
     pub hostname: Option<String>,
     /// Url this Pod reports to other to reach it
+    /// defaults to the Machine's real hostname and the used port
     #[arg(long, short)]
     pub listen_url: Option<String>, // listen_url in the Cli and public_url in the code because the -p would conflict with the port
     /// Ip address this Pod listen [default: 0.0.0.0]
