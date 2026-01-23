@@ -49,7 +49,7 @@ where
     let public_url = match (local_config.general.public_url, args.public_url) {
         (None, None) => gethostname::gethostname()
             .into_string()
-            .inspect_err(|os|log::warn!("Could not create utf8 url for machine name {os:#?}"))
+            .inspect_err(|os| log::warn!("Could not create utf8 url for machine name {os:#?}"))
             .ok()
             .map(|s| format!("{s}:{}", bound_socket.port())),
         (None, Some(public_url)) => Some(public_url),
