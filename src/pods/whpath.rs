@@ -12,6 +12,7 @@ use std::{
     ffi::{OsStr, OsString},
     path::{Path, PathBuf},
 };
+use ts_rs::TS;
 
 custom_error! {pub WhPathError
     NotRelative = "Path is not relative",
@@ -66,8 +67,9 @@ impl WhPathError {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, TS)]
 pub struct WhPath {
+    #[ts(as = "String")]
     inner: Utf8PathBuf,
 }
 
@@ -290,8 +292,19 @@ pub fn is_valid_for_whpath<T: AsRef<Path>>(p: T) -> Result<(), WhPathError> {
 
 // SECTION Name
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, TS)]
 pub struct InodeName(String);
+
+impl Display for InodeName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Exception: only the ROOT has an empty name, and is represented as '/'
+        if self.0.is_empty() {
+            f.write_str("/")
+        } else {
+            f.write_str(&self.0)
+        }
+    }
+}
 
 impl InodeName {
     pub fn check(name: &str) -> Result<(), InodeNameError> {
@@ -300,6 +313,10 @@ impl InodeName {
             true => Err(InodeNameError {}),
             false => Ok(()),
         }
+    }
+
+    pub fn root() -> Self {
+        Self("".to_owned())
     }
 
     pub fn as_str(&self) -> &str {

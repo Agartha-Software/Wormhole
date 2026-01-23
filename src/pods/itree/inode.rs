@@ -5,6 +5,7 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::{collections::HashMap, time::SystemTime};
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::pods::{
     filesystem::fs_interface::SimpleFileType,
@@ -21,7 +22,7 @@ pub const ROOT: Ino = 1;
 
 pub type XAttrs = HashMap<String, Vec<u8>>;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, TS)]
 pub struct Inode {
     pub parent: Ino,
     pub id: Ino,
@@ -69,7 +70,7 @@ pub const WINDOWS_DEFAULT_PERMS_MODE: u16 = 0o666;
 /* NOTE
  * is currently made with fuse in sight. Will probably need to be edited to be windows compatible
  */
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, TS)]
 pub struct Metadata {
     /// Inode number
     pub ino: u64,
@@ -78,12 +79,16 @@ pub struct Metadata {
     /// Size in blocks
     pub blocks: u64,
     /// Time of last access
+    #[ts(as = "u64")]
     pub atime: SystemTime,
     /// Time of last modification
+    #[ts(as = "u64")]
     pub mtime: SystemTime,
     /// Time of last change
+    #[ts(as = "u64")]
     pub ctime: SystemTime,
     /// Time of creation (macOS only)
+    #[ts(as = "u64")]
     pub crtime: SystemTime,
     /// Kind of file (directory, file, pipe, etc)
     pub kind: SimpleFileType,

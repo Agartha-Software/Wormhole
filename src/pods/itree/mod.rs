@@ -51,7 +51,7 @@ pub type ITreeIndex = HashMap<Ino, Inode>;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ITree {
-    entries: ITreeIndex,
+    pub entries: ITreeIndex,
     pub next_ino: RangeFrom<Ino>,
 }
 
@@ -71,7 +71,7 @@ impl ITree {
             Inode {
                 parent: ROOT,
                 id: ROOT,
-                name: WhPath::root().to_string().try_into().unwrap(),
+                name: InodeName::root(),
                 entry: FsEntry::Directory(vec![]),
                 meta: Metadata {
                     ino: ROOT,
@@ -139,8 +139,8 @@ impl ITree {
         self
     }
 
-    pub fn get_raw_entries(&self) -> ITreeIndex {
-        self.entries.clone()
+    pub fn raw_entries(&self) -> &ITreeIndex {
+        &self.entries
     }
 
     pub fn iter(&self) -> std::collections::hash_map::Iter<'_, Ino, Inode> {

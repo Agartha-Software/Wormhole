@@ -5,7 +5,6 @@ use std::{io, sync::Arc};
 
 use crate::config::local_file::{GeneralLocalConfig, LocalConfigFile};
 use crate::config::GlobalConfig;
-use crate::data::tree_hosts::CliHostTree;
 use crate::error::{WhError, WhResult};
 #[cfg(target_os = "linux")]
 use crate::fuse::fuse_impl::mount_fuse;
@@ -43,8 +42,8 @@ use super::itree::{Ino, GLOBAL_CONFIG_INO, ITREE_FILE_FNAME, ITREE_FILE_INO};
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Pod {
-    network_interface: Arc<NetworkInterface>,
-    fs_interface: Arc<FsInterface>,
+    pub network_interface: Arc<NetworkInterface>,
+    pub fs_interface: Arc<FsInterface>,
     mountpoint: PathBuf,
     pub peers: Arc<RwLock<Vec<PeerIPC>>>,
     #[cfg(target_os = "linux")]
@@ -56,7 +55,7 @@ pub struct Pod {
     new_peer_handle: JoinHandle<()>,
     redundancy_worker_handle: JoinHandle<()>,
     pub global_config: Arc<RwLock<GlobalConfig>>,
-    name: String,
+    pub name: String,
     pub should_restart: bool,
 }
 
@@ -368,18 +367,6 @@ impl Pod {
             }),
         }
     }
-
-    pub fn get_file_tree_and_hosts(
-        &self,
-        path: Option<&WhPath>,
-    ) -> Result<CliHostTree, PodInfoError> {
-        let itree = ITree::read_lock(&self.network_interface.itree, "Pod::get_info")?;
-
-        Ok(CliHostTree {
-            lines: itree.get_file_tree_and_hosts(path)?,
-        })
-    }
-
     // !SECTION
 
     /// for a given file, will try to send it to one host, trying each until succes
