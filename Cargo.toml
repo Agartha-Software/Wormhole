@@ -121,6 +121,7 @@ libp2p = { version = "0.56.0", features = [
     "yamux",
     "macros",
     "request-response",
+    "serde",
 ] }
 async-trait = "0.1.89"
 

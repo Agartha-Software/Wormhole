@@ -1,6 +1,6 @@
 use crate::{
     error::WhError,
-    network::message::{Address, MessageContent, ToNetworkMessage},
+    network::message::{Response, ToNetworkMessage},
     pods::{
         filesystem::{
             attrs::AcknoledgeSetAttrError,
@@ -11,10 +11,17 @@ use crate::{
             write::WriteError,
         },
         itree::{FsEntry, ITree, Ino, Metadata},
-        network::pull_file::PullError,
+        network::{
+            callbacks::Request, codec::BincodeCodec, event_loop::ResponseSender,
+            pull_file::PullError,
+        },
     },
 };
 use custom_error::custom_error;
+use libp2p::{
+    request_response::{Codec, ResponseChannel},
+    PeerId,
+};
 
 custom_error! {
     #[derive(Clone)]
@@ -34,13 +41,7 @@ impl FsInterface {
     /// Non-tracking peers will always only get a 'FileChanged' message
     ///
     pub fn flush(&self, ino: Ino, handle: Option<&mut FileHandle>) -> Result<(), FlushError> {
-        let peers = self
-            .network_interface
-            .peers
-            .read()
-            .iter()
-            .map(|p| p.hostname.clone())
-            .collect::<Vec<_>>();
+        let peers = self.network_interface.peers.read();
         let inode = self.itree.read().get_inode(ino)?.clone();
         let tracking = match &inode.entry {
             FsEntry::File(tracking) => tracking,
@@ -59,13 +60,13 @@ impl FsInterface {
             *signature = Signature::new(&file)?;
             *dirty = false;
 
-            for peer in &peers {
+            for peer in peers.iter() {
                 if tracking.contains(peer) {
                     self.network_interface
                         .to_network_message_tx
                         .send(ToNetworkMessage::SpecificMessage(
                             (
-                                MessageContent::FileDelta(
+                                Request::FileDelta(
                                     ino,
                                     inode.meta.clone(),
                                     old_sig.clone(),
@@ -82,7 +83,7 @@ impl FsInterface {
                     self.network_interface
                         .to_network_message_tx
                         .send(ToNetworkMessage::SpecificMessage(
-                            (MessageContent::FileChanged(ino, inode.meta.clone()), None),
+                            (Request::FileChanged(ino, inode.meta.clone()), None),
                             vec![peer.clone()],
                         ))
                         .map_err(|e| WhError::WouldBlock {
@@ -93,9 +94,10 @@ impl FsInterface {
         } else {
             self.network_interface
                 .to_network_message_tx
-                .send(ToNetworkMessage::BroadcastMessage(
-                    MessageContent::FileChanged(ino, inode.meta.clone()),
-                ))
+                .send(ToNetworkMessage::BroadcastMessage(Request::FileChanged(
+                    ino,
+                    inode.meta.clone(),
+                )))
                 .map_err(|e| WhError::WouldBlock {
                     called_from: e.to_string(),
                 })?;
@@ -105,7 +107,7 @@ impl FsInterface {
 
     /// Apply a delta received from the network
     /// deltas are in reference to a base signature, in case of signature mismatch
-    /// [MessageContent::DeltaRequest] is emitted back to get the correct diff
+    /// [Request::DeltaRequest] is emitted back to get the correct diff
     ///
     pub fn accept_delta(
         &self,
@@ -113,7 +115,8 @@ impl FsInterface {
         meta: Metadata,
         sig: Signature,
         delta: Delta,
-        origin: Address,
+        sender: ResponseSender,
+        // origin: PeerId,
     ) -> Result<(), FlushError> {
         log::trace!("accept_delta({ino})");
         let file = match self.get_local_file(ino)? {
@@ -149,13 +152,7 @@ impl FsInterface {
             })?;
         } else {
             log::warn!("accept_delta: signature does not match local sig!");
-            self.network_interface
-                .to_network_message_tx
-                .send(ToNetworkMessage::SpecificMessage(
-                    (MessageContent::DeltaRequest(ino, local_sig), None),
-                    vec![origin],
-                ))
-                .expect("pull_file: unable to request on the network thread");
+            sender.send(Response::DeltaRequest(ino, local_sig));
         }
         Ok(())
     }
@@ -165,7 +162,7 @@ impl FsInterface {
         &self,
         ino: Ino,
         meta: Metadata,
-        origin: Address,
+        origin: PeerId,
     ) -> Result<(), FlushError> {
         self.acknowledge_metadata(ino, meta).map_err(|e| match e {
             AcknoledgeSetAttrError::WhError { source } => FlushError::from(source),
@@ -177,12 +174,7 @@ impl FsInterface {
         };
         let local_sig = Signature::new(&file)?;
         self.network_interface
-            .to_network_message_tx
-            .send(ToNetworkMessage::SpecificMessage(
-                (MessageContent::DeltaRequest(ino, local_sig), None),
-                vec![origin],
-            ))
-            .expect("pull_file: unable to request on the network thread");
+            .send_to(Request::DeltaRequest(ino, local_sig), &origin);
         Ok(())
     }
 
@@ -190,7 +182,7 @@ impl FsInterface {
         &self,
         ino: Ino,
         sig: Signature,
-        origin: Address,
+        origin: PeerId,
     ) -> Result<(), FlushError> {
         let file = self.get_local_file(ino)?.ok_or(WhError::InodeNotFound)?;
         let delta = sig.diff(&file)?;
@@ -200,7 +192,7 @@ impl FsInterface {
         self.network_interface
             .to_network_message_tx
             .send(ToNetworkMessage::SpecificMessage(
-                (MessageContent::FileDelta(ino, inode.meta, sig, delta), None),
+                (Request::FileDelta(ino, inode.meta, sig, delta), None),
                 vec![origin],
             ))
             .map_err(|e| WhError::WouldBlock {

@@ -1,4 +1,4 @@
-use crate::network::message::{MessageAnswer, MessageContent};
+use crate::network::message::{Request, Response};
 use async_trait::async_trait;
 use futures::prelude::*;
 use libp2p::request_response::Codec;
@@ -36,8 +36,8 @@ impl BincodeCodec {
 #[async_trait]
 impl Codec for BincodeCodec {
     type Protocol = StreamProtocol;
-    type Request = MessageContent;
-    type Response = MessageAnswer;
+    type Request = Request;
+    type Response = Response;
 
     async fn read_request<T>(&mut self, _: &Self::Protocol, io: &mut T) -> io::Result<Self::Request>
     where

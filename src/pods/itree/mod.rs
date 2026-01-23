@@ -3,13 +3,13 @@ mod inode;
 
 pub use fsentry::*;
 pub use inode::*;
+use libp2p::PeerId;
 
 #[cfg(target_os = "windows")]
 pub use crate::pods::itree::WINDOWS_DEFAULT_PERMS_MODE;
 use crate::{
     data::tree_hosts::TreeLine,
     error::WhResult,
-    network::message::Address,
     pods::whpath::{InodeName, InodeNameError, WhPath},
 };
 
@@ -190,7 +190,7 @@ impl ITree {
 
     pub fn files_hosted_only_by<'a>(
         &'a self,
-        host: &'a Address,
+        host: &'a PeerId,
     ) -> impl Iterator<Item = &'a Inode> + use<'a> {
         self.iter()
             .filter_map(move |(_, inode)| match &inode.entry {
@@ -358,7 +358,7 @@ impl ITree {
         Ok(actual_inode)
     }
 
-    pub fn set_inode_hosts(&mut self, ino: Ino, hosts: Vec<Address>) -> WhResult<()> {
+    pub fn set_inode_hosts(&mut self, ino: Ino, hosts: Vec<PeerId>) -> WhResult<()> {
         let inode = self.get_inode_mut(ino)?;
 
         inode.entry = match &inode.entry {
@@ -372,7 +372,7 @@ impl ITree {
     ///
     /// Only works on inodes pointing files (no folders)
     /// Ignore already existing hosts to avoid duplicates
-    pub fn add_inode_hosts(&mut self, ino: Ino, mut new_hosts: Vec<Address>) -> WhResult<()> {
+    pub fn add_inode_hosts(&mut self, ino: Ino, mut new_hosts: Vec<PeerId>) -> WhResult<()> {
         let inode = self.get_inode_mut(ino)?;
 
         if let FsEntry::File(hosts) = &mut inode.entry {
@@ -388,7 +388,7 @@ impl ITree {
     /// Remove hosts from an inode
     ///
     /// Only works on inodes pointing files (no folders)
-    pub fn remove_inode_hosts(&mut self, ino: Ino, remove_hosts: Vec<Address>) -> WhResult<()> {
+    pub fn remove_inode_hosts(&mut self, ino: Ino, remove_hosts: Vec<PeerId>) -> WhResult<()> {
         let inode = self.get_inode_mut(ino)?;
 
         match &mut inode.entry {
@@ -473,7 +473,7 @@ fn index_folder_recursive(
     itree: &mut ITree,
     parent: Ino,
     path: &Path,
-    host: &String,
+    host: &PeerId,
     mountpoint: &Path,
 ) -> io::Result<()> {
     for entry in fs::read_dir(path)? {
@@ -540,7 +540,7 @@ fn index_folder_recursive(
     Ok(())
 }
 
-pub fn generate_itree(mountpoint: &Path, host: &String) -> io::Result<ITree> {
+pub fn generate_itree(mountpoint: &Path, host: &PeerId) -> io::Result<ITree> {
     if let Some(itree) = recover_serialized_itree(mountpoint) {
         Ok(itree)
     } else {

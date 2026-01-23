@@ -1,5 +1,4 @@
 use crate::error::WhResult;
-use crate::network::message::Address;
 use crate::pods::disk_managers::DiskManager;
 use crate::pods::filesystem::attrs::AcknoledgeSetAttrError;
 use crate::pods::filesystem::permissions::has_execute_perm;
@@ -12,6 +11,7 @@ use crate::pods::network::pull_file::PullError;
 use crate::pods::whpath::WhPath;
 
 use futures::io;
+use libp2p::PeerId;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -20,7 +20,6 @@ use std::sync::Arc;
 use super::file_handle::FileHandleManager;
 use super::make_inode::MakeInodeError;
 
-#[derive(Debug)]
 pub struct FsInterface {
     pub network_interface: Arc<NetworkInterface>,
     pub disk: Box<dyn DiskManager>,
@@ -185,7 +184,7 @@ impl FsInterface {
         Ok(())
     }
 
-    pub fn recept_edit_hosts(&self, id: Ino, hosts: Vec<Address>) -> WhResult<()> {
+    pub fn recept_edit_hosts(&self, id: Ino, hosts: Vec<PeerId>) -> WhResult<()> {
         if !hosts.contains(&self.network_interface.hostname) {
             let path =
                 ITree::read_lock(&self.itree, "recept_edit_hosts")?.get_path_from_inode_id(id)?;
@@ -199,7 +198,7 @@ impl FsInterface {
     pub fn recept_revoke_hosts(
         &self,
         id: Ino,
-        host: String,
+        host: PeerId,
         meta: Metadata,
     ) -> Result<(), AcknoledgeSetAttrError> {
         let needs_delete = host != self.network_interface.hostname;
@@ -219,11 +218,11 @@ impl FsInterface {
         Ok(())
     }
 
-    pub fn recept_add_hosts(&self, id: Ino, hosts: Vec<Address>) -> WhResult<()> {
+    pub fn recept_add_hosts(&self, id: Ino, hosts: Vec<PeerId>) -> WhResult<()> {
         self.network_interface.aknowledge_new_hosts(id, hosts)
     }
 
-    pub fn recept_remove_hosts(&self, id: Ino, hosts: Vec<Address>) -> WhResult<()> {
+    pub fn recept_remove_hosts(&self, id: Ino, hosts: Vec<PeerId>) -> WhResult<()> {
         if hosts.contains(&self.network_interface.hostname) {
             if let Err(e) = self.disk.remove_file(
                 &ITree::read_lock(&self.itree, "recept_remove_hosts")?
@@ -239,7 +238,7 @@ impl FsInterface {
     // !SECTION
 
     // SECTION remote -> read
-    pub fn send_filesystem(&self, to: Address) -> WhResult<()> {
+    pub fn send_filesystem(&self, to: PeerId) -> WhResult<()> {
         let itree = ITree::read_lock(&self.itree, "fs_interface::send_filesystem")?;
         let global_config_file_size = itree
             .get_inode(GLOBAL_CONFIG_INO)
@@ -266,7 +265,7 @@ impl FsInterface {
         self.network_interface.send_itree(to, global_config_bytes)
     }
 
-    pub fn send_file(&self, inode: Ino, to: Address) -> io::Result<()> {
+    pub fn send_file(&self, inode: Ino, to: PeerId) -> io::Result<()> {
         let itree = ITree::read_lock(&self.itree, "send_itree").map_err(io::Error::other)?;
         let path = itree
             .get_path_from_inode_id(inode)
@@ -275,9 +274,8 @@ impl FsInterface {
         let mut data = vec![0; size];
         size = self.disk.read_file(&path, 0, &mut data)?;
         data.resize(size, 0);
-        self.network_interface
-            .send_file(inode, data, to)
-            .map_err(io::Error::other)
+        self.network_interface.send_file(inode, data, to);
+        Ok(())
     }
 
     pub fn read_local_file(&self, inode: Ino) -> WhResult<Vec<u8>> {

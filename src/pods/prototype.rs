@@ -1,13 +1,10 @@
 use crate::config::local_file::LocalConfigFile;
+use crate::config::GlobalConfig;
 use crate::ipc::answers::InspectInfo;
-use crate::network::message::FromNetworkMessage;
-use crate::network::peer_ipc::PeerIPC;
-use crate::pods::itree::{generate_itree, ITree};
-use crate::{config::GlobalConfig, network::HandshakeError};
+use crate::pods::itree::ITree;
+use libp2p::PeerId;
 use serde::{Deserialize, Serialize};
-use std::io;
 use std::{net::SocketAddr, path::PathBuf};
-use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PodPrototype {
@@ -21,7 +18,7 @@ pub struct PodPrototype {
     pub allow_other_users: bool,
 }
 
-pub type ConnectionInfo = (ITree, Vec<PeerIPC>);
+pub type ConnectionInfo = (ITree, Vec<PeerId>);
 
 impl PodPrototype {
     pub fn apply_config(&mut self, local: LocalConfigFile) {
@@ -55,67 +52,67 @@ impl PodPrototype {
         }
     }
 
-    pub async fn try_to_connect(
-        &mut self,
-        fail_on_network: bool,
-        receiver_in: &UnboundedSender<FromNetworkMessage>,
-    ) -> Result<ConnectionInfo, io::Error> {
-        if !self.global_config.general.entrypoints.is_empty() {
-            for first_contact in &self.global_config.general.entrypoints {
-                match PeerIPC::connect(
-                    first_contact.to_owned(),
-                    self.hostname.clone(),
-                    self.public_url.clone(),
-                    receiver_in,
-                )
-                .await
-                {
-                    Err(HandshakeError::CouldntConnect) => continue,
-                    Err(e) => log::error!("{first_contact}: {e}"),
-                    Ok((ipc, accept)) => {
-                        if let Some(urls) =
-                            accept
-                                .urls
-                                .into_iter()
-                                .skip(1)
-                                .try_fold(Vec::new(), |mut a, b| {
-                                    a.push(b?);
-                                    Some(a)
-                                })
-                        {
-                            let new_hostname = accept.rename.unwrap_or(self.hostname.clone());
+    // pub async fn try_to_connect(
+    //     &mut self,
+    //     fail_on_network: bool,
+    //     receiver_in: &UnboundedSender<FromNetworkMessage>,
+    // ) -> Result<ConnectionInfo, io::Error> {
+    //     if !self.global_config.general.entrypoints.is_empty() {
+    //         for first_contact in &self.global_config.general.entrypoints {
+    //             match PeerIPC::connect(
+    //                 first_contact.to_owned(),
+    //                 self.hostname.clone(),
+    //                 self.public_url.clone(),
+    //                 receiver_in,
+    //             )
+    //             .await
+    //             {
+    //                 Err(HandshakeError::CouldntConnect) => continue,
+    //                 Err(e) => log::error!("{first_contact}: {e}"),
+    //                 Ok((ipc, accept)) => {
+    //                     if let Some(urls) =
+    //                         accept
+    //                             .urls
+    //                             .into_iter()
+    //                             .skip(1)
+    //                             .try_fold(Vec::new(), |mut a, b| {
+    //                                 a.push(b?);
+    //                                 Some(a)
+    //                             })
+    //                     {
+    //                         let new_hostname = accept.rename.unwrap_or(self.hostname.clone());
 
-                            match PeerIPC::peer_startup(
-                                urls,
-                                new_hostname.clone(),
-                                accept.hostname,
-                                receiver_in,
-                            )
-                            .await
-                            {
-                                Ok(mut other_ipc) => {
-                                    other_ipc.insert(0, ipc);
+    //                         match PeerIPC::peer_startup(
+    //                             urls,
+    //                             new_hostname.clone(),
+    //                             accept.hostname,
+    //                             receiver_in,
+    //                         )
+    //                         .await
+    //                         {
+    //                             Ok(mut other_ipc) => {
+    //                                 other_ipc.insert(0, ipc);
 
-                                    self.hostname = new_hostname;
-                                    self.global_config = accept.config;
+    //                                 self.hostname = new_hostname;
+    //                                 self.global_config = accept.config;
 
-                                    return Ok((accept.itree, other_ipc));
-                                }
+    //                                 return Ok((accept.itree, other_ipc));
+    //                             }
 
-                                Err(e) => log::error!("a peer failed: {e}"),
-                            };
-                        }
-                    }
-                }
-            }
-            if fail_on_network {
-                log::error!("None of the specified peers could answer. Stopping.");
-                return Err(io::Error::other("None of the specified peers could answer"));
-            }
-        }
-        Ok((
-            generate_itree(&self.mountpoint, &self.hostname).unwrap_or_default(),
-            vec![],
-        ))
-    }
+    //                             Err(e) => log::error!("a peer failed: {e}"),
+    //                         };
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //         if fail_on_network {
+    //             log::error!("None of the specified peers could answer. Stopping.");
+    //             return Err(io::Error::other("None of the specified peers could answer"));
+    //         }
+    //     }
+    //     Ok((
+    //         generate_itree(&self.mountpoint, &self.hostname).unwrap_or_default(),
+    //         vec![],
+    //     ))
+    // }
 }

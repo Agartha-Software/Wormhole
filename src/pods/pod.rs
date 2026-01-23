@@ -9,14 +9,17 @@ use crate::error::{WhError, WhResult};
 #[cfg(target_os = "linux")]
 use crate::fuse::fuse_impl::mount_fuse;
 use crate::ipc::answers::{InspectInfo, PeerInfo};
-use crate::network::message::{FromNetworkMessage, MessageContent, ToNetworkMessage};
+use crate::network::message::{FromNetworkMessage, Request, ToNetworkMessage};
 #[cfg(target_os = "linux")]
 use crate::pods::disk_managers::unix_disk_manager::UnixDiskManager;
 #[cfg(target_os = "windows")]
 use crate::pods::disk_managers::windows_disk_manager::WindowsDiskManager;
 use crate::pods::disk_managers::DiskManager;
 use crate::pods::itree::{FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_INO, LOCK_TIMEOUT, ROOT};
+use crate::pods::network::callbacks::Callbacks;
+use crate::pods::network::event_loop::EventLoop;
 use crate::pods::network::redundancy::redundancy_worker;
+use crate::pods::network::swarm::create_swarm;
 use crate::pods::prototype::PodPrototype;
 use crate::pods::whpath::WhPath;
 #[cfg(target_os = "windows")]
@@ -24,6 +27,7 @@ use crate::winfsp::winfsp_impl::{mount_fsp, WinfspHost};
 use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use fuser;
+use libp2p::swarm;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
@@ -38,7 +42,6 @@ use crate::pods::{
 use super::itree::{Ino, GLOBAL_CONFIG_INO, ITREE_FILE_FNAME, ITREE_FILE_INO};
 
 #[allow(dead_code)]
-#[derive(Debug)]
 pub struct Pod {
     network_interface: Arc<NetworkInterface>,
     fs_interface: Arc<FsInterface>,
@@ -122,32 +125,7 @@ fn create_all_shared(itree: &ITree, from: Ino, disk: &dyn DiskManager) -> io::Re
 }
 
 impl Pod {
-    pub async fn new(mut prototype: PodPrototype, server: Arc<Server>) -> io::Result<Self> {
-        log::trace!("mount point {:?}", prototype.mountpoint);
-        let (receiver_in, receiver_out) = mpsc::unbounded_channel();
-
-        let (itree, peers) = prototype
-            .try_to_connect(
-                // NOTE - temporary fix
-                // made to help with tests and debug
-                // choice not to fail should later be supported by the cli
-                true,
-                &receiver_in,
-            )
-            .await?;
-
-        Self::realize(prototype, server, receiver_in, receiver_out, itree, peers)
-    }
-
-    #[allow(unused_variables)]
-    fn realize(
-        proto: PodPrototype,
-        server: Arc<Server>,
-        receiver_in: UnboundedSender<FromNetworkMessage>,
-        receiver_out: UnboundedReceiver<FromNetworkMessage>,
-        itree: ITree,
-        peers: Vec<PeerIPC>,
-    ) -> io::Result<Self> {
+    pub async fn new(mut proto: PodPrototype, server: Arc<Server>) -> io::Result<Self> {
         let (senders_in, senders_out) = mpsc::unbounded_channel();
 
         let (redundancy_tx, redundancy_rx) = mpsc::unbounded_channel();
@@ -200,23 +178,13 @@ impl Pod {
             proto.mountpoint.clone(),
         ));
 
-        // Start ability to recieve messages
-        let network_airport_handle = tokio::spawn(NetworkInterface::network_airport(
-            receiver_out,
-            fs_interface.clone(),
-        ));
+        let swarm = create_swarm(proto.name).await.unwrap();
+        swarm.listen_on(addr);
+        swarm....
 
-        // Start ability to send messages
-        let peer_broadcast_handle = tokio::spawn(NetworkInterface::contact_peers(
-            network_interface.peers.clone(),
-            senders_out,
-        ));
+        let event_loop = EventLoop::new(fs_interface, senders_out).await.unwrap();
 
-        let new_peer_handle = tokio::spawn(NetworkInterface::incoming_connections_watchdog(
-            server,
-            receiver_in,
-            network_interface.clone(),
-        ));
+        let network_airport_handle = tokio::spawn(event_loop.run());
 
         let peers = network_interface.peers.clone();
 
@@ -306,7 +274,7 @@ impl Pod {
                 .send(ToNetworkMessage::SpecificMessage(
                     (
                         // NOTE - file_content clone is not efficient, but no way to avoid it for now
-                        MessageContent::RedundancyFile(ino, file_content.clone()),
+                        Request::RedundancyFile(ino, file_content.clone()),
                         Some(status_tx.clone()),
                     ),
                     vec![host.clone()],
@@ -316,9 +284,10 @@ impl Pod {
             if let Some(Ok(())) = status_rx.recv().await {
                 self.network_interface
                     .to_network_message_tx
-                    .send(ToNetworkMessage::BroadcastMessage(
-                        MessageContent::EditHosts(ino, vec![host.clone()]),
-                    ))
+                    .send(ToNetworkMessage::BroadcastMessage(Request::EditHosts(
+                        ino,
+                        vec![host.clone()],
+                    )))
                     .expect("to_network_message_tx closed.");
                 return Ok(());
             }
@@ -381,9 +350,7 @@ impl Pod {
 
         self.network_interface
             .to_network_message_tx
-            .send(ToNetworkMessage::BroadcastMessage(
-                MessageContent::Disconnect,
-            ))
+            .send(ToNetworkMessage::BroadcastMessage(Request::Disconnect))
             .expect("to_network_message_tx closed.");
 
         let Self {

@@ -1,13 +1,14 @@
-use super::network_interface::{get_all_peers_address, NetworkInterface};
+use super::network_interface::NetworkInterface;
 use crate::{
     error::{WhError, WhResult},
-    network::message::{Address, MessageContent, RedundancyMessage, ToNetworkMessage},
+    network::message::{RedundancyMessage, Request, ToNetworkMessage},
     pods::{
         filesystem::fs_interface::FsInterface,
         itree::{FsEntry, ITree, Ino},
     },
 };
 use futures_util::future::join_all;
+use libp2p::PeerId;
 use std::sync::Arc;
 use tokio::{
     sync::mpsc::{unbounded_channel, UnboundedReceiver},
@@ -32,7 +33,7 @@ pub async fn redundancy_worker(
             Some(message) => message,
             None => continue,
         };
-        let peers = match get_all_peers_address(&nw_interface.peers) {
+        let peers = match get_all_peers_PeerId(&nw_interface.peers) {
             Ok(peers) => peers,
             Err(e) => {
                 log::error!(
@@ -70,7 +71,7 @@ fn eligible_to_apply(
     entry: &FsEntry,
     target_redundancy: u64,
     available_peers: usize,
-    self_addr: &Address,
+    self_addr: &PeerId,
 ) -> Option<Ino> {
     if ITree::is_local_only(ino) {
         return None;
@@ -95,7 +96,7 @@ fn eligible_to_apply(
 async fn check_integrity(
     nw_interface: &Arc<NetworkInterface>,
     fs_interface: &Arc<FsInterface>,
-    peers: &[Address],
+    peers: &[PeerId],
 ) -> WhResult<()> {
     let available_peers = peers.len() + 1;
 
@@ -137,7 +138,7 @@ async fn check_integrity(
 async fn apply_to(
     nw_interface: &Arc<NetworkInterface>,
     fs_interface: &Arc<FsInterface>,
-    peers: &[Address],
+    peers: &[PeerId],
     ino: u64,
 ) -> WhResult<usize> {
     if ITree::is_local_only(ino) {
@@ -170,13 +171,13 @@ async fn apply_to(
 /// start download to others concurrently
 async fn push_redundancy(
     nw_interface: &Arc<NetworkInterface>,
-    all_peers: &[Address],
+    all_peers: &[PeerId],
     ino: Ino,
     file_binary: Arc<Vec<u8>>,
     target_redundancy: usize,
-) -> Vec<Address> {
-    let mut success_hosts: Vec<Address> = vec![nw_interface.hostname.clone()];
-    let mut set: JoinSet<WhResult<Address>> = JoinSet::new();
+) -> Vec<PeerId> {
+    let mut success_hosts: Vec<PeerId> = vec![nw_interface.hostname.clone()];
+    let mut set: JoinSet<WhResult<PeerId>> = JoinSet::new();
 
     for addr in all_peers.iter().take(target_redundancy).cloned() {
         let nwi_clone = Arc::clone(nw_interface);
@@ -224,13 +225,13 @@ impl NetworkInterface {
         &self,
         inode: Ino,
         data: Arc<Vec<u8>>,
-        to: Address,
-    ) -> WhResult<Address> {
+        to: PeerId,
+    ) -> WhResult<PeerId> {
         let (status_tx, mut status_rx) = unbounded_channel();
 
         self.to_network_message_tx
             .send(ToNetworkMessage::SpecificMessage(
-                (MessageContent::RedundancyFile(inode, data), Some(status_tx)),
+                (Request::RedundancyFile(inode, data), Some(status_tx)),
                 vec![to.clone()],
             ))
             .expect("send_file: unable to update modification on the network thread");

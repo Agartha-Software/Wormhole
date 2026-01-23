@@ -1,6 +1,6 @@
 use crate::{
     error::{WhError, WhResult},
-    network::message::{MessageContent, ToNetworkMessage},
+    network::message::{Request, ToNetworkMessage},
     pods::{
         itree::{ITree, Ino},
         network::network_interface::NetworkInterface,
@@ -16,9 +16,11 @@ impl NetworkInterface {
         )?;
 
         self.to_network_message_tx
-            .send(ToNetworkMessage::BroadcastMessage(
-                MessageContent::SetXAttr(ino, key.to_owned(), data),
-            ))
+            .send(ToNetworkMessage::BroadcastMessage(Request::SetXAttr(
+                ino,
+                key.to_owned(),
+                data,
+            )))
             .or(Err(WhError::NetworkDied {
                 called_from: "set_inode_xattr".to_string(),
             }))
@@ -34,9 +36,10 @@ impl NetworkInterface {
             .remove_inode_xattr(ino, key)?;
 
         self.to_network_message_tx
-            .send(ToNetworkMessage::BroadcastMessage(
-                MessageContent::RemoveXAttr(ino, key.to_owned()),
-            ))
+            .send(ToNetworkMessage::BroadcastMessage(Request::RemoveXAttr(
+                ino,
+                key.to_owned(),
+            )))
             .or(Err(WhError::NetworkDied {
                 called_from: "set_inode_xattr".to_string(),
             }))
