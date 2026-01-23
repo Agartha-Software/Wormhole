@@ -223,8 +223,14 @@ impl NetworkInterface {
         }
     }
 
-    pub fn aknowledge_new_hosts(&self, id: Ino, new_hosts: Vec<Address>) -> WhResult<()> {
-        ITree::write_lock(&self.itree, "aknowledge_new_hosts")?.add_inode_hosts(id, new_hosts)
+    pub fn aknowledge_new_hosts(&self, ino: Ino, new_hosts: Vec<Address>) -> WhResult<()> {
+        ITree::write_lock(&self.itree, "aknowledge_new_hosts")?
+            .add_inode_hosts(ino, new_hosts.clone())
+            .inspect(|_| {
+                self.to_redundancy_tx
+                    .send(RedundancyMessage::UpdatedHosts(ino, new_hosts))
+                    .expect("network_interface::apply_redundancy: tx error");
+            })
     }
 
     pub fn aknowledge_hosts_removal(&self, id: Ino, new_hosts: Vec<Address>) -> WhResult<()> {
