@@ -1,6 +1,6 @@
 use crate::{
     error::WhError,
-    network::message::{Response, ToNetworkMessage},
+    network::message::{Request, Response, ToNetworkMessage},
     pods::{
         filesystem::{
             attrs::AcknoledgeSetAttrError,
@@ -11,17 +11,11 @@ use crate::{
             write::WriteError,
         },
         itree::{FsEntry, ITree, Ino, Metadata},
-        network::{
-            callbacks::Request, codec::BincodeCodec, event_loop::ResponseSender,
-            pull_file::PullError,
-        },
+        network::{event_loop::ResponseSender, pull_file::PullError},
     },
 };
 use custom_error::custom_error;
-use libp2p::{
-    request_response::{Codec, ResponseChannel},
-    PeerId,
-};
+use libp2p::PeerId;
 
 custom_error! {
     #[derive(Clone)]
@@ -42,7 +36,7 @@ impl FsInterface {
     ///
     pub fn flush(&self, ino: Ino, handle: Option<&mut FileHandle>) -> Result<(), FlushError> {
         let peers = self.network_interface.peers.read();
-        let inode = self.itree.read().get_inode(ino)?.clone();
+        let inode = self.network_interface.itree.read().get_inode(ino)?.clone();
         let tracking = match &inode.entry {
             FsEntry::File(tracking) => tracking,
             _ => return Err(WhError::InodeIsADirectory.into()),
@@ -116,7 +110,6 @@ impl FsInterface {
         sig: Signature,
         delta: Delta,
         sender: ResponseSender,
-        // origin: PeerId,
     ) -> Result<(), FlushError> {
         log::trace!("accept_delta({ino})");
         let file = match self.get_local_file(ino)? {
@@ -139,7 +132,7 @@ impl FsInterface {
                 String::from_utf8_lossy(&patched.0)
             );
 
-            let itree = ITree::read_lock(&self.itree, "fs_interface.write")?;
+            let itree = ITree::read_lock(&self.network_interface.itree, "fs_interface.write")?;
             let path = itree.get_path_from_inode_id(ino)?;
             drop(itree);
 
@@ -162,7 +155,7 @@ impl FsInterface {
         &self,
         ino: Ino,
         meta: Metadata,
-        origin: PeerId,
+        sender: ResponseSender,
     ) -> Result<(), FlushError> {
         self.acknowledge_metadata(ino, meta).map_err(|e| match e {
             AcknoledgeSetAttrError::WhError { source } => FlushError::from(source),
@@ -173,8 +166,7 @@ impl FsInterface {
             None => return Ok(()),
         };
         let local_sig = Signature::new(&file)?;
-        self.network_interface
-            .send_to(Request::DeltaRequest(ino, local_sig), &origin);
+        sender.send(Response::DeltaRequest(ino, local_sig));
         Ok(())
     }
 
@@ -187,7 +179,7 @@ impl FsInterface {
         let file = self.get_local_file(ino)?.ok_or(WhError::InodeNotFound)?;
         let delta = sig.diff(&file)?;
 
-        let inode = self.itree.read().get_inode(ino)?.clone();
+        let inode = self.network_interface.itree.read().get_inode(ino)?.clone();
 
         self.network_interface
             .to_network_message_tx

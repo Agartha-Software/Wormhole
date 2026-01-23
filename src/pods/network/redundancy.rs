@@ -31,18 +31,9 @@ pub async fn redundancy_worker(
     loop {
         let message = match reception.recv().await {
             Some(message) => message,
-            None => continue,
+            None => return,
         };
-        let peers = match get_all_peers_PeerId(&nw_interface.peers) {
-            Ok(peers) => peers,
-            Err(e) => {
-                log::error!(
-                    "Redundancy: can't get peers: (ignoring request \"{:?}\") because of: {e}",
-                    message
-                );
-                continue;
-            }
-        };
+        let peers = nw_interface.peers.read().clone();
 
         match message {
             RedundancyMessage::ApplyTo(ino) => {
@@ -110,7 +101,7 @@ async fn check_integrity(
                     &inode.entry,
                     nw_interface.global_config.read().redundancy.number,
                     available_peers,
-                    &nw_interface.hostname,
+                    &nw_interface.id,
                 )
             })
             .collect();
@@ -176,7 +167,7 @@ async fn push_redundancy(
     file_binary: Arc<Vec<u8>>,
     target_redundancy: usize,
 ) -> Vec<PeerId> {
-    let mut success_hosts: Vec<PeerId> = vec![nw_interface.hostname.clone()];
+    let mut success_hosts: Vec<PeerId> = vec![nw_interface.id];
     let mut set: JoinSet<WhResult<PeerId>> = JoinSet::new();
 
     for addr in all_peers.iter().take(target_redundancy).cloned() {

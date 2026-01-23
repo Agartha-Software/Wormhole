@@ -1,3 +1,4 @@
+use libp2p::Multiaddr;
 use serde::{Deserialize, Serialize};
 use std::{net::IpAddr, path::PathBuf};
 use ts_rs::TS;
@@ -37,17 +38,13 @@ impl From<IdentifyNewPodGroup> for PodId {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct NewRequest {
     pub name: String,
     pub mountpoint: PathBuf,
-    pub url: Option<String>,
-    pub public_url: Option<String>,
     pub ip_address: Option<IpAddr>,
     pub port: Option<u16>,
-    pub hostname: Option<String>,
-    pub additional_hosts: Vec<String>,
+    pub hosts: Vec<Multiaddr>,
     pub allow_other_users: bool,
 }
 
@@ -64,8 +61,7 @@ pub struct RemoveRequest {
     pub mode: Mode,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Command {
     Unfreeze(PodId),
     Freeze(PodId),

@@ -39,7 +39,10 @@ impl FsInterface {
     #[cfg(target_os = "linux")]
     pub fn fuse_remove_inode(&self, parent: Ino, name: InodeName) -> Result<(), RemoveFileError> {
         let target = {
-            let itree = ITree::read_lock(&self.itree, "fs_interface::fuse_remove_inode")?;
+            let itree = ITree::read_lock(
+                &self.network_interface.itree,
+                "fs_interface::fuse_remove_inode",
+            )?;
             let parent = itree.get_inode(parent)?;
             if !has_write_perm(parent.meta.perm) {
                 return Err(RemoveFileError::PermissionDenied);
@@ -51,13 +54,13 @@ impl FsInterface {
     }
 
     pub fn remove_inode_locally(&self, id: Ino) -> Result<(), RemoveFileError> {
-        let itree = ITree::read_lock(&self.itree, "fs_interface::remove_inode")?;
+        let itree = ITree::read_lock(&self.network_interface.itree, "fs_interface::remove_inode")?;
         let to_remove_path = itree.get_path_from_inode_id(id)?;
         let entry = itree.get_inode(id)?.entry.to_owned();
         drop(itree);
 
         match entry {
-            FsEntry::File(hosts) if hosts.contains(&self.network_interface.hostname) => self
+            FsEntry::File(hosts) if hosts.contains(&self.network_interface.id) => self
                 .disk
                 .remove_file(&to_remove_path)
                 .map_err(|io| RemoveFileError::LocalDeletionFailed { io })?,

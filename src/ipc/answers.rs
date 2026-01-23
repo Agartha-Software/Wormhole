@@ -1,25 +1,24 @@
-use std::{net::SocketAddr, path::PathBuf};
+use std::path::PathBuf;
 
+use libp2p::Multiaddr;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::{cli::ConfigType, ipc::error::IoError, pods::itree::Hosts};
 
-#[derive(Debug, Serialize, Deserialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum NewAnswer {
-    Success(SocketAddr),
+    Success(Multiaddr),
     AlreadyExist,
     AlreadyMounted,
-    InvalidIp,
-    InvalidUrlIp,
+    InvalidIp(String),
+    PortAlreadyTaken,
+    NoFreePortInRage,
     ConflictWithConfig(String),
-    BindImpossible(IoError),
     FailedToCreatePod(IoError),
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum GetHostsAnswer {
     Hosts(Hosts),
     FileNotInsideARunningPod,
@@ -99,20 +98,16 @@ impl std::fmt::Display for PeerInfo {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct InspectInfo {
     pub frozen: bool,
-    pub public_url: Option<String>,
-    pub bound_socket: SocketAddr,
-    pub hostname: String,
+    pub listen_address: Multiaddr,
     pub name: String,
     pub connected_peers: Vec<PeerInfo>,
     pub mount: PathBuf,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum InspectAnswer {
     Information(InspectInfo),
     PodNotFound,

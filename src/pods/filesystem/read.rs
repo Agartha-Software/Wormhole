@@ -68,7 +68,8 @@ impl FsInterface {
     ) -> Result<usize, ReadError> {
         match self.network_interface.pull_file_sync(ino)? {
             None => Ok(self.disk.read_file(
-                &ITree::read_lock(&self.itree, "read_file")?.get_path_from_inode_id(ino)?,
+                &ITree::read_lock(&self.network_interface.itree, "read_file")?
+                    .get_path_from_inode_id(ino)?,
                 offset,
                 buf,
             )?),
@@ -103,10 +104,10 @@ impl FsInterface {
     /// returns Ok(None) if the file is not tracked
     pub fn get_local_file(&self, ino: Ino) -> Result<Option<File>, ReadError> {
         let mut buf = Vec::new();
-        let itree = self.itree.read();
+        let itree = self.network_interface.itree.read();
         let size = itree.get_inode(ino).and_then(|inode| match &inode.entry {
             FsEntry::File(hosts) => Ok(hosts
-                .contains(&self.network_interface.hostname)
+                .contains(&self.network_interface.id)
                 .then_some(inode.meta.size as usize)),
             _ => Err(WhError::InodeIsADirectory),
         })?;
@@ -114,7 +115,8 @@ impl FsInterface {
         if let Some(mut size) = size {
             buf.resize(size, 0);
             size = self.disk.read_file(
-                &ITree::read_lock(&self.itree, "read_file")?.get_path_from_inode_id(ino)?,
+                &ITree::read_lock(&self.network_interface.itree, "read_file")?
+                    .get_path_from_inode_id(ino)?,
                 0,
                 &mut buf[..],
             )?;

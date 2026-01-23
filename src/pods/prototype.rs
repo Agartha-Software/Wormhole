@@ -2,17 +2,15 @@ use crate::config::local_file::LocalConfigFile;
 use crate::config::GlobalConfig;
 use crate::ipc::answers::InspectInfo;
 use crate::pods::itree::ITree;
-use libp2p::PeerId;
+use libp2p::{Multiaddr, PeerId};
 use serde::{Deserialize, Serialize};
-use std::{net::SocketAddr, path::PathBuf};
+use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PodPrototype {
     pub global_config: GlobalConfig,
     pub name: String,
-    pub hostname: String,
-    pub public_url: Option<String>,
-    pub bound_socket: SocketAddr,
+    pub listen_address: Multiaddr,
     pub mountpoint: PathBuf,
     pub should_restart: bool,
     pub allow_other_users: bool,
@@ -25,16 +23,6 @@ impl PodPrototype {
         if let Some(name) = local.name {
             self.name = name;
         }
-        if let Some(hostname) = local.hostname {
-            self.hostname = hostname;
-        }
-        if let Some(public_url) = local.public_url {
-            if public_url.is_empty() {
-                self.public_url = None;
-            } else {
-                self.public_url = Some(public_url);
-            }
-        }
         if let Some(restart) = local.restart {
             self.should_restart = restart;
         }
@@ -43,9 +31,7 @@ impl PodPrototype {
     pub fn get_inspect_info(&self) -> InspectInfo {
         InspectInfo {
             frozen: true,
-            public_url: self.public_url.clone(),
-            bound_socket: self.bound_socket,
-            hostname: self.hostname.clone(),
+            listen_address: self.listen_address.clone(),
             name: self.name.clone(),
             connected_peers: vec![],
             mount: self.mountpoint.clone(),

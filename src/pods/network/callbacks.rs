@@ -12,7 +12,7 @@ use crate::{
 };
 
 #[derive(Eq, Hash, PartialEq, Clone, Debug)]
-pub enum Request {
+pub enum CallbackRequest {
     GetSignature(Ino, String),
     Pull(Ino),
     PullFs,
@@ -24,14 +24,18 @@ type Shot<File = Arc<Vec<u8>>> = Result<Option<File>, PullError>;
 /// Deduplicate costly network actions by letting only one run at a time
 #[derive(Debug)]
 pub struct Callbacks {
-    callbacks: RwLock<HashMap<Request, broadcast::Sender<Shot>>>,
+    callbacks: RwLock<HashMap<CallbackRequest, broadcast::Sender<Shot>>>,
 }
 
 impl Callbacks {
     ///
     /// create a waiting callback or wait for existing
     ///
-    pub async fn request<R: Future, F: FnOnce() -> R>(&self, call: &Request, procedure: F) -> Shot {
+    pub async fn request<R: Future, F: FnOnce() -> R>(
+        &self,
+        call: &CallbackRequest,
+        procedure: F,
+    ) -> Shot {
         let mut waiter = if let Some(mut callbacks) = self.callbacks.try_write_for(LOCK_TIMEOUT) {
             if let Some(cb) = callbacks.get(call) {
                 // safety: the sender is removed before it is pushed.
@@ -67,7 +71,7 @@ impl Callbacks {
     /// This function panics if called within an asynchronous execution
     /// context.
     ///
-    pub fn request_sync<F, E>(&self, call: &Request, procedure: F) -> Shot
+    pub fn request_sync<F, E>(&self, call: &CallbackRequest, procedure: F) -> Shot
     where
         PullError: From<E>,
         F: FnOnce() -> Result<(), E>,
@@ -105,7 +109,7 @@ impl Callbacks {
 
     /// resolve a callback and resume waiting threads
     /// removes the callback from the queue
-    pub fn resolve(&self, call: Request, answer: Shot) -> io::Result<()> {
+    pub fn resolve(&self, call: CallbackRequest, answer: Shot) -> io::Result<()> {
         if let Some(mut callbacks) = self.callbacks.try_write_for(LOCK_TIMEOUT) {
             if let Some(cb) = callbacks.remove(&call) {
                 // safety: removing the sender before fulfilling it ensures no one subscribes to it after it's been fulfilled

@@ -8,15 +8,14 @@ use crate::data::tree_hosts::CliHostTree;
 use crate::error::{WhError, WhResult};
 #[cfg(target_os = "linux")]
 use crate::fuse::fuse_impl::mount_fuse;
-use crate::ipc::answers::{InspectInfo, PeerInfo};
-use crate::network::message::{FromNetworkMessage, Request, ToNetworkMessage};
+use crate::ipc::answers::InspectInfo;
+use crate::network::message::{Request, ToNetworkMessage};
 #[cfg(target_os = "linux")]
 use crate::pods::disk_managers::unix_disk_manager::UnixDiskManager;
 #[cfg(target_os = "windows")]
 use crate::pods::disk_managers::windows_disk_manager::WindowsDiskManager;
 use crate::pods::disk_managers::DiskManager;
-use crate::pods::itree::{FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_INO, LOCK_TIMEOUT, ROOT};
-use crate::pods::network::callbacks::Callbacks;
+use crate::pods::itree::{FsEntry, LOCAL_CONFIG_INO, LOCK_TIMEOUT};
 use crate::pods::network::event_loop::EventLoop;
 use crate::pods::network::redundancy::redundancy_worker;
 use crate::pods::network::swarm::create_swarm;
@@ -27,12 +26,10 @@ use crate::winfsp::winfsp_impl::{mount_fsp, WinfspHost};
 use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use fuser;
-use libp2p::swarm;
+use libp2p::PeerId;
 use parking_lot::RwLock;
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-
-use crate::network::{message::Address, peer_ipc::PeerIPC, server::Server};
 
 use crate::pods::{
     filesystem::fs_interface::FsInterface, itree::ITree,
@@ -46,14 +43,11 @@ pub struct Pod {
     network_interface: Arc<NetworkInterface>,
     fs_interface: Arc<FsInterface>,
     mountpoint: PathBuf,
-    pub peers: Arc<RwLock<Vec<PeerIPC>>>,
     #[cfg(target_os = "linux")]
     fuse_handle: fuser::BackgroundSession,
     #[cfg(target_os = "windows")]
     fsp_host: WinfspHost,
     network_airport_handle: JoinHandle<()>,
-    peer_broadcast_handle: JoinHandle<()>,
-    new_peer_handle: JoinHandle<()>,
     redundancy_worker_handle: JoinHandle<()>,
     pub global_config: Arc<RwLock<GlobalConfig>>,
     name: String,
@@ -125,7 +119,7 @@ fn create_all_shared(itree: &ITree, from: Ino, disk: &dyn DiskManager) -> io::Re
 }
 
 impl Pod {
-    pub async fn new(mut proto: PodPrototype, server: Arc<Server>) -> io::Result<Self> {
+    pub async fn new(proto: PodPrototype) -> io::Result<Self> {
         let (senders_in, senders_out) = mpsc::unbounded_channel();
 
         let (redundancy_tx, redundancy_rx) = mpsc::unbounded_channel();
@@ -135,58 +129,53 @@ impl Pod {
         #[cfg(target_os = "windows")]
         let disk_manager = Box::new(WindowsDiskManager::new(&proto.mountpoint)?);
 
-        create_all_shared(&itree, ROOT, disk_manager.as_ref())
-            .inspect_err(|e| log::error!("unable to create_all_shared: {e}"))
-            .map_err(|e| std::io::Error::new(e.kind(), format!("create_all_shared: {e}")))?;
+        // create_all_shared(&itree, ROOT, disk_manager.as_ref())
+        //     .inspect_err(|e| log::error!("unable to create_all_shared: {e}"))
+        //     .map_err(|e| std::io::Error::new(e.kind(), format!("create_all_shared: {e}")))?;
 
-        if let Ok(perms) = itree
-            .get_inode(GLOBAL_CONFIG_INO)
-            .map(|inode| inode.meta.perm)
-        {
-            let _ = disk_manager.new_file(&WhPath::try_from(GLOBAL_CONFIG_FNAME).unwrap(), perms);
-            disk_manager
-                .write_file(
-                    &WhPath::try_from(GLOBAL_CONFIG_FNAME).unwrap(),
-                    toml::to_string(&proto.global_config)
-                        .expect("infallible")
-                        .as_bytes(),
-                    0,
-                )
-                .map_err(|e| {
-                    std::io::Error::new(e.kind(), format!("write_file(global_config): {e}"))
-                })?;
+        // if let Ok(perms) = itree
+        //     .get_inode(GLOBAL_CONFIG_INO)
+        //     .map(|inode| inode.meta.perm)
+        // {
+        //     let _ = disk_manager.new_file(&WhPath::try_from(GLOBAL_CONFIG_FNAME).unwrap(), perms);
+        //     disk_manager
+        //         .write_file(
+        //             &WhPath::try_from(GLOBAL_CONFIG_FNAME).unwrap(),
+        //             toml::to_string(&proto.global_config)
+        //                 .expect("infallible")
+        //                 .as_bytes(),
+        //             0,
+        //         )
+        //         .map_err(|e| {
+        //             std::io::Error::new(e.kind(), format!("write_file(global_config): {e}"))
+        //         })?;
+        // }
+
+        let mut swarm = create_swarm(proto.name.clone()).await.unwrap();
+        swarm.listen_on(proto.listen_address).unwrap();
+        for peer in &proto.global_config.general.entrypoints {
+            swarm.dial(peer.clone()).unwrap();
         }
 
-        let itree: Arc<RwLock<ITree>> = Arc::new(RwLock::new(itree));
         let global = Arc::new(RwLock::new(proto.global_config));
 
         let network_interface = Arc::new(NetworkInterface::new(
-            itree.clone(),
-            proto.public_url,
-            proto.bound_socket,
-            proto.hostname,
+            swarm.local_peer_id().clone(),
             senders_in.clone(),
             redundancy_tx.clone(),
-            Arc::new(RwLock::new(peers)),
+            Arc::new(RwLock::new(swarm.connected_peers().cloned().collect())),
             global.clone(),
         ));
 
         let fs_interface = Arc::new(FsInterface::new(
             network_interface.clone(),
             disk_manager,
-            itree.clone(),
             proto.mountpoint.clone(),
         ));
 
-        let swarm = create_swarm(proto.name).await.unwrap();
-        swarm.listen_on(addr);
-        swarm....
-
-        let event_loop = EventLoop::new(fs_interface, senders_out).await.unwrap();
+        let event_loop = EventLoop::new(swarm, fs_interface.clone(), senders_out);
 
         let network_airport_handle = tokio::spawn(event_loop.run());
-
-        let peers = network_interface.peers.clone();
 
         let redundancy_worker_handle = tokio::spawn(redundancy_worker(
             redundancy_rx,
@@ -199,7 +188,6 @@ impl Pod {
             network_interface,
             fs_interface: fs_interface.clone(),
             mountpoint: proto.mountpoint.clone(),
-            peers,
             #[cfg(target_os = "linux")]
             fuse_handle: mount_fuse(
                 &proto.mountpoint,
@@ -211,8 +199,6 @@ impl Pod {
             fsp_host: mount_fsp(fs_interface.clone())
                 .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fsp: {e}")))?,
             network_airport_handle,
-            peer_broadcast_handle,
-            new_peer_handle,
             global_config: global.clone(),
             redundancy_worker_handle,
             name: proto.name,
@@ -223,7 +209,7 @@ impl Pod {
 
     // SECTION getting info from the pod (for the cli)
 
-    pub fn get_file_hosts(&self, path: &WhPath) -> Result<Vec<Address>, PodInfoError> {
+    pub fn get_file_hosts(&self, path: &WhPath) -> Result<Vec<PeerId>, PodInfoError> {
         let binding = ITree::read_lock(&self.network_interface.itree, "Pod::get_info")?;
         let entry = &binding
             .get_inode_from_path(path)
@@ -254,7 +240,7 @@ impl Pod {
     /// for a given file, will try to send it to one host, trying each until succes
     async fn send_file_to_possible_hosts(
         &self,
-        possible_hosts: &Vec<Address>,
+        possible_hosts: &Vec<PeerId>,
         ino: Ino,
     ) -> Result<(), PodStopError> {
         let file_content =
@@ -299,10 +285,10 @@ impl Pod {
     async fn send_files_when_stopping<T: Deref<Target = ITree>>(
         &self,
         itree: T,
-        peers: Vec<Address>,
+        peers: Vec<PeerId>,
     ) {
         let ids_to_send = itree
-            .files_hosted_only_by(&self.network_interface.hostname)
+            .files_hosted_only_by(&self.network_interface.id)
             .filter_map(|inode| {
                 if inode.id == GLOBAL_CONFIG_INO
                     || inode.id == LOCAL_CONFIG_INO
@@ -335,12 +321,7 @@ impl Pod {
         let (itree_bin, task) = {
             let itree = ITree::read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
 
-            let peers: Vec<Address> = self
-                .peers
-                .read()
-                .iter()
-                .map(|peer| peer.hostname.clone())
-                .collect();
+            let peers: Vec<PeerId> = self.network_interface.peers.read().to_vec();
 
             let bin = bincode::serialize(&*itree).expect("can't serialize itree to bincode");
             let task = self.send_files_when_stopping(itree, peers);
@@ -355,14 +336,11 @@ impl Pod {
 
         let Self {
             fs_interface,
-            peers,
             #[cfg(target_os = "linux")]
             fuse_handle,
             #[cfg(target_os = "windows")]
             fsp_host,
             network_airport_handle,
-            peer_broadcast_handle,
-            new_peer_handle,
             redundancy_worker_handle,
             ..
         } = self;
@@ -380,15 +358,6 @@ impl Pod {
         let _ = network_airport_handle
             .await
             .inspect(|_| log::error!("await error: network_airport_handle"));
-        new_peer_handle.abort();
-        let _ = new_peer_handle
-            .await
-            .inspect(|_| log::error!("await error: new_peer_handle"));
-        peer_broadcast_handle.abort();
-        let _ = peer_broadcast_handle
-            .await
-            .inspect(|_| log::error!("await error: peer_broadcast_handle"));
-        *peers.write() = Vec::new(); // dropping PeerIPCs
 
         let itree_path = WhPath::try_from(ITREE_FILE_FNAME).unwrap();
 
@@ -404,8 +373,8 @@ impl Pod {
             .write_file(&WhPath::try_from(ITREE_FILE_FNAME).unwrap(), &itree_bin, 0)
             .map_err(|io| PodStopError::ITreeSavingFailed { source: io })?;
 
-        let mut fs_interface =
-            Arc::try_unwrap(fs_interface).expect("fs_interface not released from every thread");
+        let mut fs_interface = Arc::try_unwrap(fs_interface)
+            .unwrap_or_else(|_| panic!("fs_interface not released from every thread"));
 
         fs_interface
             .disk
@@ -426,47 +395,49 @@ impl Pod {
     pub fn try_generate_prototype(&self) -> Option<PodPrototype> {
         let global_config = self.global_config.try_read_for(LOCK_TIMEOUT)?.clone();
 
-        Some(PodPrototype {
-            global_config,
-            name: self.name.clone(),
-            hostname: self.network_interface.hostname.clone(),
-            public_url: self.network_interface.public_url.clone(),
-            bound_socket: self.network_interface.bound_socket,
-            mountpoint: self.mountpoint.clone(),
-            should_restart: self.should_restart,
-            allow_other_users: self.allow_other_users,
-        })
+        todo!();
+        // Some(PodPrototype {
+        //     global_config,
+        //     name: self.name.clone(),
+        //     listen_address: self.network_interface.id,
+        //     mountpoint: self.mountpoint.clone(),
+        //     should_restart: self.should_restart,
+        //     allow_other_users: self.allow_other_users,
+        // })
     }
 
     pub fn generate_local_config(&self) -> LocalConfigFile {
-        LocalConfigFile {
-            name: Some(self.name.clone()),
-            hostname: Some(self.network_interface.hostname.clone()),
-            public_url: self.network_interface.public_url.clone(),
-            restart: Some(self.should_restart),
-        }
+        todo!();
+
+        // LocalConfigFile {
+        //     name: Some(self.name.clone()),
+        //     restart: Some(self.should_restart),
+        //     listen_address: self.;,
+        // }
     }
 
     pub fn get_inspect_info(&self) -> InspectInfo {
-        let peers_data: Vec<PeerInfo> = self
-            .peers
-            .try_read_for(LOCK_TIMEOUT)
-            .expect("Can't lock peers")
-            .iter()
-            .map(|peer| PeerInfo {
-                hostname: peer.hostname.clone(),
-                url: peer.url.clone(),
-            })
-            .collect();
+        todo!();
 
-        InspectInfo {
-            frozen: false,
-            public_url: self.network_interface.public_url.clone(),
-            bound_socket: self.network_interface.bound_socket,
-            hostname: self.network_interface.hostname.clone(),
-            name: self.name.clone(),
-            connected_peers: peers_data,
-            mount: self.mountpoint.clone(),
-        }
+        // let peers_data: Vec<PeerInfo> = self
+        //     .peers
+        //     .try_read_for(LOCK_TIMEOUT)
+        //     .expect("Can't lock peers")
+        //     .iter()
+        //     .map(|peer| PeerInfo {
+        //         hostname: peer.hostname.clone(),
+        //         url: peer.url.clone(),
+        //     })
+        //     .collect();
+
+        // InspectInfo {
+        //     frozen: false,
+        //     public_url: self.network_interface.public_url.clone(),
+        //     bound_socket: self.network_interface.bound_socket,
+        //     hostname: self.network_interface.hostname.clone(),
+        //     name: self.name.clone(),
+        //     connected_peers: peers_data,
+        //     mount: self.mountpoint.clone(),
+        // }
     }
 }

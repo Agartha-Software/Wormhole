@@ -36,16 +36,12 @@ pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String
             "Pod informations: {}\n\
             \x20  Name:\t\t{}\n\
             \x20  Mount:\t\t{:#?}\n\
-            \x20  Hostname:\t\t{}\n\
-            \x20  Url:\t\t\t{}\n\
-            \x20  Bound Address:\t{}\n\
+            \x20  Listen Address:\t\t{}\n\
             \x20  Connected peers:\t{}",
             if info.frozen { "Frozen" } else { "Running" },
             info.name,
             info.mount,
-            info.hostname,
-            info.public_url.unwrap_or("[ None ]".to_string()),
-            info.bound_socket,
+            info.listen_address,
             if info.frozen {
                 "Disconnected (Frozen)".to_string()
             } else {

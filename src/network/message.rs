@@ -138,12 +138,15 @@ impl fmt::Debug for Request {
 pub enum Response {
     /// Request a file delta from this base signature
     DeltaRequest(Ino, Signature),
+    // (ITree, peers, global_config)
+    FsAnswer(ITree, Vec<PeerId>, Vec<u8>),
 }
 
 impl fmt::Display for Response {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let name = match self {
             Response::DeltaRequest(_, _) => "DeltaRequest",
+            Response::FsAnswer(_, _, _) => "FsAnswer",
         };
         write!(f, "{}", name)
     }
@@ -153,6 +156,7 @@ impl fmt::Debug for Response {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Response::DeltaRequest(ino, _) => write!(f, "DeltaRequest({ino})"),
+            Response::FsAnswer(_, peers, _) => write!(f, "FsAnswer(<bin>, {peers:?}, <bin>"),
         }
     }
 }

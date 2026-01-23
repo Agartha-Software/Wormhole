@@ -1,9 +1,9 @@
 use std::io;
 use std::sync::Arc;
 
-use crate::network::message::{MessageContent, ToNetworkMessage};
+use crate::network::message::{Request, ToNetworkMessage};
 use crate::pods::itree::{FsEntry, ITree};
-use crate::pods::network::callbacks::Request;
+use crate::pods::network::callbacks::CallbackRequest;
 use crate::pods::network::network_interface::NetworkInterface;
 use crate::{error::WhError, pods::itree::Ino};
 use custom_error::custom_error;
@@ -47,7 +47,7 @@ impl NetworkInterface {
             return Err(PullError::NoHostAvailable);
         }
 
-        if hosts.contains(&self.hostname) {
+        if hosts.contains(&self.id) {
             // if the asked file is already on disk
             Ok(None)
         } else {
@@ -58,7 +58,7 @@ impl NetworkInterface {
                     // trying on host `pull_from`
                     self.to_network_message_tx
                         .send(ToNetworkMessage::SpecificMessage(
-                            (MessageContent::RequestFile(file), Some(tx)),
+                            (Request::RequestFile(file), Some(tx)),
                             vec![host.clone()], // NOTE - naive choice for now
                         ))
                         .expect("pull_file: unable to request on the network thread");
@@ -73,7 +73,8 @@ impl NetworkInterface {
                 Err(PullError::NoHostAvailable)
             };
 
-            self.callbacks.request_sync(&Request::Pull(file), procedure)
+            self.callbacks
+                .request_sync(&CallbackRequest::Pull(file), procedure)
         }
     }
 }

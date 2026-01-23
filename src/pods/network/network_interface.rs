@@ -1,12 +1,15 @@
-use std::{net::SocketAddr, sync::Arc, time::UNIX_EPOCH};
+use std::{sync::Arc, time::UNIX_EPOCH};
 
 use crate::{
     config::GlobalConfig,
     error::{WhError, WhResult},
-    network::message::{Address, RedundancyMessage, Request, ToNetworkMessage},
-    pods::{filesystem::make_inode::MakeInodeError, whpath::InodeName},
+    network::message::{RedundancyMessage, Request, Response, ToNetworkMessage},
+    pods::{
+        filesystem::make_inode::MakeInodeError, network::event_loop::ResponseSender,
+        whpath::InodeName,
+    },
 };
-use libp2p::PeerId;
+use libp2p::{Multiaddr, PeerId};
 use parking_lot::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -28,9 +31,7 @@ pub struct NetworkInterface {
 }
 
 impl NetworkInterface {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        itree: Arc<RwLock<ITree>>,
         id: PeerId,
         to_network_message_tx: UnboundedSender<ToNetworkMessage>,
         to_redundancy_tx: UnboundedSender<RedundancyMessage>,
@@ -38,7 +39,7 @@ impl NetworkInterface {
         global_config: Arc<RwLock<GlobalConfig>>,
     ) -> Self {
         Self {
-            itree,
+            itree: Arc::new(RwLock::new(ITree::new())),
             id,
             to_network_message_tx,
             to_redundancy_tx,
@@ -142,7 +143,7 @@ impl NetworkInterface {
     }
 
     pub fn revoke_remote_hosts(&self, id: Ino) -> WhResult<()> {
-        self.update_hosts(id, vec![self.hostname.clone()])?;
+        self.update_hosts(id, vec![self.id])?;
         // self.apply_redundancy(id);
         Ok(())
     }
@@ -181,11 +182,11 @@ impl NetworkInterface {
         }
     }
 
-    pub fn aknowledge_new_hosts(&self, id: Ino, new_hosts: Vec<Address>) -> WhResult<()> {
+    pub fn aknowledge_new_hosts(&self, id: Ino, new_hosts: Vec<PeerId>) -> WhResult<()> {
         ITree::write_lock(&self.itree, "aknowledge_new_hosts")?.add_inode_hosts(id, new_hosts)
     }
 
-    pub fn aknowledge_hosts_removal(&self, id: Ino, new_hosts: Vec<Address>) -> WhResult<()> {
+    pub fn aknowledge_hosts_removal(&self, id: Ino, new_hosts: Vec<PeerId>) -> WhResult<()> {
         ITree::write_lock(&self.itree, "aknowledge_hosts_removal")?
             .remove_inode_hosts(id, new_hosts)
     }
@@ -287,31 +288,30 @@ impl NetworkInterface {
     //     }
     // }
 
-    pub fn send_itree(&self, to: PeerId, global_config_bytes: Vec<u8>) -> WhResult<()> {
+    pub fn send_itree(
+        &self,
+        global_config_bytes: Vec<u8>,
+        to: PeerId,
+        sender: ResponseSender,
+    ) -> WhResult<()> {
         let clean_itree = ITree::read_lock(&self.itree, "send_itree")?
             .clone()
             .clean_local();
-        if let Some(peers) = self.peers.try_read_for(LOCK_TIMEOUT) {
-            let peers_address_list = peers
-                .iter()
-                .filter_map(|peer: &PeerId| if peer != &to { Some(peer) } else { None })
-                .collect();
 
-            self.to_network_message_tx
-                .send(ToNetworkMessage::SpecificMessage(
-                    (
-                        Request::FsAnswer(clean_itree, peers_address_list, global_config_bytes),
-                        None,
-                    ),
-                    vec![to],
-                ))
-                .expect("send_itree: unable to update modification on the network thread");
-            Ok(())
-        } else {
-            Err(WhError::WouldBlock {
-                called_from: "send_tree".to_owned(),
-            })
-        }
+        let peers_address_list: Vec<PeerId> = self
+            .peers
+            .read()
+            .iter()
+            .filter_map(|peer: &PeerId| if peer != &to { Some(peer) } else { None })
+            .cloned()
+            .collect();
+
+        sender.send(Response::FsAnswer(
+            clean_itree,
+            peers_address_list,
+            global_config_bytes,
+        ));
+        Ok(())
     }
 
     pub fn disconnect_peer(&self, addr: PeerId) -> WhResult<()> {
@@ -320,7 +320,7 @@ impl NetworkInterface {
             .ok_or(WhError::WouldBlock {
                 called_from: "disconnect_peer: can't write lock peers".to_owned(),
             })?
-            .retain(|p| p.hostname != addr);
+            .retain(|p| p != &addr);
 
         log::debug!("Disconnecting {addr}. Removing from inodes hosts");
         for inode in ITree::write_lock(&self.itree, "disconnect_peer")?.inodes_mut() {

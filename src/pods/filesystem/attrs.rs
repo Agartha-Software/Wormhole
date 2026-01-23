@@ -35,7 +35,7 @@ impl FsInterface {
         ino: Ino,
         meta: Metadata,
     ) -> Result<(), AcknoledgeSetAttrError> {
-        let mut itree = ITree::write_lock(&self.itree, "acknowledge_metadata")?;
+        let mut itree = ITree::write_lock(&self.network_interface.itree, "acknowledge_metadata")?;
         let path = itree.get_path_from_inode_id(ino)?;
         let inode = itree.get_inode_mut(ino)?;
 
@@ -47,10 +47,10 @@ impl FsInterface {
                     });
                 }
                 FsEntry::File(hosts) => {
-                    if hosts.contains(&self.network_interface.hostname) {
+                    if hosts.contains(&self.network_interface.id) {
                         let created = match &inode.entry {
                             FsEntry::File(old_hosts) => {
-                                !old_hosts.contains(&self.network_interface.hostname)
+                                !old_hosts.contains(&self.network_interface.id)
                             }
                             _ => false,
                         };
@@ -103,7 +103,7 @@ impl FsInterface {
         file_handle: Option<UUID>,
         flags: Option<u32>,
     ) -> Result<Metadata, SetAttrError> {
-        let itree = ITree::read_lock(&self.itree, "setattr")?;
+        let itree = ITree::read_lock(&self.network_interface.itree, "setattr")?;
         let path = itree.get_path_from_inode_id(ino)?;
         let mut meta = itree.get_inode(ino)?.meta.clone();
         drop(itree);

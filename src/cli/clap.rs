@@ -1,3 +1,4 @@
+use libp2p::Multiaddr;
 use std::{net::IpAddr, path::PathBuf};
 use ts_rs::TS;
 
@@ -134,13 +135,7 @@ pub struct NewArgs {
     pub mountpoint: Option<PathBuf>,
     /// Network to join
     #[arg(long, short)]
-    pub url: Option<String>,
-    /// Name for this pod to use as a machine name with the network. Defaults to your Machine's name
-    #[arg(long, short = 'H')]
-    pub hostname: Option<String>,
-    /// Url this Pod reports to other to reach it
-    #[arg(long, short)]
-    pub listen_url: Option<String>, // listen_url in the Cli and public_url in the code because the -p would conflict with the port
+    pub url: Option<Multiaddr>,
     /// Ip address this Pod listen [default: 0.0.0.0]
     #[arg(long, short)]
     pub ip_address: Option<IpAddr>,
@@ -149,7 +144,7 @@ pub struct NewArgs {
     pub port: Option<u16>,
     /// Additional hosts to try to join from as a backup
     #[arg(raw = true)]
-    pub additional_hosts: Vec<String>,
+    pub additional_hosts: Vec<Multiaddr>,
     /// Allow other users to access the mounted pod
     #[arg(short, long, default_value_t = false)]
     pub allow_other_users: bool,

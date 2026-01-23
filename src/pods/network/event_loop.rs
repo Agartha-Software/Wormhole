@@ -1,7 +1,8 @@
-use std::{error::Error, io, sync::Arc};
+use std::{io, sync::Arc};
 
 use futures::StreamExt;
 use libp2p::{
+    identify,
     request_response::{self, ResponseChannel},
     swarm::SwarmEvent,
     PeerId, Swarm,
@@ -49,12 +50,12 @@ impl EventLoop {
         swarm: Swarm<Behaviour>,
         fs_interface: Arc<FsInterface>,
         to_network: UnboundedReceiver<ToNetworkMessage>,
-    ) -> Result<Self, Box<dyn Error>> {
-        Ok(EventLoop {
+    ) -> Self {
+        EventLoop {
             swarm,
             to_network,
             fs_interface,
-        })
+        }
     }
 
     pub async fn run(mut self) {
@@ -62,22 +63,32 @@ impl EventLoop {
             tokio::select! {
                 event = self.swarm.select_next_some() => self.handle_event(event).await,
                 to_network = self.to_network.recv() => match to_network {
-                    Some(message) => self.handle_to_network(message),
+                    Some(ToNetworkMessage::SpecificMessage((message, _), _)) => self.send_request(message),
+                    Some(ToNetworkMessage::BroadcastMessage(message)) => self.send_request(message),
                     None => return,
                 }
             }
         }
     }
 
-    fn handle_to_network(&mut self, message: ToNetworkMessage) {}
+    fn send_request(&mut self, message: Request) {
+        log::error!("CANT SEND MESSAGE YET: {}", message);
+    }
 
     async fn handle_response_message(&mut self, response: Response, peer: PeerId) {
-        let a = match response {
+        let result = match response {
             Response::DeltaRequest(ino, sig) => self
                 .fs_interface
                 .respond_delta(ino, sig, peer)
                 .map_err(into_boxed_io),
+            e => {
+                log::trace!("Recieved fsAnswer {}", e);
+                Ok(())
+            }
         };
+        if let Err(err) = result {
+            log::trace!("Response Message Failed: {err}");
+        }
     }
 
     async fn handle_request_message(
@@ -88,7 +99,7 @@ impl EventLoop {
     ) {
         let sender = ResponseSender::new(self.swarm.behaviour_mut(), channel);
 
-        let a = match request {
+        let result = match request {
             Request::PullAnswer(id, binary) => self
                 .fs_interface
                 .recept_binary(id, binary)
@@ -128,7 +139,7 @@ impl EventLoop {
                 .map_err(into_boxed_io),
             Request::RequestFs => self
                 .fs_interface
-                .send_filesystem(peer)
+                .send_filesystem(peer, sender)
                 .map_err(into_boxed_io),
             Request::Rename(parent, new_parent, name, new_name, overwrite) => self
                 .fs_interface
@@ -156,16 +167,20 @@ impl EventLoop {
                 .map_err(into_boxed_io),
             Request::FileChanged(ino, meta) => self
                 .fs_interface
-                .accept_file_changed(ino, meta, peer)
+                .accept_file_changed(ino, meta, sender)
                 .map_err(into_boxed_io),
         };
+
+        if let Err(err) = result {
+            log::trace!("Request Message Failed: {err}");
+        }
     }
 
     async fn handle_rr_event(&mut self, event: request_response::Event<Request, Response>) {
         match event {
             request_response::Event::Message {
                 peer,
-                connection_id,
+                connection_id: _,
                 message,
             } => match message {
                 request_response::Message::Request {
@@ -178,23 +193,18 @@ impl EventLoop {
                     response,
                 } => self.handle_response_message(response, peer).await,
             },
-            request_response::Event::InboundFailure {
-                peer,
+            e => log::trace!("rr: {e:?}"),
+        }
+    }
+
+    async fn handle_identify_event(&mut self, event: identify::Event) {
+        match event {
+            identify::Event::Received {
                 connection_id,
-                request_id,
-                error,
-            } => {}
-            request_response::Event::OutboundFailure {
-                peer,
-                connection_id,
-                request_id,
-                error,
-            } => {}
-            request_response::Event::ResponseSent {
-                peer,
-                connection_id,
-                request_id,
-            } => {}
+                peer_id,
+                info,
+            } => log::trace!("id received!: {} {} {:?}", connection_id, peer_id, info),
+            e => log::trace!("identify: {e:?}"),
         }
     }
 
@@ -203,62 +213,10 @@ impl EventLoop {
             SwarmEvent::Behaviour(BehaviourEvent::RequestResponse(event)) => {
                 self.handle_rr_event(event).await
             }
-
-            SwarmEvent::ConnectionEstablished {
-                peer_id,
-                connection_id,
-                endpoint,
-                num_established,
-                concurrent_dial_errors,
-                established_in,
-            } => todo!(),
-            SwarmEvent::ConnectionClosed {
-                peer_id,
-                connection_id,
-                endpoint,
-                num_established,
-                cause,
-            } => todo!(),
-            SwarmEvent::IncomingConnection {
-                connection_id,
-                local_addr,
-                send_back_addr,
-            } => todo!(),
-            SwarmEvent::IncomingConnectionError {
-                connection_id,
-                local_addr,
-                send_back_addr,
-                error,
-                peer_id,
-            } => todo!(),
-            SwarmEvent::OutgoingConnectionError {
-                connection_id,
-                peer_id,
-                error,
-            } => todo!(),
-            SwarmEvent::NewListenAddr {
-                listener_id,
-                address,
-            } => todo!(),
-            SwarmEvent::ExpiredListenAddr {
-                listener_id,
-                address,
-            } => todo!(),
-            SwarmEvent::ListenerClosed {
-                listener_id,
-                addresses,
-                reason,
-            } => todo!(),
-            SwarmEvent::ListenerError { listener_id, error } => todo!(),
-            SwarmEvent::Dialing {
-                peer_id,
-                connection_id,
-            } => todo!(),
-            SwarmEvent::NewExternalAddrCandidate { address } => todo!(),
-            SwarmEvent::ExternalAddrConfirmed { address } => todo!(),
-            SwarmEvent::ExternalAddrExpired { address } => todo!(),
-            SwarmEvent::NewExternalAddrOfPeer { peer_id, address } => todo!(),
-            _ => todo!(),
+            SwarmEvent::Behaviour(BehaviourEvent::Identify(event)) => {
+                self.handle_identify_event(event).await
+            }
+            e => log::trace!("event: {e:?}"),
         }
     }
 }

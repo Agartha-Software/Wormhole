@@ -1,8 +1,5 @@
-use std::sync::Arc;
-
 use crate::ipc::answers::RestartAnswer;
 use crate::ipc::commands::PodId;
-use crate::network::server::Server;
 use crate::pods::pod::Pod;
 use crate::service::commands::{find_frozen_pod, find_pod};
 use crate::service::connection::send_answer;
@@ -46,14 +43,7 @@ impl Service {
             return send_answer(RestartAnswer::PodStopFailed(err.to_string()), stream).await;
         }
 
-        let server = match Server::from_specific_address(proto.bound_socket) {
-            Ok(server) => Arc::new(server),
-            Err(err) => {
-                return send_answer(RestartAnswer::CouldntBind(err.into()), stream).await;
-            }
-        };
-
-        match Pod::new(proto, server).await {
+        match Pod::new(proto).await {
             Ok(pod) => {
                 self.pods.insert(name.clone(), pod);
                 send_answer(RestartAnswer::Success(name), stream).await
