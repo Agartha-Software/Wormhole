@@ -155,15 +155,6 @@ pub struct FromNetworkMessage {
     pub content: MessageContent,
 }
 
-/// Message going to the redundancy worker
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum RedundancyMessage {
-    // PeerSignature(Ino, String, Vec<u8>),
-    // WriteDeltas(Ino),
-    ApplyTo(Ino),
-    CheckIntegrity,
-}
-
 /// Message Going To Network
 /// Messages sent from fuser to process communicating to the peers
 #[derive(Debug)]
