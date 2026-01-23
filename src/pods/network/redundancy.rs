@@ -8,7 +8,6 @@ use crate::{
     },
 };
 use core::time;
-use nt_time::time::Duration;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::SystemTime};
@@ -63,7 +62,7 @@ impl PendingRedundancy {
         all_peers: &[Address],
         r_count: usize,
     ) -> Result<Self, RedundancyError> {
-        let timeout = SystemTime::now() + Duration::seconds(10);
+        let timeout = SystemTime::now() + time::Duration::from_secs(10);
         let hosts = match &fs_interface.itree.read_recursive().get_inode(ino)?.entry {
             FsEntry::File(hosts) => Ok(hosts.clone()),
             _ => Err(WhError::InodeIsADirectory),
@@ -124,7 +123,7 @@ impl PendingRedundancy {
             return Err(RedundancyError::InsufficientHosts);
         }
 
-        let timeout = SystemTime::now() + Duration::seconds(10);
+        let timeout = SystemTime::now() + time::Duration::from_secs(10);
         let file = match &self.file {
             Some(file) => file.clone(),
             None => fs_interface
