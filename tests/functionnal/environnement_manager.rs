@@ -161,7 +161,7 @@ impl EnvironnementManager {
                     let temp_dir = assert_fs::TempDir::new().expect("can't create temp dir");
                     let mut pod_ip = conn_to
                         .clone()
-                        .unwrap_or(IpP::try_from(&"0.0.0.0:8080".to_string()).unwrap());
+                        .unwrap_or(IpP::try_from(&"127.0.0.1:8080".to_string()).unwrap());
                     pod_ip.set_ip_last(pod_ip.get_ip_last() + 1);
 
                     println!(

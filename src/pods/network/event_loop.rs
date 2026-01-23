@@ -197,7 +197,7 @@ impl EventLoop {
         }
     }
 
-    async fn handle_identify_event(&mut self, event: identify::Event) {
+    fn handle_identify_event(&mut self, event: identify::Event) {
         match event {
             identify::Event::Received {
                 connection_id,
@@ -211,10 +211,18 @@ impl EventLoop {
     pub async fn handle_event(&mut self, event: SwarmEvent<BehaviourEvent>) {
         match event {
             SwarmEvent::Behaviour(BehaviourEvent::RequestResponse(event)) => {
-                self.handle_rr_event(event).await
+                self.handle_rr_event(event).await;
+                ()
             }
             SwarmEvent::Behaviour(BehaviourEvent::Identify(event)) => {
-                self.handle_identify_event(event).await
+                self.handle_identify_event(event);
+                ()
+            }
+            SwarmEvent::NewListenAddr {
+                listener_id,
+                address,
+            } => {
+                log::trace!("new listen address: {address:?}    {listener_id:?}")
             }
             e => log::trace!("event: {e:?}"),
         }

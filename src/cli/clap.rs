@@ -136,7 +136,7 @@ pub struct NewArgs {
     /// Network to join
     #[arg(long, short)]
     pub url: Option<Multiaddr>,
-    /// Ip address this Pod listen [default: 0.0.0.0]
+    /// Ip address this Pod listen [default: 127.0.0.1]
     #[arg(long, short)]
     pub ip_address: Option<IpAddr>,
     /// Local port for the pod to use. By default automatically find a port on the range [default: 40000-40100]
