@@ -10,13 +10,15 @@ use crate::{
     error::{WhError, WhResult},
     network::{
         message::{
-            Address, FromNetworkMessage, MessageAndStatus, MessageContent,
-            ToNetworkMessage,
+            Address, FromNetworkMessage, MessageAndStatus, MessageContent, ToNetworkMessage,
         },
         peer_ipc::PeerIPC,
         server::Server,
     },
-    pods::{filesystem::make_inode::MakeInodeError, network::redundancy::RedundancyMessage, whpath::InodeName},
+    pods::{
+        filesystem::make_inode::MakeInodeError, network::redundancy::RedundancyMessage,
+        whpath::InodeName,
+    },
 };
 use parking_lot::RwLock;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};

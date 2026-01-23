@@ -87,10 +87,7 @@ impl PendingRedundancy {
         Ok(Self {
             ino,
             file: (file.0.len() < MAX_SIZE_KEEP_RAM).then_some(file),
-            pending_sends: sent
-                .iter()
-                .map(|t| (t.clone(), Some(timeout)))
-                .collect(),
+            pending_sends: sent.iter().map(|t| (t.clone(), Some(timeout))).collect(),
             hosts,
         })
     }
@@ -142,12 +139,8 @@ impl PendingRedundancy {
         )
         .await;
 
-        self.pending_sends.append(
-            &mut sent
-                .iter()
-                .map(|t| (t.clone(), Some(timeout)))
-                .collect(),
-        );
+        self.pending_sends
+            .append(&mut sent.iter().map(|t| (t.clone(), Some(timeout))).collect());
         Ok(())
     }
 }
