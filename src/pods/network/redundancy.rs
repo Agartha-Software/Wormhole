@@ -11,7 +11,7 @@ use futures_util::future::join_all;
 use libp2p::PeerId;
 use std::sync::Arc;
 use tokio::{
-    sync::mpsc::{unbounded_channel, UnboundedReceiver},
+    sync::{mpsc::UnboundedReceiver, oneshot},
     task::JoinSet,
 };
 
@@ -218,7 +218,7 @@ impl NetworkInterface {
         data: Arc<Vec<u8>>,
         to: PeerId,
     ) -> WhResult<PeerId> {
-        let (status_tx, mut status_rx) = unbounded_channel();
+        let (status_tx, status_rx) = oneshot::channel();
 
         self.to_network_message_tx
             .send(ToNetworkMessage::SpecificMessage(
@@ -228,7 +228,6 @@ impl NetworkInterface {
             .expect("send_file: unable to update modification on the network thread");
 
         status_rx
-            .recv()
             .await
             .unwrap_or(Err(WhError::NetworkDied {
                 called_from: "network_interface::send_file_redundancy".to_owned(),

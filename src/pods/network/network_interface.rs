@@ -9,7 +9,7 @@ use crate::{
         whpath::InodeName,
     },
 };
-use libp2p::{Multiaddr, PeerId};
+use libp2p::PeerId;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -132,14 +132,13 @@ impl NetworkInterface {
         itree.set_inode_hosts(id, hosts) // TODO - if unable to update for some reason, should be passed to the background worker
     }
 
-    pub fn send_file(&self, inode: Ino, data: Vec<u8>, to: PeerId) -> WhResult<()> {
+    pub fn send_file(&self, inode: Ino, data: Vec<u8>, to: PeerId) -> () {
         self.to_network_message_tx
             .send(ToNetworkMessage::SpecificMessage(
                 (Request::PullAnswer(inode, data), None),
                 vec![to],
             ))
             .expect("send_file: unable to update modification on the network thread");
-        Ok(())
     }
 
     pub fn revoke_remote_hosts(&self, id: Ino) -> WhResult<()> {

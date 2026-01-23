@@ -7,7 +7,7 @@ use crate::pods::network::callbacks::CallbackRequest;
 use crate::pods::network::network_interface::NetworkInterface;
 use crate::{error::WhError, pods::itree::Ino};
 use custom_error::custom_error;
-use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 
 custom_error! {
     #[derive(Clone)]
@@ -54,7 +54,7 @@ impl NetworkInterface {
             let procedure = || {
                 // will try to pull on all redundancies until success
                 for host in hosts {
-                    let (tx, mut rx) = mpsc::unbounded_channel();
+                    let (tx, rx) = oneshot::channel();
                     // trying on host `pull_from`
                     self.to_network_message_tx
                         .send(ToNetworkMessage::SpecificMessage(
@@ -65,7 +65,7 @@ impl NetworkInterface {
 
                     // processing status
                     match rx.blocking_recv() {
-                        Some(_) => return Ok(()),
+                        Ok(_) => return Ok(()),
                         _ => continue,
                     }
                 }

@@ -5,7 +5,7 @@ use std::{
 
 use libp2p::PeerId;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::oneshot;
 
 use crate::{
     error::WhResult,
@@ -161,7 +161,7 @@ impl fmt::Debug for Response {
     }
 }
 
-pub type MessageAndStatus = (Request, Option<UnboundedSender<WhResult<()>>>);
+pub type RequestAndStatus = (Request, Option<oneshot::Sender<WhResult<()>>>);
 
 pub type Address = String;
 
@@ -187,7 +187,7 @@ pub enum RedundancyMessage {
 #[derive(Debug)]
 pub enum ToNetworkMessage {
     BroadcastMessage(Request),
-    SpecificMessage(MessageAndStatus, Vec<PeerId>),
+    SpecificMessage(RequestAndStatus, Vec<PeerId>),
 }
 
 impl fmt::Display for ToNetworkMessage {

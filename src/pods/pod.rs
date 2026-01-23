@@ -5,7 +5,7 @@ use std::{io, sync::Arc};
 use crate::config::local_file::LocalConfigFile;
 use crate::config::GlobalConfig;
 use crate::data::tree_hosts::CliHostTree;
-use crate::error::{WhError, WhResult};
+use crate::error::WhError;
 #[cfg(target_os = "linux")]
 use crate::fuse::fuse_impl::mount_fuse;
 use crate::ipc::answers::InspectInfo;
@@ -28,7 +28,7 @@ use custom_error::custom_error;
 use fuser;
 use libp2p::PeerId;
 use parking_lot::RwLock;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 
 use crate::pods::{
@@ -253,7 +253,7 @@ impl Pod {
         let file_content = Arc::new(file_content);
 
         for host in possible_hosts {
-            let (status_tx, mut status_rx) = tokio::sync::mpsc::unbounded_channel::<WhResult<()>>();
+            let (status_tx, status_rx) = oneshot::channel();
 
             self.network_interface
                 .to_network_message_tx
@@ -261,13 +261,13 @@ impl Pod {
                     (
                         // NOTE - file_content clone is not efficient, but no way to avoid it for now
                         Request::RedundancyFile(ino, file_content.clone()),
-                        Some(status_tx.clone()),
+                        Some(status_tx),
                     ),
                     vec![host.clone()],
                 ))
                 .expect("to_network_message_tx closed.");
 
-            if let Some(Ok(())) = status_rx.recv().await {
+            if let Ok(_) = status_rx.await.expect("network died") {
                 self.network_interface
                     .to_network_message_tx
                     .send(ToNetworkMessage::BroadcastMessage(Request::EditHosts(
