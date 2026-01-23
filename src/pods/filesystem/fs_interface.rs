@@ -127,26 +127,23 @@ impl FsInterface {
         }
     }
 
-    pub fn recept_redundancy(&self, id: Ino, binary: Arc<Vec<u8>>) -> WhResult<()> {
+    pub fn recept_redundancy(&self, ino: Ino, binary: Arc<Vec<u8>>) -> io::Result<()> {
         let itree = ITree::write_lock(&self.itree, "recept_binary")
             .expect("recept_binary: can't read lock itree");
         let (path, perms) = itree
-            .get_path_from_inode_id(id)
-            .and_then(|path| itree.get_inode(id).map(|inode| (path, inode.meta.perm)))?;
+            .get_path_from_inode_id(ino)
+            .and_then(|path| itree.get_inode(ino).map(|inode| (path, inode.meta.perm)))
+            .map_err(io::Error::other)?;
         drop(itree);
 
         let _created = self.disk.new_file(&path, perms);
         self.disk
             .write_file(&path, &binary, 0)
-            .inspect_err(|e| log::error!("{e}"))
-            .expect("disk error");
-        // TODO -> in case of failure, other hosts still think this one is valid. Should send error report to the redundancy manager
+            .inspect_err(|e| log::error!("{e}"))?;
 
-        ITree::write_lock(&self.itree, "recept_redundancy")?
-            .add_inode_hosts(id, vec![self.network_interface.hostname.clone()])
-            .inspect_err(|e| {
-                log::error!("Can't update (local) hosts for redundancy pulled file ({id}): {e}")
-            })
+        self.network_interface
+            .add_inode_hosts(ino, [self.network_interface.hostname.clone()].to_vec())
+            .map_err(io::Error::other)
     }
 
     pub fn recept_binary(&self, id: Ino, binary: Vec<u8>) -> io::Result<()> {
