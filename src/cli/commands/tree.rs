@@ -6,20 +6,19 @@ use crate::{
         connection::{recieve_answer, send_command},
         IdentifyPodArgs,
     },
-    data::tree_hosts::TreeData,
     ipc::{
         answers::TreeAnswer,
         commands::{Command, PodId},
     },
 };
 
-pub async fn tree(args: IdentifyPodArgs, mut stream: Stream) -> io::Result<TreeData> {
+pub async fn tree(args: IdentifyPodArgs, mut stream: Stream) -> io::Result<String> {
     let pod = PodId::from(args);
 
     send_command(Command::Tree(pod), &mut stream).await?;
 
     match recieve_answer::<TreeAnswer>(&mut stream).await? {
-        TreeAnswer::Tree(data) => Ok(*data),
+        TreeAnswer::Tree(data) => Ok(format!("{:?}", *data)),
         TreeAnswer::PodNotFound => Err(io::Error::new(
             io::ErrorKind::NotFound,
             "The given pod couldn't be found.",
