@@ -125,12 +125,11 @@ impl EventLoop {
     }
 
     fn retry_fs_request(&mut self, failing_host: PeerId) {
-        let retry_peer = self
+        let retry_peer = *self
             .swarm
             .connected_peers()
             .find(|peer| **peer != failing_host)
-            .unwrap_or(&failing_host)
-            .clone();
+            .unwrap_or(&failing_host);
 
         let request_id = self
             .swarm
@@ -349,12 +348,10 @@ impl EventLoop {
     pub async fn handle_event(&mut self, event: SwarmEvent<BehaviourEvent>) -> bool {
         match event {
             SwarmEvent::Behaviour(BehaviourEvent::RequestResponse(event)) => {
-                self.handle_rr_event(event).await;
-                ()
+                self.handle_rr_event(event).await
             }
             SwarmEvent::Behaviour(BehaviourEvent::Identify(event)) => {
-                self.handle_identify_event(event);
-                ()
+                self.handle_identify_event(event)
             }
             SwarmEvent::NewListenAddr { address, .. } => {
                 self.fs_interface
@@ -397,6 +394,6 @@ impl EventLoop {
             }
             e => log::trace!("event: {e:?}"),
         };
-        return false;
+        false
     }
 }

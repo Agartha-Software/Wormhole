@@ -9,7 +9,7 @@ use crate::error::WhError;
 #[cfg(target_os = "linux")]
 use crate::fuse::fuse_impl::mount_fuse;
 use crate::ipc::answers::{InspectInfo, PeerInfo, PodCreationError};
-use crate::network::message::{Request, ToNetworkMessage};
+use crate::network::message::{Request, Response, ToNetworkMessage};
 #[cfg(target_os = "linux")]
 use crate::pods::disk_managers::unix_disk_manager::UnixDiskManager;
 #[cfg(target_os = "windows")]
@@ -119,7 +119,7 @@ impl Pod {
 
         let network_interface = Arc::new(NetworkInterface::new(
             itree,
-            swarm.local_peer_id().clone(),
+            *swarm.local_peer_id(),
             senders_in.clone(),
             redundancy_tx.clone(),
             Arc::new(RwLock::new(swarm.connected_peers().cloned().collect())),
@@ -230,16 +230,16 @@ impl Pod {
                     // NOTE - file_content clone is not efficient, but no way to avoid it for now
                     Request::RedundancyFile(ino, file_content.clone()),
                     status_tx,
-                    host.clone(),
+                    *host,
                 ))
                 .expect("to_network_message_tx closed.");
 
-            if let Some(_) = status_rx.await.expect("network died") {
+            if let Some(Response::Success) = status_rx.await.expect("network died") {
                 self.network_interface
                     .to_network_message_tx
                     .send(ToNetworkMessage::BroadcastMessage(Request::EditHosts(
                         ino,
-                        vec![host.clone()],
+                        vec![*host],
                     )))
                     .expect("to_network_message_tx closed.");
                 return Ok(());

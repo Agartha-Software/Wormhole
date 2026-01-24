@@ -65,7 +65,7 @@ impl FsInterface {
                                 old_sig.clone(),
                                 delta.clone(),
                             ),
-                            vec![peer.clone()],
+                            vec![*peer],
                         ))
                         .map_err(|e| WhError::WouldBlock {
                             called_from: e.to_string(),
@@ -75,7 +75,7 @@ impl FsInterface {
                         .to_network_message_tx
                         .send(ToNetworkMessage::SpecificMessage(
                             Request::FileChanged(ino, inode.meta.clone()),
-                            vec![peer.clone()],
+                            vec![*peer],
                         ))
                         .map_err(|e| WhError::WouldBlock {
                             called_from: e.to_string(),

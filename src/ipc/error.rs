@@ -104,9 +104,9 @@ impl From<IoError> for std::io::Error {
     }
 }
 
-impl Into<std::io::Error> for PodCreationError {
-    fn into(self) -> std::io::Error {
-        match self {
+impl From<PodCreationError> for std::io::Error {
+    fn from(val: PodCreationError) -> Self {
+        match val {
             PodCreationError::DiskAccessError(mut io_error) => {
                 io_error.error = format!(
                     "Error while trying to interact with the disk: {}",

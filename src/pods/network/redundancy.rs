@@ -195,7 +195,7 @@ async fn push_redundancy(
                 }
                 let nwi_clone = Arc::clone(nw_interface);
                 let bin_clone = file_binary.clone();
-                let addr = all_peers[current_try].clone();
+                let addr = all_peers[current_try];
 
                 set.spawn(
                     async move { nwi_clone.send_file_redundancy(ino, bin_clone, addr).await },
@@ -220,7 +220,7 @@ impl NetworkInterface {
             .send(ToNetworkMessage::AnswerMessage(
                 Request::RedundancyFile(inode, data),
                 status_tx,
-                to.clone(),
+                to,
             ))
             .expect("send_file: unable to update modification on the network thread");
 

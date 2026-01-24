@@ -510,7 +510,7 @@ fn index_folder_recursive(
 
         let fs_entry = match ftype.try_into()? {
             SimpleFileType::Directory => FsEntry::new_directory(),
-            SimpleFileType::File => FsEntry::File(vec![host.clone()]),
+            SimpleFileType::File => FsEntry::File(vec![*host]),
             SimpleFileType::Symlink => {
                 let target = std::fs::read_link(entry.path());
                 let link = EntrySymlink::parse(&target?, mountpoint);

@@ -6,7 +6,7 @@ use libp2p::{
 };
 use std::{error::Error, time::Duration};
 
-const PROTOCOL_VERSION: &'static str = "/wormhole/1.0.0";
+const PROTOCOL_VERSION: &str = "/wormhole/1.0.0";
 
 pub async fn create_swarm(name: String) -> Result<Swarm<Behaviour>, Box<dyn Error>> {
     let swarm = libp2p::SwarmBuilder::with_new_identity()

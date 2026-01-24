@@ -142,7 +142,7 @@ impl FsInterface {
         // TODO -> in case of failure, other hosts still think this one is valid. Should send error report to the redundancy manager
 
         ITree::write_lock(&self.network_interface.itree, "recept_redundancy")?
-            .add_inode_hosts(id, vec![self.network_interface.id.clone()])
+            .add_inode_hosts(id, vec![self.network_interface.id])
             .inspect_err(|e| {
                 log::error!("Can't update (local) hosts for redundancy pulled file ({id}): {e}")
             })?;

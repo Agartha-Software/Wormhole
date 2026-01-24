@@ -37,10 +37,6 @@ name = "wormhole"
 path = "src/bin/cli.rs"
 
 [[bin]]
-name = "p2p-test"
-path = "src/bin/p2p-test.rs"
-
-[[bin]]
 name = "wormholed"
 path = "src/bin/service.rs"
 
