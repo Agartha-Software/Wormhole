@@ -246,36 +246,6 @@ impl FsInterface {
     // !SECTION
 
     // SECTION remote -> read
-    pub fn send_filesystem(&self, to: PeerId) -> WhResult<Response> {
-        let itree = ITree::read_lock(
-            &self.network_interface.itree,
-            "fs_interface::send_filesystem",
-        )?;
-        let global_config_file_size = itree
-            .get_inode(GLOBAL_CONFIG_INO)
-            .map(|inode| inode.meta.size)
-            .ok();
-        let global_config_path = if global_config_file_size.is_some() {
-            Some(WhPath::try_from(GLOBAL_CONFIG_FNAME).expect("GLOBAL_CONFIG_FNAME const error"))
-        } else {
-            None
-        };
-        drop(itree);
-        log::info!("reading global config at {global_config_path:?}");
-
-        let mut global_config_bytes = Vec::new();
-        if let Some(global_config_file_size) = global_config_file_size {
-            global_config_bytes.resize(global_config_file_size as usize, 0);
-
-            if let Some(global_config_path) = global_config_path {
-                self.disk
-                    .read_file(&global_config_path, 0, &mut global_config_bytes)
-                    .expect("disk can't read file (global condfig)");
-            }
-        }
-        self.network_interface.send_itree(global_config_bytes, to)
-    }
-
     pub fn send_file(&self, inode: Ino) -> io::Result<Response> {
         let itree = ITree::read_lock(&self.network_interface.itree, "send_itree")
             .map_err(io::Error::other)?;

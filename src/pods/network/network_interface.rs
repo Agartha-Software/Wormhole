@@ -268,10 +268,8 @@ impl NetworkInterface {
     //     }
     // }
 
-    pub fn send_itree(&self, global_config_bytes: Vec<u8>, to: PeerId) -> WhResult<Response> {
-        let clean_itree = ITree::read_lock(&self.itree, "send_itree")?
-            .clone()
-            .clean_local();
+    pub fn send_filesystem(&self, to: PeerId) -> WhResult<Response> {
+        let clean_itree = self.itree.read().clone().clean_local();
 
         let peers_address_list: Vec<PeerId> = self
             .peers
@@ -281,10 +279,12 @@ impl NetworkInterface {
             .cloned()
             .collect();
 
+        let global_config = self.global_config.read().clone();
+
         Ok(Response::FsAnswer(
             clean_itree,
             peers_address_list,
-            global_config_bytes,
+            global_config,
         ))
     }
 

@@ -7,10 +7,13 @@ use libp2p::PeerId;
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
-use crate::pods::{
-    filesystem::diffs::{Delta, Signature},
-    itree::{ITree, Ino, Inode, Metadata},
-    whpath::InodeName,
+use crate::{
+    config::GlobalConfig,
+    pods::{
+        filesystem::diffs::{Delta, Signature},
+        itree::{ITree, Ino, Inode, Metadata},
+        whpath::InodeName,
+    },
 };
 
 /// Message Content
@@ -133,7 +136,7 @@ pub enum Response {
     /// Request a file delta from this base signature
     DeltaRequest(Ino, Signature),
     // (ITree, peers, global_config)
-    FsAnswer(ITree, Vec<PeerId>, Vec<u8>),
+    FsAnswer(ITree, Vec<PeerId>, GlobalConfig),
     RequestedFile(Vec<u8>),
     Success,
     Failed,

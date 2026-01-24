@@ -10,7 +10,6 @@ use libp2p::{
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
 
 use crate::{
-    config::GlobalConfig,
     ipc::answers::PeerInfo,
     network::message::{Request, Response, ToNetworkMessage},
     pods::{
@@ -148,7 +147,7 @@ impl EventLoop {
                 .fs_interface
                 .respond_delta(ino, sig, peer)
                 .map_err(into_boxed_io),
-            Response::FsAnswer(tree, peers, global_config_data) => {
+            Response::FsAnswer(tree, peers, global_config) => {
                 self.need_initialisation = None;
 
                 for peer in peers {
@@ -157,9 +156,6 @@ impl EventLoop {
                         log::error!("Could'nt connect to {peer} on the network: {e}")
                     });
                 }
-
-                let global_config: GlobalConfig = bincode::deserialize(&global_config_data)
-                    .expect("global config should always be deserializable");
 
                 let mut current = self.fs_interface.network_interface.itree.write();
                 // Overwrite local tree
@@ -222,6 +218,7 @@ impl EventLoop {
             }
             Request::RequestFs => self
                 .fs_interface
+                .network_interface
                 .send_filesystem(peer)
                 .map_err(into_boxed_io),
             Request::Rename(parent, new_parent, name, new_name, overwrite) => self
