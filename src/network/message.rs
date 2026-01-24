@@ -49,7 +49,6 @@ pub enum Request {
     RemoveXAttr(Ino, String),
 
     RequestFs,
-    Disconnect,
 }
 
 impl fmt::Display for Request {
@@ -68,7 +67,6 @@ impl fmt::Display for Request {
             Request::RemoveXAttr(_, _) => "RemoveXAttr",
             Request::RequestFs => "RequestFs",
             Request::RedundancyFile(_, _) => "RedundancyFile",
-            Request::Disconnect => "Disconnect",
             Request::FileDelta(_, _, _, _) => "FileDelta",
             Request::FileChanged(_, _) => "FileChanged",
             // Request::RequestFileSignature(_) => "RequestFileSignature",
@@ -121,7 +119,6 @@ impl fmt::Debug for Request {
             ),
             Request::RemoveXAttr(id, name) => write!(f, "RemoveXAttr({id}, {name})"),
             Request::RequestFs => write!(f, "RequestFs"),
-            Request::Disconnect => write!(f, "Disconnect"),
             Request::FileDelta(ino, meta, _, _) => {
                 write!(f, "FileDelta({ino}, {:?})", meta.mtime)
             }

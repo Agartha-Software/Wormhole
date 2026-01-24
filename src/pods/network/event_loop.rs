@@ -62,10 +62,6 @@ impl EventLoop {
             .cloned()
             .collect::<Vec<PeerId>>()
         {
-            self.swarm
-                .behaviour_mut()
-                .request_response
-                .send_request(&peer, Request::Disconnect);
             let _ = self.swarm.disconnect_peer_id(peer);
         }
     }
@@ -156,7 +152,7 @@ impl EventLoop {
                     for addr in info.listen_addrs {
                         match self.swarm.dial(addr.clone()) {
                             Ok(_) => break,
-                            Err(e) => log::error!("Could'nt connect to {peer} at {addr}: {e}"),
+                            Err(e) => log::error!("Couldn't connect to {peer} at {addr}: {e}"),
                         };
                     }
                 }
@@ -235,16 +231,10 @@ impl EventLoop {
                 .network_interface
                 .recept_inode_xattr(ino, &key, data)
                 .map_err(into_boxed_io),
-
             Request::RemoveXAttr(ino, key) => self
                 .fs_interface
                 .network_interface
                 .recept_remove_inode_xattr(ino, &key)
-                .map_err(into_boxed_io),
-            Request::Disconnect => self
-                .fs_interface
-                .network_interface
-                .disconnect_peer(peer)
                 .map_err(into_boxed_io),
             Request::FileDelta(ino, meta, sig, delta) => self
                 .fs_interface
@@ -381,6 +371,11 @@ impl EventLoop {
                 if self.closing && self.swarm.connected_peers().count() == 0 {
                     return true;
                 }
+
+                if let Err(err) = self.fs_interface.network_interface.disconnect_peer(peer_id) {
+                    log::error!("Error while disconnecting remote pod: {err}");
+                }
+
                 self.fs_interface
                     .network_interface
                     .peers_info

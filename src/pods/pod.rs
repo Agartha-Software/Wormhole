@@ -104,7 +104,8 @@ impl Pod {
             .general
             .entrypoints
             .iter()
-            .find_map(|peer| swarm.dial(peer.clone()).ok())
+            .cloned()
+            .find_map(|peer| swarm.dial(peer).ok())
             .is_some();
 
         let itree = generate_itree(&proto.mountpoint, &swarm.local_peer_id().clone())

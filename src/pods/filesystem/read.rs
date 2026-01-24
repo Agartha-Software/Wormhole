@@ -83,6 +83,14 @@ impl FsInterface {
         }
     }
 
+    /// Pull the file from the network
+    /// Affects the itree and the disk
+    ///
+    /// # Panics
+    ///
+    /// This function panics if called within an asynchronous execution
+    /// context.
+    ///
     pub fn pull_file_sync(&self, ino: Ino) -> Result<Option<Vec<u8>>, PullError> {
         let data = match self.network_interface.pull_file(ino)? {
             Some(data) => data,
