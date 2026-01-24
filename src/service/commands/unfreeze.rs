@@ -31,9 +31,9 @@ impl Service {
             .expect("Already checked that the frozen_pod exist");
 
         match Pod::new(proto).await {
-            Ok(pod) => self.pods.insert(name.clone(), pod),
+            Ok((pod, _)) => self.pods.insert(name.clone(), pod),
             Err(err) => {
-                return send_answer(UnfreezeAnswer::PodCreationFailed(err.into()), stream).await;
+                return send_answer(UnfreezeAnswer::PodCreationFailed(err), stream).await;
             }
         };
 

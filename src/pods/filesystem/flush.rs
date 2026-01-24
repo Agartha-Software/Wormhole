@@ -11,7 +11,7 @@ use crate::{
             write::WriteError,
         },
         itree::{FsEntry, ITree, Ino, Metadata},
-        network::{event_loop::ResponseSender, pull_file::PullError},
+        network::pull_file::PullError,
     },
 };
 use custom_error::custom_error;
@@ -59,14 +59,11 @@ impl FsInterface {
                     self.network_interface
                         .to_network_message_tx
                         .send(ToNetworkMessage::SpecificMessage(
-                            (
-                                Request::FileDelta(
-                                    ino,
-                                    inode.meta.clone(),
-                                    old_sig.clone(),
-                                    delta.clone(),
-                                ),
-                                None,
+                            Request::FileDelta(
+                                ino,
+                                inode.meta.clone(),
+                                old_sig.clone(),
+                                delta.clone(),
                             ),
                             vec![peer.clone()],
                         ))
@@ -77,7 +74,7 @@ impl FsInterface {
                     self.network_interface
                         .to_network_message_tx
                         .send(ToNetworkMessage::SpecificMessage(
-                            (Request::FileChanged(ino, inode.meta.clone()), None),
+                            Request::FileChanged(ino, inode.meta.clone()),
                             vec![peer.clone()],
                         ))
                         .map_err(|e| WhError::WouldBlock {
@@ -109,14 +106,13 @@ impl FsInterface {
         meta: Metadata,
         sig: Signature,
         delta: Delta,
-        sender: ResponseSender,
-    ) -> Result<(), FlushError> {
+    ) -> Result<Response, FlushError> {
         log::trace!("accept_delta({ino})");
         let file = match self.get_local_file(ino)? {
             Some(file) => file,
             None => {
                 log::warn!("accept_delta: received delta but isn't currently tracking the file!");
-                return Ok(());
+                return Ok(Response::Success);
             }
         };
         let local_sig = Signature::new_using(&file, sig.implementor())?;
@@ -145,29 +141,23 @@ impl FsInterface {
             })?;
         } else {
             log::warn!("accept_delta: signature does not match local sig!");
-            sender.send(Response::DeltaRequest(ino, local_sig));
+            return Ok(Response::DeltaRequest(ino, local_sig));
         }
-        Ok(())
+        Ok(Response::Success)
     }
 
     /// Acknowledge a file change and request the change contents if we are tracking the file
-    pub fn accept_file_changed(
-        &self,
-        ino: Ino,
-        meta: Metadata,
-        sender: ResponseSender,
-    ) -> Result<(), FlushError> {
+    pub fn accept_file_changed(&self, ino: Ino, meta: Metadata) -> Result<Response, FlushError> {
         self.acknowledge_metadata(ino, meta).map_err(|e| match e {
             AcknoledgeSetAttrError::WhError { source } => FlushError::from(source),
             AcknoledgeSetAttrError::SetFileSizeIoError { io } => WriteError::from(io).into(),
         })?;
         let file = match self.get_local_file(ino)? {
             Some(file) => file,
-            None => return Ok(()),
+            None => return Ok(Response::Success),
         };
         let local_sig = Signature::new(&file)?;
-        sender.send(Response::DeltaRequest(ino, local_sig));
-        Ok(())
+        Ok(Response::DeltaRequest(ino, local_sig))
     }
 
     pub fn respond_delta(
@@ -184,7 +174,7 @@ impl FsInterface {
         self.network_interface
             .to_network_message_tx
             .send(ToNetworkMessage::SpecificMessage(
-                (Request::FileDelta(ino, inode.meta, sig, delta), None),
+                Request::FileDelta(ino, inode.meta, sig, delta),
                 vec![origin],
             ))
             .map_err(|e| WhError::WouldBlock {

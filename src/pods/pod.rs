@@ -8,13 +8,13 @@ use crate::data::tree_hosts::CliHostTree;
 use crate::error::WhError;
 #[cfg(target_os = "linux")]
 use crate::fuse::fuse_impl::mount_fuse;
-use crate::ipc::answers::InspectInfo;
+use crate::ipc::answers::{InspectInfo, PeerInfo, PodCreationError};
 use crate::network::message::{Request, ToNetworkMessage};
 #[cfg(target_os = "linux")]
 use crate::pods::disk_managers::unix_disk_manager::UnixDiskManager;
 #[cfg(target_os = "windows")]
 use crate::pods::disk_managers::windows_disk_manager::WindowsDiskManager;
-use crate::pods::disk_managers::DiskManager;
+use crate::pods::itree::creation::{generate_itree, initiate_itree};
 use crate::pods::itree::{FsEntry, LOCAL_CONFIG_INO, LOCK_TIMEOUT};
 use crate::pods::network::event_loop::EventLoop;
 use crate::pods::network::redundancy::redundancy_worker;
@@ -72,94 +72,53 @@ custom_error! {pub PodStopError
     DiskManagerStopFailed{e: io::Error} = "Unable to stop the disk manager properly. Your files are still on the system folder: ('.'mount_path). {e}",
 }
 
-/// Create all directories and symlinks present in ITree. (not the files)
-///
-/// Required at setup to resolve issue #179
-/// (files pulling need the parent folder to be already present)
-fn create_all_shared(itree: &ITree, from: Ino, disk: &dyn DiskManager) -> io::Result<()> {
-    let from = itree.get_inode(from).map_err(|e| e.into_io())?;
-
-    match &from.entry {
-        FsEntry::File(_) => Ok(()),
-        FsEntry::Symlink(symlink) => {
-            let current_path = itree
-                .get_path_from_inode_id(from.id)
-                .map_err(|e| e.into_io())?;
-            disk.new_symlink(&current_path, from.meta.perm, symlink)
-                .or_else(|e| {
-                    if e.kind() == io::ErrorKind::AlreadyExists {
-                        Ok(())
-                    } else {
-                        Err(e)
-                    }
-                })
-        }
-        FsEntry::Directory(children) => {
-            let current_path = itree
-                .get_path_from_inode_id(from.id)
-                .map_err(|e| e.into_io())?;
-
-            // skipping root folder
-            if current_path != WhPath::root() {
-                disk.new_dir(&current_path, from.meta.perm).or_else(|e| {
-                    if e.kind() == io::ErrorKind::AlreadyExists {
-                        Ok(())
-                    } else {
-                        Err(e)
-                    }
-                })?;
-            }
-
-            for child in children {
-                create_all_shared(itree, *child, disk)?
-            }
-            Ok(())
-        }
-    }
-}
-
 impl Pod {
-    pub async fn new(proto: PodPrototype) -> io::Result<Self> {
+    pub async fn new(proto: PodPrototype) -> Result<(Self, bool), PodCreationError> {
         let (senders_in, senders_out) = mpsc::unbounded_channel();
 
         let (redundancy_tx, redundancy_rx) = mpsc::unbounded_channel();
 
         #[cfg(target_os = "linux")]
-        let disk_manager = Box::new(UnixDiskManager::new(&proto.mountpoint)?);
+        let disk_manager = Box::new(
+            UnixDiskManager::new(&proto.mountpoint)
+                .map_err(|err| PodCreationError::DiskAccessError(err.into()))?,
+        );
         #[cfg(target_os = "windows")]
-        let disk_manager = Box::new(WindowsDiskManager::new(&proto.mountpoint)?);
+        let disk_manager = Box::new(
+            WindowsDiskManager::new(&proto.mountpoint)
+                .map_err(|err| PodCreationError::DiskAccessError(err.into()))?,
+        );
 
-        // create_all_shared(&itree, ROOT, disk_manager.as_ref())
-        //     .inspect_err(|e| log::error!("unable to create_all_shared: {e}"))
-        //     .map_err(|e| std::io::Error::new(e.kind(), format!("create_all_shared: {e}")))?;
+        let mut swarm = create_swarm(proto.name.clone())
+            .await
+            .map_err(|err| PodCreationError::TransportError(err.to_string()))?;
 
-        // if let Ok(perms) = itree
-        //     .get_inode(GLOBAL_CONFIG_INO)
-        //     .map(|inode| inode.meta.perm)
-        // {
-        //     let _ = disk_manager.new_file(&WhPath::try_from(GLOBAL_CONFIG_FNAME).unwrap(), perms);
-        //     disk_manager
-        //         .write_file(
-        //             &WhPath::try_from(GLOBAL_CONFIG_FNAME).unwrap(),
-        //             toml::to_string(&proto.global_config)
-        //                 .expect("infallible")
-        //                 .as_bytes(),
-        //             0,
-        //         )
-        //         .map_err(|e| {
-        //             std::io::Error::new(e.kind(), format!("write_file(global_config): {e}"))
-        //         })?;
-        // }
-
-        let mut swarm = create_swarm(proto.name.clone()).await.unwrap();
-        swarm.listen_on(proto.listen_address).unwrap();
-        for peer in &proto.global_config.general.entrypoints {
-            swarm.dial(peer.clone()).unwrap();
+        for address in proto.listen_addrs {
+            swarm
+                .listen_on(address)
+                .map_err(|err| PodCreationError::TransportError(err.to_string()))?;
         }
+
+        let dialed_success = proto
+            .global_config
+            .general
+            .entrypoints
+            .iter()
+            .find_map(|peer| swarm.dial(peer.clone()).ok())
+            .is_some();
+
+        let itree = generate_itree(&proto.mountpoint, &swarm.local_peer_id().clone())
+            .map_err(|err| PodCreationError::ITreeIndexion(err.into()))?;
+
+        initiate_itree(&itree, &proto.global_config, disk_manager.as_ref())
+            .map_err(|err| PodCreationError::ITreeIndexion(err.into()))?;
+
+        let itree = Arc::new(RwLock::new(itree));
 
         let global = Arc::new(RwLock::new(proto.global_config));
 
         let network_interface = Arc::new(NetworkInterface::new(
+            itree,
             swarm.local_peer_id().clone(),
             senders_in.clone(),
             redundancy_tx.clone(),
@@ -173,7 +132,7 @@ impl Pod {
             proto.mountpoint.clone(),
         ));
 
-        let event_loop = EventLoop::new(swarm, fs_interface.clone(), senders_out);
+        let event_loop = EventLoop::new(swarm, fs_interface.clone(), senders_out, dialed_success);
 
         let network_airport_handle = tokio::spawn(event_loop.run());
 
@@ -184,27 +143,37 @@ impl Pod {
         ));
 
         // FIXME - if mount fuse or fsp errors, drops of disk managers don't seems to be called
-        Ok(Self {
-            network_interface,
-            fs_interface: fs_interface.clone(),
-            mountpoint: proto.mountpoint.clone(),
-            #[cfg(target_os = "linux")]
-            fuse_handle: mount_fuse(
-                &proto.mountpoint,
-                proto.allow_other_users,
-                fs_interface.clone(),
-            )
-            .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fuse: {e}")))?,
-            #[cfg(target_os = "windows")]
-            fsp_host: mount_fsp(fs_interface.clone())
-                .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fsp: {e}")))?,
-            network_airport_handle,
-            global_config: global.clone(),
-            redundancy_worker_handle,
-            name: proto.name,
-            should_restart: proto.should_restart,
-            allow_other_users: proto.allow_other_users,
-        })
+        Ok((
+            Self {
+                network_interface,
+                fs_interface: fs_interface.clone(),
+                mountpoint: proto.mountpoint.clone(),
+                #[cfg(target_os = "linux")]
+                fuse_handle: mount_fuse(
+                    &proto.mountpoint,
+                    proto.allow_other_users,
+                    fs_interface.clone(),
+                )
+                .map_err(|e| {
+                    PodCreationError::Mount(
+                        io::Error::new(e.kind(), format!("mount_fuse: {e}")).into(),
+                    )
+                })?,
+                #[cfg(target_os = "windows")]
+                fsp_host: mount_fsp(fs_interface.clone()).map_err(|e| {
+                    PodCreationError::Mount(
+                        io::Error::new(e.kind(), format!("mount_fsp: {e}")).into(),
+                    )
+                })?,
+                network_airport_handle,
+                global_config: global.clone(),
+                redundancy_worker_handle,
+                name: proto.name,
+                should_restart: proto.should_restart,
+                allow_other_users: proto.allow_other_users,
+            },
+            dialed_success,
+        ))
     }
 
     // SECTION getting info from the pod (for the cli)
@@ -257,17 +226,15 @@ impl Pod {
 
             self.network_interface
                 .to_network_message_tx
-                .send(ToNetworkMessage::SpecificMessage(
-                    (
-                        // NOTE - file_content clone is not efficient, but no way to avoid it for now
-                        Request::RedundancyFile(ino, file_content.clone()),
-                        Some(status_tx),
-                    ),
-                    vec![host.clone()],
+                .send(ToNetworkMessage::AnswerMessage(
+                    // NOTE - file_content clone is not efficient, but no way to avoid it for now
+                    Request::RedundancyFile(ino, file_content.clone()),
+                    status_tx,
+                    host.clone(),
                 ))
                 .expect("to_network_message_tx closed.");
 
-            if let Ok(_) = status_rx.await.expect("network died") {
+            if let Some(_) = status_rx.await.expect("network died") {
                 self.network_interface
                     .to_network_message_tx
                     .send(ToNetworkMessage::BroadcastMessage(Request::EditHosts(
@@ -329,11 +296,6 @@ impl Pod {
         };
         task.await;
 
-        self.network_interface
-            .to_network_message_tx
-            .send(ToNetworkMessage::BroadcastMessage(Request::Disconnect))
-            .expect("to_network_message_tx closed.");
-
         let Self {
             fs_interface,
             #[cfg(target_os = "linux")]
@@ -345,6 +307,15 @@ impl Pod {
             ..
         } = self;
 
+        self.network_interface
+            .to_network_message_tx
+            .send(ToNetworkMessage::CloseNetwork)
+            .expect("to_network_message_tx closed.");
+
+        let _ = network_airport_handle
+            .await
+            .inspect_err(|_| log::error!("await error: network_airport_handle"));
+
         #[cfg(target_os = "linux")]
         drop(fuse_handle);
         #[cfg(target_os = "windows")]
@@ -354,10 +325,6 @@ impl Pod {
         let _ = redundancy_worker_handle
             .await
             .inspect(|_| log::error!("await error: redundancy_worker_handle"));
-        network_airport_handle.abort();
-        let _ = network_airport_handle
-            .await
-            .inspect(|_| log::error!("await error: network_airport_handle"));
 
         let itree_path = WhPath::try_from(ITREE_FILE_FNAME).unwrap();
 
@@ -395,49 +362,62 @@ impl Pod {
     pub fn try_generate_prototype(&self) -> Option<PodPrototype> {
         let global_config = self.global_config.try_read_for(LOCK_TIMEOUT)?.clone();
 
-        todo!();
-        // Some(PodPrototype {
-        //     global_config,
-        //     name: self.name.clone(),
-        //     listen_address: self.network_interface.id,
-        //     mountpoint: self.mountpoint.clone(),
-        //     should_restart: self.should_restart,
-        //     allow_other_users: self.allow_other_users,
-        // })
+        Some(PodPrototype {
+            global_config,
+            name: self.name.clone(),
+            listen_addrs: self
+                .network_interface
+                .listen_addrs
+                .read()
+                .clone()
+                .into_iter()
+                .collect(),
+            mountpoint: self.mountpoint.clone(),
+            should_restart: self.should_restart,
+            allow_other_users: self.allow_other_users,
+        })
     }
 
     pub fn generate_local_config(&self) -> LocalConfigFile {
-        todo!();
-
-        // LocalConfigFile {
-        //     name: Some(self.name.clone()),
-        //     restart: Some(self.should_restart),
-        //     listen_address: self.;,
-        // }
+        LocalConfigFile {
+            name: Some(self.name.clone()),
+            restart: Some(self.should_restart),
+            listen_addrs: self
+                .fs_interface
+                .network_interface
+                .listen_addrs
+                .read()
+                .clone()
+                .into_iter()
+                .collect(),
+        }
     }
 
     pub fn get_inspect_info(&self) -> InspectInfo {
-        todo!();
+        let listen_addrs = self
+            .fs_interface
+            .network_interface
+            .listen_addrs
+            .read()
+            .clone()
+            .into_iter()
+            .collect();
 
-        // let peers_data: Vec<PeerInfo> = self
-        //     .peers
-        //     .try_read_for(LOCK_TIMEOUT)
-        //     .expect("Can't lock peers")
-        //     .iter()
-        //     .map(|peer| PeerInfo {
-        //         hostname: peer.hostname.clone(),
-        //         url: peer.url.clone(),
-        //     })
-        //     .collect();
+        let peers_info = self
+            .fs_interface
+            .network_interface
+            .peers_info
+            .read()
+            .values()
+            .cloned()
+            .collect::<Vec<PeerInfo>>();
 
-        // InspectInfo {
-        //     frozen: false,
-        //     public_url: self.network_interface.public_url.clone(),
-        //     bound_socket: self.network_interface.bound_socket,
-        //     hostname: self.network_interface.hostname.clone(),
-        //     name: self.name.clone(),
-        //     connected_peers: peers_data,
-        //     mount: self.mountpoint.clone(),
-        // }
+        InspectInfo {
+            frozen: false,
+            listen_addrs,
+            name: self.name.clone(),
+            connected_peers: peers_info,
+            mount: self.mountpoint.clone(),
+        }
     }
 }

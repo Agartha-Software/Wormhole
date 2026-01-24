@@ -7,13 +7,10 @@ use libp2p::PeerId;
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
-use crate::{
-    error::WhResult,
-    pods::{
-        filesystem::diffs::{Delta, Signature},
-        itree::{ITree, Ino, Inode, Metadata},
-        whpath::InodeName,
-    },
+use crate::pods::{
+    filesystem::diffs::{Delta, Signature},
+    itree::{ITree, Ino, Inode, Metadata},
+    whpath::InodeName,
 };
 
 /// Message Content
@@ -40,7 +37,6 @@ pub enum Request {
     // RequestFileSignature(Ino),
     // FileSignature(Ino, Vec<u8>),
     RequestFile(Ino),
-    PullAnswer(Ino, Vec<u8>),
 
     Remove(Ino),
     EditMetadata(Ino, Metadata),
@@ -57,7 +53,6 @@ impl fmt::Display for Request {
             Request::Remove(_) => "Remove",
             Request::Inode(_) => "Inode",
             Request::RequestFile(_) => "RequestFile",
-            Request::PullAnswer(_, _) => "PullAnswer",
             Request::Rename(_, _, _, _, _) => "Rename",
             Request::EditHosts(_, _) => "EditHosts",
             Request::RevokeFile(_, _, _) => "RevokeFile",
@@ -94,7 +89,6 @@ impl fmt::Debug for Request {
                 }
             ),
             Request::RedundancyFile(id, _) => write!(f, "RedundancyFile({id}, <bin>)"),
-            Request::PullAnswer(id, _) => write!(f, "PullAnswer({id}, <bin>)"),
             Request::Remove(id) => write!(f, "Remove({id})"),
             Request::RequestFile(id) => write!(f, "RequestFile({id})"),
             Request::Rename(parent, new_parent, name, new_name, overwrite) => write!(
@@ -140,6 +134,9 @@ pub enum Response {
     DeltaRequest(Ino, Signature),
     // (ITree, peers, global_config)
     FsAnswer(ITree, Vec<PeerId>, Vec<u8>),
+    RequestedFile(Vec<u8>),
+    Success,
+    Failed,
 }
 
 impl fmt::Display for Response {
@@ -147,6 +144,9 @@ impl fmt::Display for Response {
         let name = match self {
             Response::DeltaRequest(_, _) => "DeltaRequest",
             Response::FsAnswer(_, _, _) => "FsAnswer",
+            Response::RequestedFile(_) => "RequestedFile",
+            Response::Success => "Success!",
+            Response::Failed => "Failed...",
         };
         write!(f, "{}", name)
     }
@@ -157,20 +157,11 @@ impl fmt::Debug for Response {
         match self {
             Response::DeltaRequest(ino, _) => write!(f, "DeltaRequest({ino})"),
             Response::FsAnswer(_, peers, _) => write!(f, "FsAnswer(<bin>, {peers:?}, <bin>"),
+            Response::RequestedFile(_) => write!(f, "RequestedFile(<bin>)"),
+            Response::Success => write!(f, "Succes!"),
+            Response::Failed => write!(f, "Failed..."),
         }
     }
-}
-
-pub type RequestAndStatus = (Request, Option<oneshot::Sender<WhResult<()>>>);
-
-pub type Address = String;
-
-/// Message Coming from Network
-/// Messages recived by peers, forwared to [crate::network::watchdogs::network_file_actions]
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct FromNetworkMessage {
-    pub origin: Address,
-    pub content: Request,
 }
 
 /// Message going to the redundancy worker
@@ -187,7 +178,9 @@ pub enum RedundancyMessage {
 #[derive(Debug)]
 pub enum ToNetworkMessage {
     BroadcastMessage(Request),
-    SpecificMessage(RequestAndStatus, Vec<PeerId>),
+    SpecificMessage(Request, Vec<PeerId>),
+    AnswerMessage(Request, oneshot::Sender<Option<Response>>, PeerId),
+    CloseNetwork,
 }
 
 impl fmt::Display for ToNetworkMessage {
@@ -196,15 +189,21 @@ impl fmt::Display for ToNetworkMessage {
             ToNetworkMessage::BroadcastMessage(content) => {
                 write!(f, "ToNetworkMessage::BroadcastMessage({})", content)
             }
-            ToNetworkMessage::SpecificMessage((content, callback), adress) => {
+            ToNetworkMessage::SpecificMessage(content, peer) => {
                 write!(
                     f,
-                    "ToNetworkMessage::SpecificMessage({}, callback: {}, to: {:?})",
-                    content,
-                    callback.is_some(),
-                    adress
+                    "ToNetworkMessage::SpecificMessage({}, to: {:?})",
+                    content, peer
                 )
             }
+            ToNetworkMessage::AnswerMessage(content, _, peer) => {
+                write!(
+                    f,
+                    "ToNetworkMessage::AnswerMessage({}, to: {:?}) with callback",
+                    content, peer
+                )
+            }
+            ToNetworkMessage::CloseNetwork => write!(f, "ToNetworkMessage::CloseNetwork"),
         }
     }
 }

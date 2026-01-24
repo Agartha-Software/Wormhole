@@ -1,3 +1,4 @@
+pub mod creation;
 mod fsentry;
 mod inode;
 
@@ -538,15 +539,4 @@ fn index_folder_recursive(
         };
     }
     Ok(())
-}
-
-pub fn generate_itree(mountpoint: &Path, host: &PeerId) -> io::Result<ITree> {
-    if let Some(itree) = recover_serialized_itree(mountpoint) {
-        Ok(itree)
-    } else {
-        let mut itree = ITree::new();
-
-        index_folder_recursive(&mut itree, ROOT, mountpoint, host, mountpoint)?;
-        Ok(itree)
-    }
 }

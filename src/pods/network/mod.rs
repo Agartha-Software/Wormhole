@@ -1,5 +1,4 @@
 pub mod behaviour;
-pub mod callbacks;
 pub mod codec;
 pub mod event_loop;
 pub mod network_interface;

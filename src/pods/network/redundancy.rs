@@ -168,7 +168,7 @@ async fn push_redundancy(
     target_redundancy: usize,
 ) -> Vec<PeerId> {
     let mut success_hosts: Vec<PeerId> = vec![nw_interface.id];
-    let mut set: JoinSet<WhResult<PeerId>> = JoinSet::new();
+    let mut set: JoinSet<Option<PeerId>> = JoinSet::new();
 
     for addr in all_peers.iter().take(target_redundancy).cloned() {
         let nwi_clone = Arc::clone(nw_interface);
@@ -186,8 +186,8 @@ async fn push_redundancy(
                 log::error!("redundancy_worker: error in thread pool: {e}");
                 break;
             }
-            Some(Ok(Ok(host))) => success_hosts.push(host),
-            Some(Ok(Err(crate::error::WhError::NetworkDied { called_from: _ }))) => {
+            Some(Ok(Some(host))) => success_hosts.push(host),
+            Some(Ok(None)) => {
                 log::warn!("Redundancy: NetworkDied on some host. Trying next...");
                 if current_try >= all_peers.len() {
                     log::error!("Redundancy: Not enough answering hosts to apply redundancy.");
@@ -202,10 +202,6 @@ async fn push_redundancy(
                 );
                 current_try += 1;
             }
-            Some(Ok(Err(e))) => {
-                log::error!("Redundancy: unknown error when applying redundancy: {e}");
-                break;
-            }
         }
     }
     success_hosts
@@ -217,21 +213,17 @@ impl NetworkInterface {
         inode: Ino,
         data: Arc<Vec<u8>>,
         to: PeerId,
-    ) -> WhResult<PeerId> {
+    ) -> Option<PeerId> {
         let (status_tx, status_rx) = oneshot::channel();
 
         self.to_network_message_tx
-            .send(ToNetworkMessage::SpecificMessage(
-                (Request::RedundancyFile(inode, data), Some(status_tx)),
-                vec![to.clone()],
+            .send(ToNetworkMessage::AnswerMessage(
+                Request::RedundancyFile(inode, data),
+                status_tx,
+                to.clone(),
             ))
             .expect("send_file: unable to update modification on the network thread");
 
-        status_rx
-            .await
-            .unwrap_or(Err(WhError::NetworkDied {
-                called_from: "network_interface::send_file_redundancy".to_owned(),
-            }))
-            .map(|()| to)
+        status_rx.await.ok().flatten().map(|_| to)
     }
 }

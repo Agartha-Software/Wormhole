@@ -44,11 +44,11 @@ impl Service {
         }
 
         match Pod::new(proto).await {
-            Ok(pod) => {
+            Ok((pod, _)) => {
                 self.pods.insert(name.clone(), pod);
                 send_answer(RestartAnswer::Success(name), stream).await
             }
-            Err(err) => send_answer(RestartAnswer::PodCreationFailed(err.into()), stream).await,
+            Err(err) => send_answer(RestartAnswer::PodCreationFailed(err), stream).await,
         }
     }
 }

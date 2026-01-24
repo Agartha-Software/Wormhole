@@ -118,9 +118,9 @@ impl Service {
             } else {
                 let name = prototype.name.clone();
                 match Pod::new(prototype).await {
-                    Ok(pod) => self.pods.insert(name, pod),
+                    Ok((pod, _)) => self.pods.insert(name, pod),
                     Err(err) => {
-                        log::trace!("Failed to create the pod '{name}': {err}");
+                        log::trace!("Failed to create the pod '{name}': {err:?}");
                         // Delete failing save?
                         continue;
                     }

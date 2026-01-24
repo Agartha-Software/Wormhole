@@ -3,6 +3,7 @@ use crate::pods::{filesystem::permissions::has_write_perm, whpath::InodeName};
 
 use crate::{
     error::WhError,
+    network::message::Response,
     pods::itree::{FsEntry, ITree, Ino},
 };
 use custom_error::custom_error;
@@ -95,9 +96,9 @@ impl FsInterface {
         Ok(())
     }
 
-    pub fn recept_remove_inode(&self, id: Ino) -> Result<(), RemoveFileError> {
+    pub fn recept_remove_inode(&self, id: Ino) -> Result<Response, RemoveFileError> {
         self.remove_inode_locally(id)?;
         self.network_interface.acknowledge_unregister_inode(id)?;
-        Ok(())
+        Ok(Response::Success)
     }
 }

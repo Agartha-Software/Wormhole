@@ -10,7 +10,7 @@ use std::path::PathBuf;
 pub struct PodPrototype {
     pub global_config: GlobalConfig,
     pub name: String,
-    pub listen_address: Multiaddr,
+    pub listen_addrs: Vec<Multiaddr>,
     pub mountpoint: PathBuf,
     pub should_restart: bool,
     pub allow_other_users: bool,
@@ -31,7 +31,7 @@ impl PodPrototype {
     pub fn get_inspect_info(&self) -> InspectInfo {
         InspectInfo {
             frozen: true,
-            listen_address: self.listen_address.clone(),
+            listen_addrs: self.listen_addrs.clone(),
             name: self.name.clone(),
             connected_peers: vec![],
             mount: self.mountpoint.clone(),

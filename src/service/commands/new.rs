@@ -68,7 +68,7 @@ impl Service {
 
         let prototype = PodPrototype {
             global_config,
-            listen_address: listen_address.clone(),
+            listen_addrs: vec![listen_address.clone()],
             name: args.name.clone(),
             mountpoint: args.mountpoint,
             should_restart: local_config.restart.unwrap_or(true),
@@ -76,12 +76,16 @@ impl Service {
         };
 
         match Pod::new(prototype).await {
-            Ok(pod) => {
+            Ok((pod, dialed)) => {
                 self.pods.insert(args.name, pod);
-                println!("New pod created successfully, listening to '{listen_address}'");
-                send_answer(NewAnswer::Success(listen_address), stream).await
+                if dialed {
+                    println!("New pod created successfully, listening to '{listen_address}', connected to a network.");
+                } else {
+                    println!("New pod created successfully, listening to '{listen_address}', no valid peers found.");
+                }
+                send_answer(NewAnswer::Success(listen_address, dialed), stream).await
             }
-            Err(err) => send_answer(NewAnswer::FailedToCreatePod(err.into()), stream).await,
+            Err(err) => send_answer(err, stream).await,
         }
     }
 }

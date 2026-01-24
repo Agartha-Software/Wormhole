@@ -4,6 +4,7 @@ use custom_error::custom_error;
 
 use crate::{
     error::{WhError, WhResult},
+    network::message::Response,
     pods::{
         filesystem::{flush::FlushError, permissions::has_write_perm},
         itree::{FsEntry, ITree, Ino, Metadata},
@@ -233,7 +234,7 @@ impl FsInterface {
         name: InodeName,
         new_name: InodeName,
         overwrite: bool,
-    ) -> Result<(), RenameError> {
+    ) -> Result<Response, RenameError> {
         let itree = ITree::read_lock(&self.network_interface.itree, "fs_interface::remove_inode")?;
         let dest_ino =
             match itree.get_inode_child_by_name(itree.get_inode(new_parent)?, new_name.as_ref()) {
@@ -267,6 +268,6 @@ impl FsInterface {
             })?;
         self.network_interface
             .acknowledge_rename(parent, new_parent, name, new_name)?;
-        Ok(())
+        Ok(Response::Success)
     }
 }

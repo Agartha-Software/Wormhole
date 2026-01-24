@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::io::{self, ErrorKind};
 use ts_rs::TS;
 
+use crate::ipc::answers::PodCreationError;
+
 custom_error! {pub ListenerError
     TCPListenerError { source: TCPListenerError } = "{source}",
     SocketListenerError { source: SocketListenerError } = "{source}",
@@ -99,5 +101,32 @@ impl From<std::io::Error> for IoError {
 impl From<IoError> for std::io::Error {
     fn from(value: IoError) -> std::io::Error {
         std::io::Error::new(value.kind, value.error)
+    }
+}
+
+impl Into<std::io::Error> for PodCreationError {
+    fn into(self) -> std::io::Error {
+        match self {
+            PodCreationError::DiskAccessError(mut io_error) => {
+                io_error.error = format!(
+                    "Error while trying to interact with the disk: {}",
+                    io_error.error
+                );
+                io_error.into()
+            }
+            PodCreationError::ITreeIndexion(mut io_error) => {
+                io_error.error = format!("Error while trying to restore files: {}", io_error.error);
+                io_error.into()
+            }
+            PodCreationError::Mount(mut io_error) => {
+                io_error.error =
+                    format!("Error while trying to mount wormhole: {}", io_error.error);
+                io_error.into()
+            }
+            PodCreationError::TransportError(error) => io::Error::new(
+                io::ErrorKind::ConnectionAborted,
+                format!("Error while trying interact with wormhole network: {error}"),
+            ),
+        }
     }
 }

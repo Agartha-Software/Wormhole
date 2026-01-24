@@ -41,7 +41,11 @@ pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String
             if info.frozen { "Frozen" } else { "Running" },
             info.name,
             info.mount,
-            info.listen_address,
+            info.listen_addrs
+                .iter()
+                .map(|addr| addr.to_string())
+                .collect::<Vec<String>>()
+                .join(", "),
             if info.frozen {
                 "Disconnected (Frozen)".to_string()
             } else {

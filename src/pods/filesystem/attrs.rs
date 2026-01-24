@@ -4,6 +4,7 @@ use custom_error::custom_error;
 
 use crate::{
     error::WhError,
+    network::message::Response,
     pods::{
         filesystem::{
             file_handle::{AccessMode, FileHandleManager, UUID},
@@ -34,7 +35,7 @@ impl FsInterface {
         &self,
         ino: Ino,
         meta: Metadata,
-    ) -> Result<(), AcknoledgeSetAttrError> {
+    ) -> Result<Response, AcknoledgeSetAttrError> {
         let mut itree = ITree::write_lock(&self.network_interface.itree, "acknowledge_metadata")?;
         let path = itree.get_path_from_inode_id(ino)?;
         let inode = itree.get_inode_mut(ino)?;
@@ -86,7 +87,7 @@ impl FsInterface {
         }
 
         itree.get_inode_mut(ino)?.meta = meta;
-        Ok(())
+        Ok(Response::Success)
     }
 
     #[allow(clippy::too_many_arguments)]

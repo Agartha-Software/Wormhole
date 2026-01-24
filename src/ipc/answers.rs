@@ -6,16 +6,25 @@ use ts_rs::TS;
 
 use crate::{cli::ConfigType, ipc::error::IoError, pods::itree::Hosts};
 
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub enum PodCreationError {
+    DiskAccessError(IoError),
+    ITreeIndexion(IoError),
+    Mount(IoError),
+    TransportError(String),
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum NewAnswer {
-    Success(Multiaddr),
+    Success(Multiaddr, bool),
     AlreadyExist,
     AlreadyMounted,
     InvalidIp(String),
     PortAlreadyTaken,
     NoFreePortInRage,
     ConflictWithConfig(String),
-    FailedToCreatePod(IoError),
+    FailedToCreatePod(PodCreationError),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -34,7 +43,7 @@ pub enum UnfreezeAnswer {
     PodNotFound,
     AlreadyUnfrozen,
     CouldntBind(IoError),
-    PodCreationFailed(IoError),
+    PodCreationFailed(PodCreationError),
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -47,8 +56,7 @@ pub enum FreezeAnswer {
     PodStopFailed(String),
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum RestartAnswer {
     Success(String),
     PodNotFound,
@@ -56,7 +64,7 @@ pub enum RestartAnswer {
     PodBlock,
     PodStopFailed(String),
     CouldntBind(IoError),
-    PodCreationFailed(IoError),
+    PodCreationFailed(PodCreationError),
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -80,20 +88,23 @@ pub enum StatusAnswer {
     Success(StatusSuccess),
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
-#[ts(export)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerInfo {
-    pub hostname: String,
-    pub url: Option<String>,
+    pub name: String,
+    pub listen_addrs: Vec<Multiaddr>,
 }
 
 impl std::fmt::Display for PeerInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Hostname: \"{}\", Url: {}",
-            self.hostname,
-            self.url.clone().unwrap_or("None".to_string())
+            "Name: \"{}\", Addresses: [ {} ]",
+            self.name,
+            self.listen_addrs
+                .iter()
+                .map(|address| address.to_string())
+                .collect::<Vec<String>>()
+                .join(", ")
         )
     }
 }
@@ -101,7 +112,7 @@ impl std::fmt::Display for PeerInfo {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InspectInfo {
     pub frozen: bool,
-    pub listen_address: Multiaddr,
+    pub listen_addrs: Vec<Multiaddr>,
     pub name: String,
     pub connected_peers: Vec<PeerInfo>,
     pub mount: PathBuf,
