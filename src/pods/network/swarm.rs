@@ -25,7 +25,7 @@ pub async fn create_swarm(name: String) -> Result<Swarm<Behaviour>, Box<dyn Erro
                 identify: identify::Behaviour::new(cfg),
             }
         })?
-        .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
+        .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(u64::MAX)))
         .build();
 
     Ok(swarm)
