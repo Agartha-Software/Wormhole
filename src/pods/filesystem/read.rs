@@ -84,24 +84,30 @@ impl FsInterface {
     }
 
     pub fn pull_file_sync(&self, ino: Ino) -> Result<Option<Vec<u8>>, PullError> {
-        if let Some(data) = self.network_interface.pull_file(ino)? {
+        let data = match self.network_interface.pull_file(ino)? {
+            Some(data) => data,
+            None => return Ok(None),
+        };
+
+        let (path, perms) = {
             let itree = self.network_interface.itree.read();
 
             let path = itree.get_path_from_inode_id(ino)?;
             let inode = itree.get_inode(ino)?;
-            let _created = self.disk.new_file(&path, inode.meta.perm);
+            (path, inode.meta.perm)
+        };
 
-            self.disk
-                .write_file(&path, &data, 0)
-                .inspect_err(|e| log::error!("writing pulled file: {e}"))
-                .map_err(|e| PullError::WriteError { io: Arc::new(e) })?;
+        let _created = self.disk.new_file(&path, perms);
 
-            self.network_interface
-                .add_inode_hosts(ino, vec![self.network_interface.id])
-                .expect("can't update inode hosts");
-            return Ok(Some(data));
-        }
-        Ok(None)
+        self.disk
+            .write_file(&path, &data, 0)
+            .inspect_err(|e| log::error!("writing pulled file: {e}"))
+            .map_err(|e| PullError::WriteError { io: Arc::new(e) })?;
+
+        self.network_interface
+            .add_inode_hosts(ino, vec![self.network_interface.id])
+            .expect("can't update inode hosts");
+        Ok(Some(data))
     }
 
     /// Get or pull the file from storage or network
