@@ -3,11 +3,8 @@ use crate::network::message::Response;
 use crate::pods::disk_managers::DiskManager;
 use crate::pods::filesystem::attrs::AcknoledgeSetAttrError;
 use crate::pods::filesystem::permissions::has_execute_perm;
-use crate::pods::itree::{
-    FsEntry, ITree, Ino, Inode, Metadata, GLOBAL_CONFIG_FNAME, GLOBAL_CONFIG_INO,
-};
+use crate::pods::itree::{FsEntry, ITree, Ino, Inode, Metadata};
 use crate::pods::network::network_interface::NetworkInterface;
-use crate::pods::whpath::WhPath;
 
 use futures::io;
 use libp2p::PeerId;
@@ -151,42 +148,6 @@ impl FsInterface {
             })?;
         Ok(Response::Success)
     }
-
-    // pub fn recept_binary(&self, id: Ino, binary: Vec<u8>) -> io::Result<Response> {
-    //     let itree = ITree::read_lock(&self.network_interface.itree, "recept_binary")
-    //         .expect("recept_binary: can't read lock itree");
-    //     let (path, perms) = match itree
-    //         .get_path_from_inode_id(id)
-    //         .and_then(|path| itree.get_inode(id).map(|inode| (path, inode.meta.perm)))
-    //     {
-    //         Ok(value) => value,
-    //         Err(e) => {
-    //             return self
-    //                 .network_interface
-    //                 .callbacks
-    //                 .resolve(CallbackRequest::Pull(id), Err(e.into()))
-    //         }
-    //     };
-    //     drop(itree);
-    //     let _created = self.disk.new_file(&path, perms);
-    //     let status = self
-    //         .disk
-    //         .write_file(&path, &binary, 0)
-    //         .inspect_err(|e| log::error!("writing pulled file: {e}"))
-    //         .map_err(|e| PullError::WriteError { io: Arc::new(e) });
-    //     let _ = self.network_interface.callbacks.resolve(
-    //         CallbackRequest::Pull(id),
-    //         status
-    //             .as_ref()
-    //             .map_err(|e| e.clone())
-    //             .map(|_| Some(Arc::new(binary))),
-    //     );
-    //     status.map_err(io::Error::other)?;
-    //     self.network_interface
-    //         .add_inode_hosts(id, vec![self.network_interface.id])
-    //         .expect("can't update inode hosts");
-    //     Ok(())
-    // }
 
     pub fn recept_edit_hosts(&self, id: Ino, hosts: Vec<PeerId>) -> WhResult<Response> {
         if !hosts.contains(&self.network_interface.id) {

@@ -312,9 +312,9 @@ impl Pod {
             .send(ToNetworkMessage::CloseNetwork)
             .expect("to_network_message_tx closed.");
 
-        let _ = network_airport_handle
-            .await
-            .inspect_err(|_| log::error!("await error: network_airport_handle"));
+        if let Err(err) = network_airport_handle.await {
+            log::error!("await error: network_airport_handle: {err}");
+        }
 
         #[cfg(target_os = "linux")]
         drop(fuse_handle);

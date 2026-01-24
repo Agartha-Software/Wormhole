@@ -142,6 +142,8 @@ impl EventLoop {
     }
 
     async fn handle_response_message(&mut self, response: Response, peer: PeerId) {
+        log::trace!("Network Request: {:?}", response);
+
         let result = match response {
             Response::DeltaRequest(ino, sig) => self
                 .fs_interface
@@ -183,6 +185,7 @@ impl EventLoop {
         channel: ResponseChannel<Response>,
         peer: PeerId,
     ) {
+        log::trace!("Network Request: {:?}", request);
         let result = match request {
             Request::RedundancyFile(id, binary) => self
                 .fs_interface
