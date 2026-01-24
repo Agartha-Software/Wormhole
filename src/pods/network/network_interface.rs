@@ -271,13 +271,10 @@ impl NetworkInterface {
     pub fn send_filesystem(&self, to: PeerId) -> WhResult<Response> {
         let clean_itree = self.itree.read().clone().clean_local();
 
-        let peers_address_list: Vec<PeerId> = self
-            .peers
-            .read()
-            .iter()
-            .filter_map(|peer: &PeerId| if peer != &to { Some(peer) } else { None })
-            .cloned()
-            .collect();
+        let mut peers_address_list = self.peers_info.read().clone();
+        peers_address_list.remove(&to);
+
+        log::trace!("send fs; {peers_address_list:?}");
 
         let global_config = self.global_config.read().clone();
 

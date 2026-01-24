@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fmt::{self, Debug},
     sync::Arc,
 };
@@ -9,6 +10,7 @@ use tokio::sync::oneshot;
 
 use crate::{
     config::GlobalConfig,
+    ipc::answers::PeerInfo,
     pods::{
         filesystem::diffs::{Delta, Signature},
         itree::{ITree, Ino, Inode, Metadata},
@@ -136,7 +138,7 @@ pub enum Response {
     /// Request a file delta from this base signature
     DeltaRequest(Ino, Signature),
     // (ITree, peers, global_config)
-    FsAnswer(ITree, Vec<PeerId>, GlobalConfig),
+    FsAnswer(ITree, HashMap<PeerId, PeerInfo>, GlobalConfig),
     RequestedFile(Vec<u8>),
     Success,
     Failed,
@@ -159,7 +161,9 @@ impl fmt::Debug for Response {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Response::DeltaRequest(ino, _) => write!(f, "DeltaRequest({ino})"),
-            Response::FsAnswer(_, peers, _) => write!(f, "FsAnswer(<bin>, {peers:?}, <bin>"),
+            Response::FsAnswer(_, peers, global) => {
+                write!(f, "FsAnswer(<bin>, {peers:?}, {global:?})")
+            }
             Response::RequestedFile(_) => write!(f, "RequestedFile(<bin>)"),
             Response::Success => write!(f, "Succes!"),
             Response::Failed => write!(f, "Failed..."),

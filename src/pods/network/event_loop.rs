@@ -142,7 +142,7 @@ impl EventLoop {
     }
 
     async fn handle_response_message(&mut self, response: Response, peer: PeerId) {
-        log::trace!("Network Request: {:?}", response);
+        log::trace!("Network Response: {:?}", response);
 
         let result = match response {
             Response::DeltaRequest(ino, sig) => self
@@ -152,11 +152,14 @@ impl EventLoop {
             Response::FsAnswer(tree, peers, global_config) => {
                 self.need_initialisation = None;
 
-                for peer in peers {
+                for (peer, info) in peers {
                     log::trace!("Trying to connect to the other peer: {peer}");
-                    let _ = self.swarm.dial(peer).inspect_err(|e| {
-                        log::error!("Could'nt connect to {peer} on the network: {e}")
-                    });
+                    for addr in info.listen_addrs {
+                        match self.swarm.dial(addr.clone()) {
+                            Ok(_) => break,
+                            Err(e) => log::error!("Could'nt connect to {peer} at {addr}: {e}"),
+                        };
+                    }
                 }
 
                 let mut current = self.fs_interface.network_interface.itree.write();
@@ -333,6 +336,11 @@ impl EventLoop {
                             listen_addrs: info.listen_addrs,
                         },
                     );
+                self.fs_interface
+                    .network_interface
+                    .peers
+                    .write()
+                    .push(peer_id);
             }
             e => log::trace!("identify: {e:?}"),
         }
@@ -381,6 +389,11 @@ impl EventLoop {
                     .peers_info
                     .write()
                     .remove(&peer_id);
+                self.fs_interface
+                    .network_interface
+                    .peers
+                    .write()
+                    .retain(|id| id != &peer_id);
             }
             e => log::trace!("event: {e:?}"),
         };
