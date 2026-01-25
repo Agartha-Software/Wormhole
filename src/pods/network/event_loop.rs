@@ -69,7 +69,7 @@ impl EventLoop {
     pub async fn run(mut self) {
         loop {
             tokio::select! {
-                event = self.swarm.select_next_some() => if self.handle_event(event).await {
+                event = self.swarm.select_next_some() => if self.handle_event(event) {
                     return
                 },
                 to_network = self.to_network.recv() => match to_network {
@@ -136,7 +136,7 @@ impl EventLoop {
         self.need_initialisation = Some(Some(request_id));
     }
 
-    async fn handle_response_message(&mut self, response: Response, peer: PeerId) {
+    fn handle_response_message(&mut self, response: Response, peer: PeerId) {
         log::trace!("Network Response: {:?}", response);
 
         let result = match response {
@@ -265,12 +265,12 @@ impl EventLoop {
         };
     }
 
-    async fn handle_rr_event(&mut self, event: request_response::Event<Request, Response>) {
+    fn handle_rr_event(&mut self, event: request_response::Event<Request, Response>) {
         match event {
             request_response::Event::Message { peer, message, .. } => match message {
                 request_response::Message::Request {
                     request, channel, ..
-                } => self.handle_request_message(request, channel, peer).await,
+                } => self.handle_request_message(request, channel, peer),
                 request_response::Message::Response {
                     response,
                     request_id,
@@ -278,7 +278,7 @@ impl EventLoop {
                     if let Some(answer) = self.answers.remove(&request_id) {
                         let _ = answer.send(Some(response.clone()));
                     };
-                    self.handle_response_message(response, peer).await;
+                    self.handle_response_message(response, peer);
                 }
             },
             request_response::Event::OutboundFailure {
@@ -335,10 +335,10 @@ impl EventLoop {
         }
     }
 
-    pub async fn handle_event(&mut self, event: SwarmEvent<BehaviourEvent>) -> bool {
+    pub fn handle_event(&mut self, event: SwarmEvent<BehaviourEvent>) -> bool {
         match event {
             SwarmEvent::Behaviour(BehaviourEvent::RequestResponse(event)) => {
-                self.handle_rr_event(event).await
+                self.handle_rr_event(event)
             }
             SwarmEvent::Behaviour(BehaviourEvent::Identify(event)) => {
                 self.handle_identify_event(event)
