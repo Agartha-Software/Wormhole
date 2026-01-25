@@ -123,10 +123,6 @@ impl ITree {
         Ok(())
     }
 
-    pub fn overwrite_self(&mut self, entries: ITreeIndex) {
-        self.entries = entries;
-    }
-
     /// Removed 'local only' files from the tree
     /// This takes and mutates self, so that it can't accidentally be used in place
     /// only meant to create a 'clean' network copy of an itree for sharing

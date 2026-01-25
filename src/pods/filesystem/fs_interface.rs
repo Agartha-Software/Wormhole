@@ -1,7 +1,6 @@
 use crate::error::WhResult;
 use crate::network::message::Response;
 use crate::pods::disk_managers::DiskManager;
-use crate::pods::filesystem::attrs::AcknoledgeSetAttrError;
 use crate::pods::filesystem::permissions::has_execute_perm;
 use crate::pods::itree::{FsEntry, ITree, Ino, Inode, Metadata};
 use crate::pods::network::network_interface::NetworkInterface;
@@ -146,42 +145,6 @@ impl FsInterface {
             .inspect_err(|e| {
                 log::error!("Can't update (local) hosts for redundancy pulled file ({id}): {e}")
             })?;
-        Ok(Response::Success)
-    }
-
-    pub fn recept_edit_hosts(&self, id: Ino, hosts: Vec<PeerId>) -> WhResult<Response> {
-        if !hosts.contains(&self.network_interface.id) {
-            let path = ITree::read_lock(&self.network_interface.itree, "recept_edit_hosts")?
-                .get_path_from_inode_id(id)?;
-            if let Err(e) = self.disk.remove_file(&path) {
-                log::debug!("recept_edit_hosts: can't delete file. {}", e);
-            }
-        }
-        self.network_interface
-            .acknowledge_hosts_edition(id, hosts)?;
-        Ok(Response::Success)
-    }
-
-    pub fn recept_revoke_hosts(
-        &self,
-        id: Ino,
-        host: PeerId,
-        meta: Metadata,
-    ) -> Result<Response, AcknoledgeSetAttrError> {
-        let needs_delete = host != self.network_interface.id;
-        self.acknowledge_metadata(id, meta)?;
-        self.network_interface
-            .acknowledge_hosts_edition(id, vec![host])
-            .map_err(|source| AcknoledgeSetAttrError::WhError { source })?;
-        if needs_delete {
-            // TODO: recept_revoke_hosts, for the redudancy, should recieve the written text (data from write) instead of deleting and adding it back completely with apply_redudancy
-            if let Err(e) = self.disk.remove_file(
-                &ITree::read_lock(&self.network_interface.itree, "recept_revoke_hosts")?
-                    .get_path_from_inode_id(id)?,
-            ) {
-                log::debug!("recept_revoke_hosts: can't delete file. {}", e);
-            }
-        }
         Ok(Response::Success)
     }
 

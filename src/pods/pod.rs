@@ -238,9 +238,9 @@ impl Pod {
             if let Some(Response::Success) = status_rx.await.expect("network died") {
                 self.network_interface
                     .to_network_message_tx
-                    .send(ToNetworkMessage::BroadcastMessage(Request::EditHosts(
+                    .send(ToNetworkMessage::BroadcastMessage(Request::RemoveHosts(
                         ino,
-                        vec![*host],
+                        vec![self.network_interface.id],
                     )))
                     .expect("to_network_message_tx closed.");
                 return Ok(());

@@ -28,8 +28,6 @@ pub enum Request {
     RedundancyFile(Ino, Arc<Vec<u8>>),
     /// Parent, New Parent, Name, New Name, overwrite
     Rename(Ino, Ino, InodeName, InodeName, bool),
-    EditHosts(Ino, Vec<PeerId>),
-    RevokeFile(Ino, PeerId, Metadata),
     AddHosts(Ino, Vec<PeerId>),
     RemoveHosts(Ino, Vec<PeerId>),
 
@@ -58,8 +56,6 @@ impl fmt::Display for Request {
             Request::Inode(_) => "Inode",
             Request::RequestFile(_) => "RequestFile",
             Request::Rename(_, _, _, _, _) => "Rename",
-            Request::EditHosts(_, _) => "EditHosts",
-            Request::RevokeFile(_, _, _) => "RevokeFile",
             Request::AddHosts(_, _) => "AddHosts",
             Request::RemoveHosts(_, _) => "RemoveHosts",
             Request::EditMetadata(_, _) => "EditMetadata",
@@ -103,10 +99,6 @@ impl fmt::Debug for Request {
                 new_name.as_str(),
                 overwrite
             ),
-            Request::EditHosts(id, hosts) => write!(f, "EditHosts({id}, {hosts:?})"),
-            Request::RevokeFile(id, address, _) => {
-                write!(f, "RevokeFile({id}, {address}, <metadata>)")
-            }
             Request::AddHosts(id, hosts) => write!(f, "AddHosts({id}, {hosts:?})"),
             Request::RemoveHosts(id, hosts) => write!(f, "RemoveHosts({id}, {hosts:?})"),
             Request::EditMetadata(id, metadata) => {

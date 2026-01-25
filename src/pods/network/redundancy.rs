@@ -155,7 +155,7 @@ async fn apply_to(
 
     let new_hosts = push_redundancy(nw_interface, peers, ino, file_binary, target_redundancy).await;
 
-    nw_interface.update_hosts(ino, new_hosts)?;
+    nw_interface.add_inode_hosts(ino, new_hosts)?;
     Ok(missing_hosts_count)
 }
 

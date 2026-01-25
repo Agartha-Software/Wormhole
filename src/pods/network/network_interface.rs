@@ -129,50 +129,18 @@ impl NetworkInterface {
         ITree::write_lock(&self.itree, "acknowledge_unregister_inode")?.remove_inode(id)
     }
 
-    pub fn acknowledge_hosts_edition(&self, id: Ino, hosts: Vec<PeerId>) -> WhResult<()> {
-        let mut itree = ITree::write_lock(&self.itree, "acknowledge_hosts_edition")?;
-
-        itree.set_inode_hosts(id, hosts) // TODO - if unable to update for some reason, should be passed to the background worker
-    }
-
-    pub fn revoke_remote_hosts(&self, id: Ino) -> WhResult<()> {
-        self.update_hosts(id, vec![self.id])?;
-        // self.apply_redundancy(id);
-        Ok(())
-    }
-
     pub fn add_inode_hosts(&self, ino: Ino, hosts: Vec<PeerId>) -> WhResult<()> {
         ITree::write_lock(&self.itree, "network_interface::update_hosts")?
-            .add_inode_hosts(ino, hosts)?;
-        self.update_remote_hosts(ino)
-    }
+            .add_inode_hosts(ino, hosts.clone())?;
 
-    pub fn update_hosts(&self, ino: Ino, hosts: Vec<PeerId>) -> WhResult<()> {
-        ITree::write_lock(&self.itree, "network_interface::update_hosts")?
-            .set_inode_hosts(ino, hosts)?;
-        self.update_remote_hosts(ino)
-    }
-
-    fn update_remote_hosts(&self, ino: Ino) -> WhResult<()> {
-        let inode = ITree::read_lock(&self.itree, "update_remote_hosts")?
-            .get_inode(ino)?
-            .clone();
-
-        if let FsEntry::File(hosts) = &inode.entry {
-            if !ITree::is_local_only(inode.id) {
-                self.to_network_message_tx
-                    .send(ToNetworkMessage::BroadcastMessage(Request::EditHosts(
-                        inode.id,
-                        hosts.clone(),
-                    )))
-                    .expect(
-                        "update_remote_hosts: unable to update modification on the network thread",
-                    );
-            }
-            Ok(())
-        } else {
-            Err(WhError::InodeIsADirectory)
+        if !ITree::is_local_only(ino) {
+            self.to_network_message_tx
+                .send(ToNetworkMessage::BroadcastMessage(Request::AddHosts(
+                    ino, hosts,
+                )))
+                .expect("update_remote_hosts: unable to update modification on the network thread");
         }
+        Ok(())
     }
 
     pub fn aknowledge_new_hosts(&self, id: Ino, new_hosts: Vec<PeerId>) -> WhResult<()> {

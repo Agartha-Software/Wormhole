@@ -177,7 +177,7 @@ impl EventLoop {
         }
     }
 
-    async fn handle_request_message(
+    fn handle_request_message(
         &mut self,
         request: Request,
         channel: ResponseChannel<Response>,
@@ -190,14 +190,6 @@ impl EventLoop {
                 .recept_redundancy(id, binary)
                 .map_err(into_boxed_io),
             Request::Inode(inode) => self.fs_interface.recept_inode(inode).map_err(into_boxed_io),
-            Request::EditHosts(id, hosts) => self
-                .fs_interface
-                .recept_edit_hosts(id, hosts)
-                .map_err(into_boxed_io),
-            Request::RevokeFile(id, host, meta) => self
-                .fs_interface
-                .recept_revoke_hosts(id, host, meta)
-                .map_err(into_boxed_io),
             Request::AddHosts(id, hosts) => self
                 .fs_interface
                 .recept_add_hosts(id, hosts)
