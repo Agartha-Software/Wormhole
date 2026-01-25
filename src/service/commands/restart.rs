@@ -43,7 +43,7 @@ impl Service {
             .expect("Already checked that the pod exist");
 
         if let Err(err) = pod.stop().await {
-            return send_answer(RestartAnswer::PodStopFailed(err.to_string()), stream).await;
+            return send_answer(RestartAnswer::PodStopFailed(err.into()), stream).await;
         }
 
         let server = match Server::from_specific_address(proto.bound_socket) {

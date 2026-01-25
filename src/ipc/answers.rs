@@ -45,7 +45,7 @@ pub enum FreezeAnswer {
     PodNotFound,
     AlreadyFrozen,
     PodBlock,
-    PodStopFailed(String),
+    PodStopFailed(IoError),
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -55,7 +55,7 @@ pub enum RestartAnswer {
     PodNotFound,
     PodFrozen,
     PodBlock,
-    PodStopFailed(String),
+    PodStopFailed(IoError),
     CouldntBind(IoError),
     PodCreationFailed(IoError),
 }
@@ -65,7 +65,7 @@ pub enum RestartAnswer {
 pub enum RemoveAnswer {
     Success,
     PodNotFound,
-    PodStopFailed(String),
+    PodStopFailed(IoError),
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
