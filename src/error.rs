@@ -23,14 +23,24 @@ impl WhError {
             WhError::WouldBlock { called_from: _ } => libc::EWOULDBLOCK,
         }
     }
+}
 
-    pub fn into_io(self) -> io::Error {
-        match self {
-            WhError::InodeNotFound => io::ErrorKind::NotFound.into(),
-            WhError::InodeIsNotADirectory => io::ErrorKind::NotADirectory.into(),
-            WhError::InodeIsADirectory => io::ErrorKind::IsADirectory.into(),
-            other => io::Error::other(other),
+impl From<WhError> for io::ErrorKind {
+    fn from(value: WhError) -> Self {
+        match value {
+            WhError::InodeNotFound => io::ErrorKind::NotFound,
+            WhError::InodeIsNotADirectory => io::ErrorKind::NotADirectory,
+            WhError::InodeIsADirectory => io::ErrorKind::IsADirectory,
+            WhError::DeadLock => io::ErrorKind::Deadlock,
+            WhError::NetworkDied { called_from: _ } => io::ErrorKind::NetworkDown,
+            WhError::WouldBlock { called_from: _ } => io::ErrorKind::WouldBlock,
         }
+    }
+}
+
+impl From<WhError> for io::Error {
+    fn from(value: WhError) -> Self {
+        io::Error::new(value.clone().into(), value.to_string())
     }
 }
 
