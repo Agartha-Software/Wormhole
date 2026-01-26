@@ -110,13 +110,13 @@ impl EventLoop {
                 self.swarm
                     .behaviour_mut()
                     .request_response
-                    .send_request(&peer, message.clone());
+                    .send_request(peer, message.clone());
             }
 
             self.swarm
                 .behaviour_mut()
                 .request_response
-                .send_request(&last, message);
+                .send_request(last, message);
         }
     }
 
