@@ -33,19 +33,24 @@ pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String
     send_command(Command::Inspect(id), &mut stream).await?;
     match recieve_answer::<InspectAnswer>(&mut stream).await? {
         InspectAnswer::Information(info) => Ok(format!(
-            "Pod informations:\n\
+            "Pod informations: {}\n\
             \x20  Name:\t\t{}\n\
             \x20  Mount:\t\t{:#?}\n\
             \x20  Hostname:\t\t{}\n\
             \x20  Url:\t\t\t{}\n\
             \x20  Bound Address:\t{}\n\
             \x20  Connected peers:\t{}",
+            if info.frozen { "Frozen" } else { "Running" },
             info.name,
             info.mount,
             info.hostname,
             info.public_url.unwrap_or("[ None ]".to_string()),
             info.bound_socket,
-            display_peers(info.connected_peers)
+            if info.frozen {
+                "Disconnected (Frozen)".to_string()
+            } else {
+                display_peers(info.connected_peers)
+            }
         )),
         InspectAnswer::PodNotFound => Err(io::Error::new(
             io::ErrorKind::NotFound,

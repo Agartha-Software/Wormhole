@@ -1,17 +1,16 @@
-use std::net::SocketAddr;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::{io, sync::Arc};
 
-use crate::config::local_file::{GeneralLocalConfig, LocalConfigFile};
+use crate::config::local_file::LocalConfigFile;
 use crate::config::GlobalConfig;
 use crate::data::tree_hosts::CliHostTree;
 use crate::error::{WhError, WhResult};
 #[cfg(target_os = "linux")]
 use crate::fuse::fuse_impl::mount_fuse;
 use crate::ipc::answers::{InspectInfo, PeerInfo};
+use crate::ipc::error::IoError;
 use crate::network::message::{FromNetworkMessage, MessageContent, ToNetworkMessage};
-use crate::network::HandshakeError;
 #[cfg(target_os = "linux")]
 use crate::pods::disk_managers::unix_disk_manager::UnixDiskManager;
 #[cfg(target_os = "windows")]
@@ -19,6 +18,7 @@ use crate::pods::disk_managers::windows_disk_manager::WindowsDiskManager;
 use crate::pods::disk_managers::DiskManager;
 use crate::pods::itree::{FsEntry, GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_INO, LOCK_TIMEOUT, ROOT};
 use crate::pods::network::redundancy::redundancy_worker;
+use crate::pods::prototype::PodPrototype;
 use crate::pods::whpath::WhPath;
 #[cfg(target_os = "windows")]
 use crate::winfsp::winfsp_impl::{mount_fsp, WinfspHost};
@@ -26,15 +26,13 @@ use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use fuser;
 use parking_lot::RwLock;
-use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
 
 use crate::network::{message::Address, peer_ipc::PeerIPC, server::Server};
 
 use crate::pods::{
-    filesystem::fs_interface::FsInterface,
-    itree::{generate_itree, ITree},
+    filesystem::fs_interface::FsInterface, itree::ITree,
     network::network_interface::NetworkInterface,
 };
 
@@ -58,20 +56,8 @@ pub struct Pod {
     pub global_config: Arc<RwLock<GlobalConfig>>,
     name: String,
     pub should_restart: bool,
+    allow_other_users: bool,
 }
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct PodPrototype {
-    pub global_config: GlobalConfig,
-    pub name: String,
-    pub hostname: String,
-    pub public_url: Option<String>,
-    pub bound_socket: SocketAddr,
-    pub mountpoint: PathBuf,
-    pub should_restart: bool,
-}
-
-type ConnectionInfo = (ITree, Vec<PeerIPC>);
 
 custom_error! {pub PodInfoError
     WhError{source: WhError} = "{source}",
@@ -79,77 +65,11 @@ custom_error! {pub PodInfoError
     FileNotFound = "PodInfoError: file not found",
 }
 
-impl PodPrototype {
-    async fn try_to_connect(
-        &mut self,
-        fail_on_network: bool,
-        receiver_in: &UnboundedSender<FromNetworkMessage>,
-    ) -> Result<ConnectionInfo, io::Error> {
-        if !self.global_config.general.entrypoints.is_empty() {
-            for first_contact in &self.global_config.general.entrypoints {
-                match PeerIPC::connect(
-                    first_contact.to_owned(),
-                    self.hostname.clone(),
-                    self.public_url.clone(),
-                    receiver_in,
-                )
-                .await
-                {
-                    Err(HandshakeError::CouldntConnect) => continue,
-                    Err(e) => log::error!("{first_contact}: {e}"),
-                    Ok((ipc, accept)) => {
-                        if let Some(urls) =
-                            accept
-                                .urls
-                                .into_iter()
-                                .skip(1)
-                                .try_fold(Vec::new(), |mut a, b| {
-                                    a.push(b?);
-                                    Some(a)
-                                })
-                        {
-                            let new_hostname = accept.rename.unwrap_or(self.hostname.clone());
-
-                            match PeerIPC::peer_startup(
-                                urls,
-                                new_hostname.clone(),
-                                accept.hostname,
-                                receiver_in,
-                            )
-                            .await
-                            {
-                                Ok(mut other_ipc) => {
-                                    other_ipc.insert(0, ipc);
-
-                                    self.hostname = new_hostname;
-                                    self.global_config = accept.config;
-
-                                    return Ok((accept.itree, other_ipc));
-                                }
-
-                                Err(e) => log::error!("a peer failed: {e}"),
-                            };
-                        }
-                    }
-                }
-            }
-            if fail_on_network {
-                log::error!("None of the specified peers could answer. Stopping.");
-                return Err(io::Error::other("None of the specified peers could answer"));
-            }
-        }
-        Ok((
-            generate_itree(&self.mountpoint, &self.hostname).unwrap_or_default(),
-            vec![],
-        ))
-    }
-}
-
-custom_error! {pub PodStopError
+custom_error! {
+    pub PodStopError
     WhError{source: WhError} = "{source}",
     ITreeSavingFailed{source: io::Error} = "Could not write itree to disk: {source}",
-    PodNotRunning = "No pod with this name was found running.",
-    FileNotReadable{file: Ino, reason: String} = "Could not read file from disk: ({file}) {reason}",
+    FileNotReadable{file: Ino, source: WhError} = "Could not read file from disk: ({file}) {source}",
     FileNotSent{file: Ino} = "No pod was able to receive this file before stopping: ({file})",
     #[cfg(target_os = "linux")]
     DiskManagerStopFailed{e: io::Error} = "Unable to stop the disk manager properly. Should not be an error on your platform {e}",
@@ -157,19 +77,49 @@ custom_error! {pub PodStopError
     DiskManagerStopFailed{e: io::Error} = "Unable to stop the disk manager properly. Your files are still on the system folder: ('.'mount_path). {e}",
 }
 
+impl From<PodStopError> for io::Error {
+    fn from(value: PodStopError) -> Self {
+        match value {
+            PodStopError::WhError { source } => source.clone().into(),
+            PodStopError::ITreeSavingFailed { ref source } => {
+                io::Error::new(source.kind(), value.to_string())
+            }
+            PodStopError::FileNotReadable {
+                file: _,
+                ref source,
+            } => {
+                let io: io::ErrorKind = source.clone().into();
+
+                io::Error::new(io, value.to_string())
+            }
+            PodStopError::FileNotSent { file: _ } => {
+                io::Error::new(io::ErrorKind::NetworkUnreachable, value.to_string())
+            }
+            PodStopError::DiskManagerStopFailed { ref e } => {
+                io::Error::new(e.kind(), value.to_string())
+            }
+        }
+    }
+}
+
+impl From<PodStopError> for IoError {
+    fn from(value: PodStopError) -> Self {
+        let io: io::Error = value.into();
+        io.into()
+    }
+}
+
 /// Create all directories and symlinks present in ITree. (not the files)
 ///
 /// Required at setup to resolve issue #179
 /// (files pulling need the parent folder to be already present)
 fn create_all_shared(itree: &ITree, from: Ino, disk: &dyn DiskManager) -> io::Result<()> {
-    let from = itree.get_inode(from).map_err(|e| e.into_io())?;
+    let from = itree.get_inode(from)?;
 
     match &from.entry {
         FsEntry::File(_) => Ok(()),
         FsEntry::Symlink(symlink) => {
-            let current_path = itree
-                .get_path_from_inode_id(from.id)
-                .map_err(|e| e.into_io())?;
+            let current_path = itree.get_path_from_inode_id(from.id)?;
             disk.new_symlink(&current_path, from.meta.perm, symlink)
                 .or_else(|e| {
                     if e.kind() == io::ErrorKind::AlreadyExists {
@@ -180,9 +130,7 @@ fn create_all_shared(itree: &ITree, from: Ino, disk: &dyn DiskManager) -> io::Re
                 })
         }
         FsEntry::Directory(children) => {
-            let current_path = itree
-                .get_path_from_inode_id(from.id)
-                .map_err(|e| e.into_io())?;
+            let current_path = itree.get_path_from_inode_id(from.id)?;
 
             // skipping root folder
             if current_path != WhPath::root() {
@@ -204,11 +152,7 @@ fn create_all_shared(itree: &ITree, from: Ino, disk: &dyn DiskManager) -> io::Re
 }
 
 impl Pod {
-    pub async fn new(
-        mut prototype: PodPrototype,
-        allow_other_users: bool,
-        server: Arc<Server>,
-    ) -> io::Result<Self> {
+    pub async fn new(mut prototype: PodPrototype, server: Arc<Server>) -> io::Result<Self> {
         log::trace!("mount point {:?}", prototype.mountpoint);
         let (receiver_in, receiver_out) = mpsc::unbounded_channel();
 
@@ -222,15 +166,7 @@ impl Pod {
             )
             .await?;
 
-        Self::realize(
-            prototype,
-            server,
-            receiver_in,
-            receiver_out,
-            itree,
-            peers,
-            allow_other_users,
-        )
+        Self::realize(prototype, server, receiver_in, receiver_out, itree, peers)
     }
 
     #[allow(unused_variables)]
@@ -241,7 +177,6 @@ impl Pod {
         receiver_out: UnboundedReceiver<FromNetworkMessage>,
         itree: ITree,
         peers: Vec<PeerIPC>,
-        allow_other_users: bool,
     ) -> io::Result<Self> {
         let (senders_in, senders_out) = mpsc::unbounded_channel();
 
@@ -328,8 +263,12 @@ impl Pod {
             mountpoint: proto.mountpoint.clone(),
             peers,
             #[cfg(target_os = "linux")]
-            fuse_handle: mount_fuse(&proto.mountpoint, allow_other_users, fs_interface.clone())
-                .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fuse: {e}")))?,
+            fuse_handle: mount_fuse(
+                &proto.mountpoint,
+                proto.allow_other_users,
+                fs_interface.clone(),
+            )
+            .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fuse: {e}")))?,
             #[cfg(target_os = "windows")]
             fsp_host: mount_fsp(fs_interface.clone())
                 .map_err(|e| std::io::Error::new(e.kind(), format!("mount_fsp: {e}")))?,
@@ -340,6 +279,7 @@ impl Pod {
             redundancy_worker_handle,
             name: proto.name,
             should_restart: proto.should_restart,
+            allow_other_users: proto.allow_other_users,
         })
     }
 
@@ -384,7 +324,7 @@ impl Pod {
                 .read_local_file(ino)
                 .map_err(|e| PodStopError::FileNotReadable {
                     file: ino,
-                    reason: e.to_string(),
+                    source: e,
                 })?;
         let file_content = Arc::new(file_content);
 
@@ -453,6 +393,7 @@ impl Pod {
         // drop(self.fuse_handle); // FIXME - do something like block the filesystem
 
         // moving the await task outside the scope needed to workaround https://github.com/rust-lang/rust-clippy/issues/6446
+
         let (itree_bin, task) = {
             let itree = ITree::read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
 
@@ -557,17 +498,16 @@ impl Pod {
             bound_socket: self.network_interface.bound_socket,
             mountpoint: self.mountpoint.clone(),
             should_restart: self.should_restart,
+            allow_other_users: self.allow_other_users,
         })
     }
 
     pub fn generate_local_config(&self) -> LocalConfigFile {
         LocalConfigFile {
-            general: GeneralLocalConfig {
-                name: Some(self.name.clone()),
-                hostname: Some(self.network_interface.hostname.clone()),
-                public_url: self.network_interface.public_url.clone(),
-                restart: Some(self.should_restart),
-            },
+            name: Some(self.name.clone()),
+            hostname: Some(self.network_interface.hostname.clone()),
+            public_url: self.network_interface.public_url.clone(),
+            restart: Some(self.should_restart),
         }
     }
 
@@ -584,6 +524,7 @@ impl Pod {
             .collect();
 
         InspectInfo {
+            frozen: false,
             public_url: self.network_interface.public_url.clone(),
             bound_socket: self.network_interface.bound_socket,
             hostname: self.network_interface.hostname.clone(),

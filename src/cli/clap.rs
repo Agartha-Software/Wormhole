@@ -24,10 +24,14 @@ pub struct Cli {
 pub enum CliCommand {
     /// Create a new pod and if possible join a network, otherwise create a new one
     New(NewArgs),
-    // /// Pause a given pod
-    // Freeze(IdentifyPodArgs),
-    // /// Restart a given pod
-    // UnFreeze(IdentifyPodArgs),
+    /// Pause a given pod
+    Freeze(IdentifyPodArgs),
+    /// Unpause a given pod
+    Unfreeze(IdentifyPodArgs),
+    /// Restart a given pod
+    Restart(IdentifyPodArgs),
+    /// Remove a pod from its network and stop it
+    Remove(RemoveArgs),
     /// Interact with the configuration of a pod (Write, Show, Validate)
     #[command(subcommand)]
     Config(ConfigCommand),
@@ -37,12 +41,6 @@ pub enum CliCommand {
     GetHosts(GetHostsArgs),
     /// Display the file tree at a given pod or path and show the hosts for each files
     Tree(IdentifyPodArgs),
-    /// Remove a pod from its network and stop it
-    Remove(RemoveArgs),
-    // /// Apply a new configuration to a pod
-    // Apply(PodConfArgs),
-    // /// Restore many or a specific file configuration
-    // Restore(PodConfArgs),
     /// Checks if the service is working
     Status,
     // /// Start the service

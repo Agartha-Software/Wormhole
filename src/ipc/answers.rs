@@ -31,13 +31,33 @@ pub enum GetHostsAnswer {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub enum UnfreezeAnswer {
-    Success,
+    Success(String),
+    PodNotFound,
+    AlreadyUnfrozen,
+    CouldntBind(IoError),
+    PodCreationFailed(IoError),
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub enum FreezeAnswer {
-    Success,
+    Success(String),
+    PodNotFound,
+    AlreadyFrozen,
+    PodBlock,
+    PodStopFailed(IoError),
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub enum RestartAnswer {
+    Success(String),
+    PodNotFound,
+    PodFrozen,
+    PodBlock,
+    PodStopFailed(IoError),
+    CouldntBind(IoError),
+    PodCreationFailed(IoError),
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -45,13 +65,20 @@ pub enum FreezeAnswer {
 pub enum RemoveAnswer {
     Success,
     PodNotFound,
-    PodStopFailed(String),
+    PodStopFailed(IoError),
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct StatusSuccess {
+    pub running: Vec<String>,
+    pub frozen: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub enum StatusAnswer {
-    Success,
+    Success(StatusSuccess),
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -75,6 +102,7 @@ impl std::fmt::Display for PeerInfo {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct InspectInfo {
+    pub frozen: bool,
     pub public_url: Option<String>,
     pub bound_socket: SocketAddr,
     pub hostname: String,
@@ -122,13 +150,27 @@ pub enum ShowConfigAnswer {
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub enum CheckConfigAnswer {
-    Success,
-    PodNotFound,
+pub enum ConfigFileError {
     MissingGlobal,
     MissingLocal,
     MissingBoth,
     InvalidGlobal(String),
     InvalidLocal(String),
     InvalidBoth(String, String),
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub enum CheckConfigAnswer {
+    Success,
+    PodNotFound,
+    ConfigFileError(ConfigFileError),
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub enum ApplyConfigAnswer {
+    Success,
+    PodNotFound,
+    ConfigFileError(ConfigFileError),
 }

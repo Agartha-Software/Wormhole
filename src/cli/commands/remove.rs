@@ -25,9 +25,9 @@ pub async fn remove(args: RemoveArgs, mut stream: Stream) -> Result<String, io::
             io::ErrorKind::NotFound,
             "The given pod couldn't be found.",
         )),
-        RemoveAnswer::PodStopFailed(e) => Err(io::Error::new(
-            io::ErrorKind::Interrupted,
-            format!("The pod couldn't be removed cleanly: {e}"),
+        RemoveAnswer::PodStopFailed(err) => Err(io::Error::new(
+            err.kind,
+            format!("The pod couldn't be removed cleanly:\n{}", err.error),
         )),
     }
 }
