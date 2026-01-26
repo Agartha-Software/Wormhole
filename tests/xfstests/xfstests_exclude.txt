@@ -1,33 +1,107 @@
-# --- Unimplemented features ---
-generic/002 # Hardlinks
+# --- Category: acl ---
+generic/026 # ACLs
+generic/053 # ACLs
+generic/099 # ACLs
+generic/105 # ACLs
+generic/375 # ACLs
+
+# --- Category: aio ---
+generic/198 # Suspect for the current hang
+
+# --- Category: atime ---
+generic/003 # Timestamps lost on remount
+
+# --- Category: attr ---
+generic/062 # Symlinks (Exercises getfattr/setfattr)
+generic/066 # Tests requiring a real block device
+generic/103 # falloc (Attributes test)
+
+# --- Category: clone ---
+generic/110 # Reflink
+generic/111 # Reflink
+generic/463 # AIO race (classic FUSE deadlock)
+
+# --- Category: dax ---
+generic/462 # Current hang (AIO/COW Race)
+generic/470 # log writes (Device mapper target)
+
+# --- Category: dir ---
 generic/005 # Symlinks
-generic/023 # Symlinks
+generic/471 # RWF_NOWAIT (Non-blocking IO race)
+
+# --- Category: exportfs ---
+generic/467 # open_by_handle (NFS export)
+
+# --- Category: fiemap ---
+generic/473 # Fiemap holes (Complexe)
+
+# --- Category: fsr ---
+generic/018 # Defrag
+
+# --- Category: ioctl ---
+generic/079 # chattr
+
+# --- Category: locks ---
+generic/204 # Lock testing (often blocking on simple FUSE)
+
+# --- Category: metadata ---
+generic/002 # Hardlinks
+generic/034 # Tests requiring a real block device
 generic/039 # Hardlinks
 generic/040 # Hardlinks
 generic/041 # Hardlinks
 generic/056 # Hardlinks
 generic/057 # Hardlinks
-generic/062 # Symlinks
+generic/059 # Tests requiring a real block device
 generic/065 # Hardlinks
-generic/067 # Symlinks
+generic/073 # Tests requiring a real block device
+generic/076 # Tests requiring a real block device
+generic/078 # renameat2
 generic/090 # Hardlinks
+generic/101 # Tests requiring a real block device
 generic/104 # Hardlinks
 generic/106 # Hardlinks
 generic/107 # Hardlinks
+generic/135 # Data integrity mismatch
+generic/193 # chown/permissions failure
+generic/215 # MMAP write (very often hangs without a robust implementation)
 
-# --- Advanced file operations not supported ---
+# --- Category: misc ---
 generic/004 # O_TMPFILE
+generic/023 # Symlinks
+generic/024 # renameat2
+generic/025 # renameat2
+generic/035 # Rename/Overwrite lost
+generic/081 # Tests requiring a real block device
+generic/313 # Persistence
+generic/478 # Lock recovery (Often blocking on FUSE)
+generic/761 # Hang
+generic/762 # Hang
+generic/763 # Hang
+
+# --- Category: mmap ---
+generic/080 # Timestamps
+
+# --- Category: mount ---
+generic/067 # Symlinks
+
+# --- Category: other ---
+generic/013 # fsstress
+generic/120 # Permissions/Timestamps
+generic/476 # Long running fsstress
+
+# --- Category: perms ---
+generic/123 # Permissions
+generic/126 # Permissions (SUID/SGID)
+
+# --- Category: prealloc ---
 generic/008 # fallocate (fzero)
 generic/009 # fallocate (fzero)
 generic/012 # fpunch
-generic/014 # Sparse files
 generic/016 # fpunch
-generic/018 # Defrag
 generic/021 # fpunch
 generic/022 # fpunch
 generic/031 # fcollapse
-generic/032 # falloc
-generic/033 # fzero
 generic/058 # fpunch
 generic/060 # fpunch
 generic/061 # fpunch
@@ -38,106 +112,44 @@ generic/086 # falloc
 generic/092 # falloc
 generic/094 # fiemap
 generic/096 # fzero
-generic/103 # falloc
-
-# --- Unsupported system features ---
-generic/026 # ACLs
-generic/053 # ACLs
-generic/099 # ACLs
-generic/105 # ACLs
-generic/082 # Quotas
-generic/024 # renameat2
-generic/025 # renameat2
-generic/078 # renameat2
-generic/042 # Shutdown (godown)
-generic/050 # Shutdown
-generic/052 # Shutdown
-generic/079 # chattr
-generic/110 # Reflink
-generic/111 # Reflink
-
-# --- Blocking or unstable tests on FUSE ---
-generic/013 # fsstress
-generic/112 # AIO Stress
-generic/113 # AIO Stress
-
-# --- Tests requiring a real block device ---
-generic/034
-generic/059
-generic/066
-generic/073
-generic/076
-generic/081
-generic/101
-generic/108
-
-# --- Suspected hangs ---
-generic/198 # Suspect for the current hang
-generic/204 # Lock testing (often blocking on simple FUSE)
-generic/215 # MMAP write (very often hangs without a robust implementation)
-
-# --- Failures due to non-persistence (RAM disk) ---
-generic/003 # Timestamps lost on remount
-generic/029 # Data lost on remount
-generic/030 # Data lost on remount
-generic/035 # Rename/Overwrite lost
-generic/075 # FSX integrity (corruption)
-generic/080 # Timestamps
-generic/091 # FSX integrity
-generic/169 # Data lost
-
-# --- Advanced concurrency tests (Frequent deadlocks on FUSE) ---
-generic/247 # Race mmap/directio (Blocking)
-generic/248 # pwrite hang (Potentially blocking)
-generic/249 # splice (Often unsupported or blocking)
 generic/250 # require scratch dev
 generic/252 # require scratch dev
 
-# --- Tests observed failing in logs (Permissions/Data) ---
-generic/120 # Permissions/Timestamps
-generic/123 # Permissions
-generic/126 # Permissions (SUID/SGID)
-generic/135 # Data integrity mismatch
-generic/193 # chown/permissions failure
+# --- Category: punch ---
+generic/469 # Persistence mmap / Mmap vs Truncate race
 
-# --- Future identified deadlocks (Concurrency/Deadlock) ---
-generic/464 # Race write/append/sync (Deadlock FUSE)
-generic/465 # Direct I/O race (Deadlock FUSE)
+# --- Category: quota ---
+generic/082 # Quotas
 
-# --- Persistence failures (Mount/Umount cycle) ---
-generic/313 # Persistence
+# --- Category: rw ---
+generic/014 # Sparse files
+generic/029 # Data lost on remount
+generic/030 # Data lost on remount
+generic/032 # falloc (Data corruption scenario)
+generic/033 # fzero (Delayed allocation)
+generic/108 # Tests requiring a real block device
+generic/112 # AIO Stress
+generic/113 # AIO Stress
+generic/129 # Loop read/write verification
+generic/169 # Data lost
+generic/247 # Race mmap/directio (Blocking)
+generic/248 # pwrite hang (Potentially blocking)
+generic/249 # splice (Often unsupported or blocking)
+generic/306 # Advanced POSIX permissions
 generic/315 # Persistence truncate
 generic/451 # Persistence
-generic/469 # Persistence mmap
-
-# --- Other missing features ---
-generic/306 # Advanced POSIX permissions
-generic/375 # ACLs
-
-# --- Concurrency & Consistency danger zone (460+) ---
 generic/464 # Race write/append/sync (Deadlock FUSE)
-generic/465 # Direct I/O i_size (Deadlock FUSE)
+generic/465 # Direct I/O race (Deadlock FUSE)
 generic/466 # Fsync consistency (Risk of hang)
-generic/468 # Race fallocate/fsync (Unsupported + Risk)
-generic/469 # Mmap vs Truncate race
-generic/478 # Lock recovery (Often blocking on FUSE)
-
-# --- Current hang (AIO/COW Race) ---
-generic/462
-generic/463 # AIO race (classic FUSE deadlock)
-
-# --- Unsupported or unstable features (Quick suite) ---
-generic/467 # open_by_handle (NFS export)
-generic/470 # log writes (Device mapper target)
-generic/471 # RWF_NOWAIT (Non-blocking IO race)
-generic/472 # Swapfiles (Non supporté sur FUSE)
-generic/473 # Fiemap holes (Complexe)
-generic/474 # Syncfs/Shutdown
-generic/475 # Crash recovery (Nécessite device block réel)
-generic/476 # Long running fsstress
-
-# generic/760 # Hang (Probable AIO/Concurrency deadlock)
 generic/760 # Hang (Probable AIO/Concurrency deadlock)
-generic/761
-generic/762
-generic/763
+
+# --- Category: shutdown ---
+generic/042 # Shutdown (godown)
+generic/050 # Shutdown
+generic/052 # Shutdown
+generic/468 # Race fallocate/fsync (Unsupported + Risk)
+generic/474 # Syncfs/Shutdown
+generic/475 # Crash recovery (Requires real block device)
+
+# --- Category: swap ---
+generic/472 # Swapfiles (Unsupported on FUSE)
