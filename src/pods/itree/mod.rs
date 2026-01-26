@@ -355,6 +355,18 @@ impl ITree {
         Ok(actual_inode)
     }
 
+    /// Get the hosts of a file
+    pub fn get_inode_hosts(&self, ino: Ino) -> WhResult<&[PeerId]> {
+        let inode = self.get_inode(ino)?;
+
+        if let FsEntry::File(hosts) = &inode.entry {
+            Ok(hosts)
+        } else {
+            Err(WhError::InodeIsADirectory)
+        }
+    }
+
+
     /// Add hosts to an inode
     ///
     /// Only works on inodes pointing files (no folders)
