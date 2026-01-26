@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Delta","DiffError","Implementors","Signature"],"struct":["RSyncDelta","RSyncSig"],"trait":["Dlt","Sig"]};

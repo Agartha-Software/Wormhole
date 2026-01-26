@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["ReadDirError"]};
+window.SIDEBAR_ITEMS = {"enum":["ReadDirError","ReadLinkError"]};

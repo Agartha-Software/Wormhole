@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["dummy_disk_manager","unix_disk_manager"],"struct":["DiskSizeInfo"],"trait":["DiskManager"]};
+window.SIDEBAR_ITEMS = {"mod":["unix_disk_manager"],"struct":["DiskSizeInfo"],"trait":["DiskManager"]};

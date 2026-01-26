@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["CliCommand","Mode"],"struct":["Cli","GetHostsArgs","IdentifyPodArgs","IdentifyPodGroup","NewArgs","PodConfArgs","RemoveArgs","TemplateArg"]};
+window.SIDEBAR_ITEMS = {"enum":["CliCommand","ConfigCommand","ConfigType","Mode"],"fn":["command_network","parse_canonicalize_non_existant","print_err","start_local_socket"],"struct":["Cli","GenerateConfigArgs","GetHostsArgs","IdentifyNewPodGroup","IdentifyPodAndConfigArgs","IdentifyPodArgs","IdentifyPodGroup","NewArgs","PodConfArgs","RemoveArgs"]};

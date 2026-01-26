@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["attrs","file_handle","fs_interface","make_inode","open","permissions","read","readdir","release","remove_inode","rename","write","xattrs"]};
+window.SIDEBAR_ITEMS = {"mod":["attrs","diffs","file_handle","flush","fs_interface","make_inode","open","permissions","read","readdir","release","remove_inode","rename","write","xattrs"],"struct":["File"]};

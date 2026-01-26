@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["CommandAnswer"],"mod":["answers","cli","commands","error","service"]};
+window.SIDEBAR_ITEMS = {"enum":["CommandAnswer"],"mod":["answers","commands","error"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["has_execute_perm","has_read_perm","has_write_perm"]};
+window.SIDEBAR_ITEMS = {"constant":["SYMLINK_DEFAULT_PERMISSION"],"fn":["has_execute_perm","has_read_perm","has_write_perm"],"mod":["test"]};

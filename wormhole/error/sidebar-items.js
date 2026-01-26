@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["CliError","CliSuccess","WhError"],"type":["CliResult","WhResult"]};
+window.SIDEBAR_ITEMS = {"enum":["WhError"],"type":["WhResult"]};

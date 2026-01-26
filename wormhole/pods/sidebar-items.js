@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["arbo","disk_managers","filesystem","network","pod","whpath"]};
+window.SIDEBAR_ITEMS = {"mod":["disk_managers","filesystem","itree","network","pod","prototype","whpath"]};

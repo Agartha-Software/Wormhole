@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["FreezeAnswer","GetHostsAnswer","InspectAnswer","NewAnswer","RemoveAnswer","StatusAnswer","TreeAnswer","UnfreezeAnswer"],"struct":["InspectInfo","PeerInfo"]};
+window.SIDEBAR_ITEMS = {"enum":["ApplyConfigAnswer","CheckConfigAnswer","ConfigFileError","FreezeAnswer","GenerateConfigAnswer","GetHostsAnswer","InspectAnswer","NewAnswer","RemoveAnswer","RestartAnswer","ShowConfigAnswer","StatusAnswer","TreeAnswer","UnfreezeAnswer"],"struct":["InspectInfo","PeerInfo","StatusSuccess"]};

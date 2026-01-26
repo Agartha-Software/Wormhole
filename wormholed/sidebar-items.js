@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["main","stop_all_pods","terminal_watchdog"],"struct":["ServiceArgs"]};
+window.SIDEBAR_ITEMS = {"fn":["main","terminal_watchdog"]};

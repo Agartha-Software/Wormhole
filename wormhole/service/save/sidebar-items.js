@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SavePodError"],"fn":["delete_saved_pod","delete_saved_pods","local_data_path","save_prototype"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Callback"],"struct":["Callbacks"]};
+window.SIDEBAR_ITEMS = {"enum":["Request"],"struct":["Callbacks"]};

@@ -1,9 +1,9 @@
 (function() {
-    var implementors = Object.fromEntries([["wormhole",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.90.0/core/convert/trait.AsRef.html\" title=\"trait core::convert::AsRef\">AsRef</a>&lt;<a class=\"struct\" href=\"https://doc.rust-lang.org/1.90.0/std/path/struct.Path.html\" title=\"struct std::path::Path\">Path</a>&gt; for <a class=\"struct\" href=\"wormhole/pods/whpath/struct.WhPath.html\" title=\"struct wormhole::pods::whpath::WhPath\">WhPath</a>"]]]]);
+    var implementors = Object.fromEntries([["wormhole",[["impl&lt;T&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.93.0/core/convert/trait.AsRef.html\" title=\"trait core::convert::AsRef\">AsRef</a>&lt;T&gt; for <a class=\"struct\" href=\"wormhole/pods/whpath/struct.InodeName.html\" title=\"struct wormhole::pods::whpath::InodeName\">InodeName</a><div class=\"where\">where\n    T: ?<a class=\"trait\" href=\"https://doc.rust-lang.org/1.93.0/core/marker/trait.Sized.html\" title=\"trait core::marker::Sized\">Sized</a>,\n    <a class=\"struct\" href=\"https://doc.rust-lang.org/1.93.0/alloc/string/struct.String.html\" title=\"struct alloc::string::String\">String</a>: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.93.0/core/convert/trait.AsRef.html\" title=\"trait core::convert::AsRef\">AsRef</a>&lt;T&gt;,</div>"],["impl&lt;T&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.93.0/core/convert/trait.AsRef.html\" title=\"trait core::convert::AsRef\">AsRef</a>&lt;T&gt; for <a class=\"struct\" href=\"wormhole/pods/whpath/struct.WhPath.html\" title=\"struct wormhole::pods::whpath::WhPath\">WhPath</a><div class=\"where\">where\n    T: ?<a class=\"trait\" href=\"https://doc.rust-lang.org/1.93.0/core/marker/trait.Sized.html\" title=\"trait core::marker::Sized\">Sized</a>,\n    Utf8PathBuf: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.93.0/core/convert/trait.AsRef.html\" title=\"trait core::convert::AsRef\">AsRef</a>&lt;T&gt;,</div>"]]]]);
     if (window.register_implementors) {
         window.register_implementors(implementors);
     } else {
         window.pending_implementors = implementors;
     }
 })()
-//{"start":57,"fragment_lengths":[430]}
+//{"start":57,"fragment_lengths":[1437]}

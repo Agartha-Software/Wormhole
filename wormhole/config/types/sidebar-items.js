@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["GeneralGlobalConfig","GeneralLocalConfig","GlobalConfig","LocalConfig","RedundancyConfig"],"trait":["Config"]};
+window.SIDEBAR_ITEMS = {"struct":["GeneralGlobalConfig","GlobalConfig","RedundancyConfig"],"trait":["Config"]};

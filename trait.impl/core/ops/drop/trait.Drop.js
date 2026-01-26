@@ -1,5 +1,5 @@
 (function() {
-    var implementors = Object.fromEntries([["wormhole",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.90.0/core/ops/drop/trait.Drop.html\" title=\"trait core::ops::drop::Drop\">Drop</a> for <a class=\"struct\" href=\"wormhole/network/peer_ipc/struct.PeerIPC.html\" title=\"struct wormhole::network::peer_ipc::PeerIPC\">PeerIPC</a>"]]]]);
+    var implementors = Object.fromEntries([["wormhole",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.93.0/core/ops/drop/trait.Drop.html\" title=\"trait core::ops::drop::Drop\">Drop</a> for <a class=\"struct\" href=\"wormhole/network/peer_ipc/struct.PeerIPC.html\" title=\"struct wormhole::network::peer_ipc::PeerIPC\">PeerIPC</a>"]]]]);
     if (window.register_implementors) {
         window.register_implementors(implementors);
     } else {

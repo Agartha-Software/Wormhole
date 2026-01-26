@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["start_commands_listeners"],"static":["SOCKET_DEFAULT_NAME"]};

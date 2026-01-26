@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["parser","types"]};
+window.SIDEBAR_ITEMS = {"mod":["local_file","parser","types"]};

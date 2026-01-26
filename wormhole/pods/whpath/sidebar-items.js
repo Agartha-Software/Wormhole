@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["PathType"],"struct":["WhPath"],"trait":["JoinPath"]};
+window.SIDEBAR_ITEMS = {"enum":["WhPathError"],"fn":["is_valid_for_whpath","osstr_to_str","osstring_to_string"],"struct":["ConversionError","InodeName","InodeNameError","WhPath"]};
