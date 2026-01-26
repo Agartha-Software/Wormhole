@@ -113,12 +113,12 @@ impl ITree {
     pub fn mark_reserved_ino(&mut self, new: Ino) -> WhResult<()> {
         let next = &mut self.next_ino;
 
-        if next.start < new {
+        if next.start > new {
             return Err(WhError::WouldBlock {
                 called_from: "mark_reserved_ino: new is less than current".to_owned(),
             });
         }
-        *next = new..;
+        *next = new + 1..;
         Ok(())
     }
 
