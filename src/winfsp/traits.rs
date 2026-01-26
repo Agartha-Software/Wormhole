@@ -1,31 +1,34 @@
 use crate::{
     error::WhError,
     pods::{
-        arbo::Metadata,
         filesystem::{
             attrs::SetAttrError,
+            diffs::DiffError,
             file_handle::{AccessMode, OpenFlags},
+            flush::FlushError,
             fs_interface::SimpleFileType,
             make_inode::{CreateError, MakeInodeError},
             open::OpenError,
             read::ReadError,
             readdir::ReadDirError,
+            remove_inode::{RemoveFileError, RemoveInodeError},
             rename::RenameError,
             write::WriteError,
         },
+        itree::Metadata,
         network::pull_file::PullError,
-        whpath::WhPath,
+        whpath::{InodeNameError, WhPathError},
     },
 };
 use nt_time::FileTime;
 use windows::Win32::{
     Foundation::{
-        GENERIC_EXECUTE, GENERIC_READ, GENERIC_WRITE, NTSTATUS, STATUS_ACCESS_DENIED,
-        STATUS_DATA_ERROR, STATUS_DIRECTORY_NOT_EMPTY, STATUS_FILE_IS_A_DIRECTORY,
-        STATUS_INVALID_HANDLE, STATUS_INVALID_PARAMETER, STATUS_NETWORK_UNREACHABLE,
-        STATUS_NOT_A_DIRECTORY, STATUS_OBJECT_NAME_EXISTS, STATUS_OBJECT_NAME_INVALID,
-        STATUS_OBJECT_NAME_NOT_FOUND, STATUS_OBJECT_PATH_NOT_FOUND, STATUS_PENDING,
-        STATUS_POSSIBLE_DEADLOCK,
+        GENERIC_EXECUTE, GENERIC_READ, GENERIC_WRITE, STATUS_ACCESS_DENIED, STATUS_DATA_ERROR,
+        STATUS_DIRECTORY_NOT_EMPTY, STATUS_FILE_IS_A_DIRECTORY, STATUS_ILLEGAL_CHARACTER,
+        STATUS_INTERNAL_ERROR, STATUS_INVALID_DEVICE_REQUEST, STATUS_INVALID_HANDLE,
+        STATUS_INVALID_PARAMETER, STATUS_NETWORK_UNREACHABLE, STATUS_NOT_A_DIRECTORY,
+        STATUS_NO_MEMORY, STATUS_OBJECT_NAME_EXISTS, STATUS_OBJECT_NAME_NOT_FOUND,
+        STATUS_OBJECT_PATH_NOT_FOUND, STATUS_PENDING, STATUS_POSSIBLE_DEADLOCK,
     },
     Storage::FileSystem::{
         FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_DIRECTORY, FILE_WRITE_ATTRIBUTES, SYNCHRONIZE,
@@ -33,20 +36,14 @@ use windows::Win32::{
 };
 use winfsp::{filesystem::FileInfo, FspError};
 
-impl TryFrom<&winfsp::U16CStr> for WhPath {
-    type Error = NTSTATUS;
-
-    fn try_from(value: &winfsp::U16CStr) -> Result<WhPath, Self::Error> {
-        match value.to_string() {
-            Err(_) => Err(STATUS_OBJECT_NAME_INVALID),
-            Ok(string) => Ok(WhPath::from(&string.replace("\\", "/"))),
-        }
-    }
-}
-
-impl WhPath {
-    pub fn to_winfsp(&self) -> String {
-        self.inner.replace("/", "\\")
+/// unashamedly copied [`<FspError as From<std::io::Error>>::from`](https://docs.rs/winfsp/latest/winfsp/enum.FspError.html#method.from)
+/// needed because the lib impl is a consuming into, whereas io::Error is not [Clone]-able
+fn io2fsp(e: &std::io::Error) -> FspError {
+    // prefer raw error if available
+    if let Some(e) = e.raw_os_error() {
+        FspError::WIN32(e as u32)
+    } else {
+        FspError::IO(e.kind())
     }
 }
 
@@ -61,13 +58,14 @@ impl From<&Metadata> for FileInfo {
         let attributes = match value.kind {
             SimpleFileType::File => FILE_ATTRIBUTE_ARCHIVE,
             SimpleFileType::Directory => FILE_ATTRIBUTE_DIRECTORY,
+            SimpleFileType::Symlink => FILE_ATTRIBUTE_ARCHIVE, // pretend it's a .lnk link,
         };
         let now = FileTime::now();
         FileInfo {
             file_attributes: attributes.0,
             reparse_tag: 0,
-            allocation_size: value.size as u64,
-            file_size: value.size as u64,
+            allocation_size: value.size,
+            file_size: value.size,
             creation_time: FileTime::try_from(value.crtime).unwrap_or(now).to_raw(),
             last_access_time: FileTime::try_from(value.atime).unwrap_or(now).to_raw(),
             last_write_time: FileTime::try_from(value.mtime).unwrap_or(now).to_raw(),
@@ -92,6 +90,23 @@ impl From<WhError> for FspError {
     }
 }
 
+impl From<InodeNameError> for FspError {
+    fn from(_: InodeNameError) -> Self {
+        STATUS_ILLEGAL_CHARACTER.into()
+    }
+}
+
+impl From<WhPathError> for FspError {
+    fn from(e: WhPathError) -> Self {
+        match e {
+            WhPathError::NotRelative => STATUS_INVALID_DEVICE_REQUEST.into(),
+            WhPathError::ConversionError { source: _ } => STATUS_ILLEGAL_CHARACTER.into(),
+            WhPathError::NotNormalized => STATUS_INVALID_DEVICE_REQUEST.into(),
+            WhPathError::InvalidOperation => STATUS_INVALID_DEVICE_REQUEST.into(),
+        }
+    }
+}
+
 impl From<MakeInodeError> for FspError {
     fn from(value: MakeInodeError) -> Self {
         match value {
@@ -111,6 +126,7 @@ impl From<PullError> for FspError {
         match value {
             PullError::WhError { source } => source.into(),
             PullError::NoHostAvailable => STATUS_DATA_ERROR.into(),
+            PullError::WriteError { io } => io2fsp(&io),
         }
     }
 }
@@ -120,7 +136,7 @@ impl From<ReadError> for FspError {
         match value {
             ReadError::WhError { source } => source.into(),
             ReadError::PullError { source } => source.into(),
-            ReadError::LocalReadFailed { io } => io.into(),
+            ReadError::LocalReadFailed { io } => io2fsp(&io),
             ReadError::CantPull => STATUS_NETWORK_UNREACHABLE.into(),
             ReadError::NoReadPermission => STATUS_ACCESS_DENIED.into(),
             ReadError::NoFileHandle => STATUS_INVALID_HANDLE.into(),
@@ -132,7 +148,7 @@ impl From<WriteError> for FspError {
     fn from(value: WriteError) -> Self {
         match value {
             WriteError::WhError { source } => source.into(),
-            WriteError::LocalWriteFailed { io } => io.into(),
+            WriteError::LocalWriteFailed { io } => io2fsp(&io),
             WriteError::NoFileHandle => STATUS_INVALID_HANDLE.into(),
             WriteError::NoWritePermission => STATUS_ACCESS_DENIED.into(),
         }
@@ -155,6 +171,34 @@ impl From<RenameError> for FspError {
             RenameError::PermissionDenied => STATUS_ACCESS_DENIED.into(),
             RenameError::ReadFailed { source } => source.into(),
             RenameError::LocalWriteFailed { io } => io.into(),
+            RenameError::FlushError { source } => source.into(),
+        }
+    }
+}
+
+impl From<FlushError> for FspError {
+    fn from(value: FlushError) -> Self {
+        match value {
+            FlushError::WhError { source } => source.into(),
+            FlushError::ReadError { source } => source.into(),
+            FlushError::WriteError { source } => source.into(),
+            FlushError::DiffError { source } => source.into(),
+            FlushError::PullError { source } => source.into(),
+        }
+    }
+}
+
+impl From<DiffError> for FspError {
+    fn from(value: DiffError) -> Self {
+        match value {
+            DiffError::RSyncError { rsync } => match rsync.as_ref() {
+                librsync::Error::Io(error) => io2fsp(error),
+                librsync::Error::Mem => STATUS_NO_MEMORY.into(),
+                librsync::Error::BadMagic => STATUS_INTERNAL_ERROR.into(),
+                librsync::Error::Unimplemented => STATUS_INTERNAL_ERROR.into(),
+                librsync::Error::Internal => STATUS_INTERNAL_ERROR.into(),
+                librsync::Error::Unknown(_) => STATUS_INTERNAL_ERROR.into(),
+            },
         }
     }
 }
@@ -176,6 +220,26 @@ impl From<CreateError> for FspError {
             CreateError::WhError { source } => source.into(),
             CreateError::MakeInode { source } => source.into(),
             CreateError::OpenError { source } => source.into(),
+        }
+    }
+}
+
+impl From<RemoveInodeError> for FspError {
+    fn from(value: RemoveInodeError) -> Self {
+        match value {
+            RemoveInodeError::WhError { source } => source.into(),
+            RemoveInodeError::NonEmpty => STATUS_DIRECTORY_NOT_EMPTY.into(),
+        }
+    }
+}
+
+impl From<RemoveFileError> for FspError {
+    fn from(value: RemoveFileError) -> Self {
+        match value {
+            RemoveFileError::WhError { source } => source.into(),
+            RemoveFileError::NonEmpty => STATUS_DIRECTORY_NOT_EMPTY.into(),
+            RemoveFileError::LocalDeletionFailed { io } => io.into(),
+            RemoveFileError::PermissionDenied => STATUS_ACCESS_DENIED.into(),
         }
     }
 }
@@ -217,7 +281,7 @@ impl AccessMode {
         if access & (GENERIC_READ.0 & !SYNCHRONIZE.0) != 0 {
             return AccessMode::Read;
         }
-        return AccessMode::Void;
+        AccessMode::Void
     }
 }
 

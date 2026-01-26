@@ -11,7 +11,6 @@ use tokio_tungstenite::tungstenite::{protocol::WebSocketConfig, Message};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use crate::{
-    config::LocalConfig,
     network::{
         forward::{forward_peer_to_receiver, forward_sender_to_peer},
         handshake::{self, Accept, HandshakeError, Wave},
@@ -71,7 +70,6 @@ impl PeerIPC {
                 Either::Left(connect) => (connect.hostname, connect.url),
                 Either::Right(wave) => (wave.hostname, wave.url),
             };
-
         Ok(Self {
             thread: tokio::spawn(Self::work_from_incomming(
                 sink,
@@ -88,8 +86,9 @@ impl PeerIPC {
 
     pub async fn connect(
         url: String,
-        config: &LocalConfig,
-        receiver_in: UnboundedSender<FromNetworkMessage>,
+        hostname: String,
+        public_url: Option<String>,
+        receiver_in: &UnboundedSender<FromNetworkMessage>,
     ) -> Result<(Self, Accept), HandshakeError> {
         let (sender_in, sender_out) = mpsc::unbounded_channel();
 
@@ -107,15 +106,16 @@ impl PeerIPC {
         {
             Ok((stream, _)) => {
                 let (mut sink, mut stream) = stream.split();
-                let accept = handshake::connect(&mut stream, &mut sink, &config).await?;
+                let accept =
+                    handshake::connect(&mut stream, &mut sink, hostname, public_url).await?;
                 (
-                    accept,
+                    accept.clone(),
                     tokio::spawn(Self::work(
                         sink,
                         stream,
-                        receiver_in,
+                        receiver_in.clone(),
                         sender_out,
-                        url.clone(),
+                        accept.hostname,
                     )),
                 )
             }
@@ -139,7 +139,7 @@ impl PeerIPC {
         url: String,
         hostname: String,
         blame: String,
-        receiver_in: UnboundedSender<FromNetworkMessage>,
+        receiver_in: &UnboundedSender<FromNetworkMessage>,
     ) -> Result<(PeerIPC, Wave), HandshakeError> {
         let (sender_in, sender_out) = mpsc::unbounded_channel();
 
@@ -163,7 +163,7 @@ impl PeerIPC {
                     tokio::spawn(Self::work(
                         sink,
                         stream,
-                        receiver_in,
+                        receiver_in.clone(),
                         sender_out,
                         url.clone(),
                     )),
@@ -190,20 +190,18 @@ impl PeerIPC {
         peer_entrypoints: I,
         hostname: String,
         blame: String,
-        receiver_in: UnboundedSender<FromNetworkMessage>,
+        receiver_in: &UnboundedSender<FromNetworkMessage>,
     ) -> Result<Vec<PeerIPC>, HandshakeError> {
         futures_util::future::join_all(
-            peer_entrypoints.into_iter().map(|url| {
-                PeerIPC::wave(url, hostname.clone(), blame.clone(), receiver_in.clone())
-            }),
+            peer_entrypoints
+                .into_iter()
+                .map(|url| PeerIPC::wave(url, hostname.clone(), blame.clone(), receiver_in)),
         )
         .await
         .into_iter()
-        .fold(Ok(vec![]), |acc, b: Result<_, _>| {
-            acc.and_then(|mut acc| {
-                acc.push(b?.0);
-                Ok(acc)
-            })
+        .try_fold(Vec::new(), |mut acc, b: Result<_, _>| {
+            acc.push(b?.0);
+            Ok(acc)
         })
     }
 }

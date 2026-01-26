@@ -1,7 +1,7 @@
 use std::{path::Path, process::ExitStatus};
 
 use futures_util::io;
-use wormhole::pods::arbo::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME};
+use wormhole::pods::itree::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME};
 
 use crate::functionnal::environment_manager::{
     manager::socket_from_id,
@@ -10,18 +10,14 @@ use crate::functionnal::environment_manager::{
 
 /// Returns `true` if the given services runs a pod on the given network
 pub fn service_has_pod_on_network(service: &Service, network: &String) -> bool {
-    service
-        .pods
-        .iter()
-        .find(|(nw, _, _)| nw == network)
-        .is_some()
+    service.pods.iter().any(|(nw, _, _)| nw == network)
 }
 
 // Returns `true` if the service is matching the requirements
 pub fn service_filter(socket: &Option<u16>, network: &Option<String>, service: &Service) -> bool {
     network
         .as_ref()
-        .map_or_else(|| true, |nw| service_has_pod_on_network(service, &nw))
+        .map_or_else(|| true, |nw| service_has_pod_on_network(service, nw))
         && (socket
             .as_ref()
             .map_or_else(|| true, |socket| service.id == *socket))
@@ -136,13 +132,14 @@ pub fn assert_dirs_are_equal(dir1: impl AsRef<Path>, dir2: impl AsRef<Path>) {
         }
 
         if entry.path().is_dir() {
-            assert_dirs_are_equal(&entry.path(), &dir2.join(entry_name));
+            assert_dirs_are_equal(entry.path(), dir2.join(entry_name));
         } else {
             let path2 = dir2.join(entry_name);
 
-            let file1 =
-                std::fs::read(&entry.path()).expect(&format!("{}", entry.path().to_string_lossy()));
-            let file2 = std::fs::read(&path2).expect(&format!("{}", path2.to_string_lossy()));
+            let file1 = std::fs::read(entry.path())
+                .unwrap_or_else(|e| panic!("{}:{e}", entry.path().to_string_lossy()));
+            let file2 =
+                std::fs::read(&path2).unwrap_or_else(|e| panic!("{}:{e}", path2.to_string_lossy()));
             assert!(
                 file1 == file2,
                 "`{}` and `{}` have different content",

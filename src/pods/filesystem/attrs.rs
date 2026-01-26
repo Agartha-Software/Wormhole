@@ -5,12 +5,12 @@ use custom_error::custom_error;
 use crate::{
     error::WhError,
     pods::{
-        arbo::{Arbo, FsEntry, InodeId, Metadata, BLOCK_SIZE},
         filesystem::{
             file_handle::{AccessMode, FileHandleManager, UUID},
-            fs_interface::FsInterface,
+            fs_interface::{FsInterface, SimpleFileType},
             permissions::has_write_perm,
         },
+        itree::{FsEntry, ITree, Ino, Metadata, BLOCK_SIZE},
     },
 };
 
@@ -28,33 +28,41 @@ custom_error! {pub AcknoledgeSetAttrError
 }
 
 impl FsInterface {
-    //fn get_inode_attributes(&self, ino: InodeId) -> WhResult<&Metadata> {}
+    //fn get_inode_attributes(&self, ino: Ino) -> WhResult<&Metadata> {}
 
     pub fn acknowledge_metadata(
         &self,
-        ino: InodeId,
+        ino: Ino,
         meta: Metadata,
     ) -> Result<(), AcknoledgeSetAttrError> {
-        let mut arbo = Arbo::n_write_lock(&self.arbo, "acknowledge_metadata")?;
-        let path = arbo.n_get_path_from_inode_id(ino)?;
-        let inode = arbo.n_get_inode_mut(ino)?;
+        let mut itree = ITree::write_lock(&self.itree, "acknowledge_metadata")?;
+        let path = itree.get_path_from_inode_id(ino)?;
+        let inode = itree.get_inode_mut(ino)?;
 
-        if meta.size != inode.meta.size || meta.perm != inode.meta.perm {
+        if meta != inode.meta {
             match &inode.entry {
                 FsEntry::Directory(_) if meta.size != inode.meta.size => {
                     return Err(AcknoledgeSetAttrError::WhError {
                         source: WhError::InodeIsADirectory,
                     });
                 }
-                FsEntry::Directory(_) => {
-                    if meta.perm != inode.meta.perm {
-                        self.disk
-                            .set_permisions(&path, meta.perm as u16)
-                            .map_err(|io| AcknoledgeSetAttrError::SetFileSizeIoError { io })?;
-                    }
-                }
                 FsEntry::File(hosts) => {
-                    if hosts.contains(&self.network_interface.hostname()?) {
+                    if hosts.contains(&self.network_interface.hostname) {
+                        let created = match &inode.entry {
+                            FsEntry::File(old_hosts) => {
+                                !old_hosts.contains(&self.network_interface.hostname)
+                            }
+                            _ => false,
+                        };
+                        if created {
+                            self.disk.new_file(&path, meta.perm).or_else(|io| {
+                                if io.kind() == std::io::ErrorKind::AlreadyExists {
+                                    Ok(())
+                                } else {
+                                    Err(AcknoledgeSetAttrError::SetFileSizeIoError { io })
+                                }
+                            })?;
+                        }
                         if meta.size != inode.meta.size {
                             self.disk
                                 .set_file_size(&path, meta.size as usize)
@@ -62,21 +70,29 @@ impl FsInterface {
                         }
                         if meta.perm != inode.meta.perm {
                             self.disk
-                                .set_permisions(&path, meta.perm as u16)
+                                .set_permisions(&path, meta.perm)
                                 .map_err(|io| AcknoledgeSetAttrError::SetFileSizeIoError { io })?;
                         }
+                    }
+                }
+                _ => {
+                    if meta.perm != inode.meta.perm {
+                        self.disk
+                            .set_permisions(&path, meta.perm)
+                            .map_err(|io| AcknoledgeSetAttrError::SetFileSizeIoError { io })?;
                     }
                 }
             }
         }
 
-        arbo.n_get_inode_mut(ino)?.meta = meta;
+        itree.get_inode_mut(ino)?.meta = meta;
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn setattr(
         &self,
-        ino: InodeId,
+        ino: Ino,
         mode: Option<u32>,
         uid: Option<u32>,
         gid: Option<u32>,
@@ -87,10 +103,10 @@ impl FsInterface {
         file_handle: Option<UUID>,
         flags: Option<u32>,
     ) -> Result<Metadata, SetAttrError> {
-        let arbo = Arbo::n_read_lock(&self.arbo, "setattr")?;
-        let path = arbo.n_get_path_from_inode_id(ino)?;
-        let mut meta = arbo.n_get_inode(ino)?.meta.clone();
-        drop(arbo);
+        let itree = ITree::read_lock(&self.itree, "setattr")?;
+        let path = itree.get_path_from_inode_id(ino)?;
+        let mut meta = itree.get_inode(ino)?.meta.clone();
+        drop(itree);
 
         //Except for size, No permissions are required on the file itself, but permission is required on all of the directories in pathname that lead to the file.
 
@@ -113,6 +129,9 @@ impl FsInterface {
         }
         // Set size if size it's defined, take permission from the file handle if the
         if let Some(size) = size {
+            if meta.kind != SimpleFileType::File {
+                return Err(WhError::InodeIsADirectory.into());
+            }
             match fh_perm {
                 Some(perm) if perm != AccessMode::Write && perm != AccessMode::ReadWrite => {
                     return Err(SetAttrError::SizeNoPerm)
@@ -125,7 +144,7 @@ impl FsInterface {
                         .set_file_size(&path, size as usize)
                         .map_err(|io| SetAttrError::SetFileSizeIoError { io })?;
                     meta.size = size;
-                    meta.blocks = (size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                    meta.blocks = size.div_ceil(BLOCK_SIZE);
                 }
             };
         }
@@ -147,7 +166,7 @@ impl FsInterface {
 
         meta.ctime = ctime.unwrap_or(SystemTime::now());
 
-        //crtime is ignored because crtime is macos only and should'nt be updated after file creation anyway
+        //crtime is ignored because crtime is macos only and shouldn't be updated after file creation anyway
         //
         // REVIEW- we could implement this code for a perfect macos 1 to 1, but I think allowing such a feature
         // on only one os is a very weird behavior
@@ -168,6 +187,6 @@ impl FsInterface {
             meta.flags = flags;
         }
         self.network_interface.update_metadata(ino, meta.clone())?;
-        return Ok(meta);
+        Ok(meta)
     }
 }

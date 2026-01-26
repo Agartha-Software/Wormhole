@@ -1,39 +1,41 @@
 use std::{
-    collections::HashMap,
     io::{self, ErrorKind},
+    net::SocketAddr,
     sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
+    time::UNIX_EPOCH,
 };
 
 use crate::{
-    config::{types::Config, GlobalConfig, LocalConfig},
+    config::GlobalConfig,
     error::{WhError, WhResult},
     network::{
         message::{
-            Address, FileSystemSerialized, FromNetworkMessage, MessageAndStatus, MessageContent,
-            RedundancyMessage, ToNetworkMessage,
+            Address, FromNetworkMessage, MessageAndStatus, MessageContent, RedundancyMessage,
+            ToNetworkMessage,
         },
         peer_ipc::PeerIPC,
         server::Server,
     },
-    pods::{arbo::Ino, filesystem::make_inode::MakeInodeError},
+    pods::{filesystem::make_inode::MakeInodeError, whpath::InodeName},
 };
 use parking_lot::RwLock;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
-use crate::pods::arbo::{FsEntry, Metadata};
-use crate::pods::{
-    arbo::BLOCK_SIZE,
-    filesystem::{remove_inode::RemoveInodeError, rename::RenameError},
-};
+use crate::pods::filesystem::{remove_inode::RemoveInodeError, rename::RenameError};
+use crate::pods::itree::{FsEntry, Metadata};
 
 use crate::pods::{
-    arbo::{Arbo, Inode, InodeId, LOCK_TIMEOUT},
     filesystem::fs_interface::FsInterface,
+    itree::{ITree, Ino, Inode, LOCK_TIMEOUT},
 };
 
 use crate::pods::network::callbacks::Callbacks;
+
+// We use a function here because we need templates, but we don't want to leak this kind of weird function to anywhere else
+fn into_boxed_io<T: std::error::Error>(err: T) -> io::Error {
+    std::io::Error::other(format!("{}: {err}", std::any::type_name::<T>()))
+}
 
 pub fn get_all_peers_address(peers: &Arc<RwLock<Vec<PeerIPC>>>) -> WhResult<Vec<String>> {
     Ok(peers
@@ -45,133 +47,50 @@ pub fn get_all_peers_address(peers: &Arc<RwLock<Vec<PeerIPC>>>) -> WhResult<Vec<
         .map(|peer| peer.hostname.clone())
         .collect::<Vec<String>>())
 }
+
 #[derive(Debug)]
 pub struct NetworkInterface {
-    pub arbo: Arc<RwLock<Arbo>>,
-    pub url: Option<String>,
+    pub itree: Arc<RwLock<ITree>>,
+    pub public_url: Option<String>,
+    pub bound_socket: SocketAddr,
+    pub hostname: String,
     pub to_network_message_tx: UnboundedSender<ToNetworkMessage>,
     pub to_redundancy_tx: UnboundedSender<RedundancyMessage>,
     pub callbacks: Callbacks,
     pub peers: Arc<RwLock<Vec<PeerIPC>>>,
-    pub local_config: Arc<RwLock<LocalConfig>>,
     pub global_config: Arc<RwLock<GlobalConfig>>,
 }
 
 impl NetworkInterface {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        arbo: Arc<RwLock<Arbo>>,
-        url: Option<String>,
+        itree: Arc<RwLock<ITree>>,
+        public_url: Option<String>,
+        bound_socket: SocketAddr,
+        hostname: String,
         to_network_message_tx: UnboundedSender<ToNetworkMessage>,
         to_redundancy_tx: UnboundedSender<RedundancyMessage>,
         peers: Arc<RwLock<Vec<PeerIPC>>>,
-        local_config: Arc<RwLock<LocalConfig>>,
         global_config: Arc<RwLock<GlobalConfig>>,
     ) -> Self {
         Self {
-            arbo,
-            url,
+            itree,
+            public_url,
+            bound_socket,
+            hostname,
             to_network_message_tx,
             to_redundancy_tx,
-            callbacks: Callbacks {
-                callbacks: HashMap::new().into(),
-            },
+            callbacks: Callbacks::new(),
             peers,
-            local_config,
             global_config,
         }
     }
 
-    pub fn hostname(&self) -> WhResult<String> {
-        Ok(self
-            .local_config
-            .try_read()
-            .ok_or(WhError::DeadLock)?
-            .general
-            .hostname
-            .clone())
-    }
-
-    #[deprecated(note = "bad to preallocate inodes like this")]
-    pub fn get_next_inode(&self) -> io::Result<Ino> {
-        self.arbo
-            .write()
-            .next_ino
-            .next()
-            .ok_or(io::Error::other("ran out of inodes"))
-
-        // let mut next_inode = match self.next_inode.try_lock_for(LOCK_TIMEOUT) {
-        //     Some(lock) => Ok(lock),
-        //     None => Err(io::Error::new(
-        //         io::ErrorKind::Interrupted,
-        //         "get_next_inode: can't lock next_inode",
-        //     )),
-        // }?;
-        // let available_inode = *next_inode;
-        // *next_inode += 1;
-
-        // Ok(available_inode)
-    }
-
-    /** TODO: Doc when reviews are finished */
-    #[deprecated(note = "bad to preallocate inodes like this")]
-    pub fn n_get_next_inode(&self) -> WhResult<u64> {
-        self.arbo
-            .write()
-            .next_ino
-            .next()
-            .ok_or(WhError::WouldBlock {
-                called_from: "n_get_next_inode".to_owned(),
-            })
-            .inspect_err(|_| log::error!("Ran out of Ino, returning Wh::WouldBlock"))
-
-        // let mut next_inode =
-        //     self.next_inode
-        //         .try_lock_for(LOCK_TIMEOUT)
-        //         .ok_or(WhError::WouldBlock {
-        //             called_from: "get_next_inode".to_string(),
-        //         })?;
-
-        // let available_inode = *next_inode;
-        // *next_inode += 1;
-
-        // Ok(available_inode)
-    }
-
-    #[deprecated(note = "probably bad to manipulate arbo from the outside like this")]
-    pub fn promote_next_inode(&self, new: Ino) -> WhResult<()> {
-        let next = &mut self.arbo.write().next_ino;
-        new.ge(&next.start)
-            .then_some(())
-            .ok_or(WhError::InodeNotFound)
-            .inspect_err(|_| log::error!("Ran out of Ino, returning Wh::WouldBlock"))?;
-        *next = new..;
-        // .next()
-        // .ok_or(WhError::WouldBlock { called_from: "n_get_next_inode".to_owned()} )
-        // .inspect_err(|e| log::error!("Ran out of Ino, returning Wh::WouldBlock"))
-        Ok(())
-
-        // let mut next_inode =
-        //     self.next_inode
-        //         .try_lock_for(LOCK_TIMEOUT)
-        //         .ok_or(WhError::WouldBlock {
-        //             called_from: "promote_next_inode".to_string(),
-        //         })?;
-
-        // // REVIEW: next_inode being behind a mutex is weird and
-        // // the function not taking a mutable ref feels weird, is next_inode behind a mutex just to allow a simple &self?
-        // if *next_inode < new {
-        //     *next_inode = new;
-        // };
-        // Ok(())
-    }
-
-    #[must_use]
-    /// Add the requested entry to the arbo and inform the network
+    /// Add the requested entry to the itree and inform the network
     pub fn register_new_inode(&self, inode: Inode) -> Result<(), MakeInodeError> {
-        let inode_id = inode.id.clone();
-        Arbo::n_write_lock(&self.arbo, "register_new_inode")?.add_inode(inode.clone())?;
+        ITree::write_lock(&self.itree, "register_new_inode")?.add_inode(inode.clone())?;
 
-        if !Arbo::is_local_only(inode_id) {
+        if !ITree::is_local_only(inode.id) {
             self.to_network_message_tx
                 .send(ToNetworkMessage::BroadcastMessage(MessageContent::Inode(
                     inode,
@@ -182,25 +101,21 @@ impl NetworkInterface {
         // TODO - if unable to update for some reason, should be passed to the background worker
     }
 
-    pub fn n_rename(
+    pub fn rename(
         &self,
-        parent: InodeId,
-        new_parent: InodeId,
-        name: &String,
-        new_name: &String,
+        parent: Ino,
+        new_parent: Ino,
+        name: InodeName,
+        new_name: InodeName,
         overwrite: bool,
     ) -> Result<(), RenameError> {
-        let mut arbo = Arbo::n_write_lock(&self.arbo, "arbo_rename_file")?;
+        let mut itree = ITree::write_lock(&self.itree, "itree_rename_file")?;
 
-        arbo.mv_inode(parent, new_parent, name, new_name)?;
+        itree.mv_inode(parent, new_parent, name.as_ref(), new_name.clone())?;
 
         self.to_network_message_tx
             .send(ToNetworkMessage::BroadcastMessage(MessageContent::Rename(
-                parent,
-                new_parent,
-                name.clone(),
-                new_name.clone(),
-                overwrite,
+                parent, new_parent, name, new_name, overwrite,
             )))
             .expect("broadcast_rename_file: unable to update modification on the network thread");
         Ok(())
@@ -208,14 +123,15 @@ impl NetworkInterface {
 
     pub fn acknowledge_rename(
         &self,
-        parent: InodeId,
-        new_parent: InodeId,
-        name: &String,
-        new_name: &String,
+        parent: Ino,
+        new_parent: Ino,
+        name: InodeName,
+        new_name: InodeName,
     ) -> Result<(), RenameError> {
-        let mut arbo = Arbo::n_write_lock(&self.arbo, "arbo_rename_file")?;
+        let mut itree = ITree::write_lock(&self.itree, "itree_rename_file")?;
 
-        arbo.mv_inode(parent, new_parent, name, new_name)
+        itree
+            .mv_inode(parent, new_parent, name.as_ref(), new_name)
             .map_err(|err| match err {
                 WhError::InodeNotFound => RenameError::DestinationParentNotFound,
                 WhError::InodeIsNotADirectory => RenameError::DestinationParentNotFolder,
@@ -223,18 +139,19 @@ impl NetworkInterface {
             })
     }
 
-    #[must_use]
-    /// Get a new inode, add the requested entry to the arbo and inform the network
-    pub fn acknowledge_new_file(&self, inode: Inode, _id: InodeId) -> Result<(), MakeInodeError> {
-        let mut arbo = Arbo::n_write_lock(&self.arbo, "acknowledge_new_file")?;
-        arbo.add_inode(inode)
+    /// Get a new inode, add the requested entry to the itree and inform the network
+    /// marks as reserved the Ino range up to the new Inode id
+    pub fn acknowledge_new_file(&self, inode: Inode) -> Result<(), MakeInodeError> {
+        let mut itree = ITree::write_lock(&self.itree, "acknowledge_new_file")?;
+        let _ = itree.mark_reserved_ino(inode.id); // this only happens in out-of-order handling of peer's inode creation, and isn't really an error
+        itree.add_inode(inode)
     }
 
-    /// Remove [Inode] from the [Arbo] and inform the network of the removal
-    pub fn unregister_inode(&self, id: InodeId) -> Result<(), RemoveInodeError> {
-        Arbo::n_write_lock(&self.arbo, "unregister_inode")?.n_remove_inode(id)?;
+    /// Remove [Inode] from the [ITree] and inform the network of the removal
+    pub fn unregister_inode(&self, id: Ino) -> Result<(), RemoveInodeError> {
+        ITree::write_lock(&self.itree, "unregister_inode")?.remove_inode(id)?;
 
-        if !Arbo::is_local_only(id) {
+        if !ITree::is_local_only(id) {
             self.to_network_message_tx
                 .send(ToNetworkMessage::BroadcastMessage(MessageContent::Remove(
                     id,
@@ -245,18 +162,18 @@ impl NetworkInterface {
         Ok(())
     }
 
-    /// Remove [Inode] from the [Arbo]
-    pub fn acknowledge_unregister_inode(&self, id: InodeId) -> Result<Inode, RemoveInodeError> {
-        Arbo::n_write_lock(&self.arbo, "acknowledge_unregister_inode")?.n_remove_inode(id)
+    /// Remove [Inode] from the [ITree]
+    pub fn acknowledge_unregister_inode(&self, id: Ino) -> Result<Inode, RemoveInodeError> {
+        ITree::write_lock(&self.itree, "acknowledge_unregister_inode")?.remove_inode(id)
     }
 
-    pub fn acknowledge_hosts_edition(&self, id: InodeId, hosts: Vec<Address>) -> WhResult<()> {
-        let mut arbo = Arbo::n_write_lock(&self.arbo, "acknowledge_hosts_edition")?;
+    pub fn acknowledge_hosts_edition(&self, id: Ino, hosts: Vec<Address>) -> WhResult<()> {
+        let mut itree = ITree::write_lock(&self.itree, "acknowledge_hosts_edition")?;
 
-        arbo.n_set_inode_hosts(id, hosts) // TODO - if unable to update for some reason, should be passed to the background worker
+        itree.set_inode_hosts(id, hosts) // TODO - if unable to update for some reason, should be passed to the background worker
     }
 
-    pub fn send_file(&self, inode: InodeId, data: Vec<u8>, to: Address) -> io::Result<()> {
+    pub fn send_file(&self, inode: Ino, data: Vec<u8>, to: Address) -> WhResult<()> {
         self.to_network_message_tx
             .send(ToNetworkMessage::SpecificMessage(
                 (MessageContent::PullAnswer(inode, data), None),
@@ -266,65 +183,31 @@ impl NetworkInterface {
         Ok(())
     }
 
-    fn affect_write_locally(&self, id: InodeId, new_size: usize) -> WhResult<Metadata> {
-        let mut arbo = Arbo::n_write_lock(&self.arbo, "network_interface.affect_write_locally")?;
-        let inode = arbo.n_get_inode_mut(id)?;
-        let new_size = (new_size as u64).max(inode.meta.size);
-        inode.meta.size = new_size as u64;
-        inode.meta.blocks = ((new_size + BLOCK_SIZE - 1) / BLOCK_SIZE) as u64;
-
-        inode.meta.mtime = SystemTime::now();
-
-        inode.entry = match &inode.entry {
-            FsEntry::File(_) => FsEntry::File(vec![self.hostname()?]),
-            _ => panic!("Can't edit hosts on folder"),
-        };
-        Ok(inode.meta.clone())
-    }
-
-    pub fn write_file(&self, id: InodeId, new_size: usize) -> WhResult<()> {
-        let meta = self.affect_write_locally(id, new_size)?;
-        let self_hostname = LocalConfig::read_lock(&self.local_config, "affect_write_locally")?
-            .general
-            .hostname
-            .clone();
-
-        if !Arbo::is_local_only(id) {
-            self.to_network_message_tx
-                .send(ToNetworkMessage::BroadcastMessage(
-                    MessageContent::RevokeFile(id, self_hostname, meta),
-                ))
-                .expect("revoke_remote_hosts: unable to update modification on the network thread");
-            // self.apply_redundancy(id);
-        }
-        Ok(())
-    }
-
-    pub fn revoke_remote_hosts(&self, id: InodeId) -> WhResult<()> {
-        self.update_hosts(id, vec![self.hostname()?])?;
+    pub fn revoke_remote_hosts(&self, id: Ino) -> WhResult<()> {
+        self.update_hosts(id, vec![self.hostname.clone()])?;
         // self.apply_redundancy(id);
         Ok(())
     }
 
-    pub fn add_inode_hosts(&self, ino: InodeId, hosts: Vec<Address>) -> WhResult<()> {
-        Arbo::n_write_lock(&self.arbo, "network_interface::update_hosts")?
-            .n_add_inode_hosts(ino, hosts)?;
+    pub fn add_inode_hosts(&self, ino: Ino, hosts: Vec<Address>) -> WhResult<()> {
+        ITree::write_lock(&self.itree, "network_interface::update_hosts")?
+            .add_inode_hosts(ino, hosts)?;
         self.update_remote_hosts(ino)
     }
 
-    pub fn update_hosts(&self, ino: InodeId, hosts: Vec<Address>) -> WhResult<()> {
-        Arbo::n_write_lock(&self.arbo, "network_interface::update_hosts")?
-            .n_set_inode_hosts(ino, hosts)?;
+    pub fn update_hosts(&self, ino: Ino, hosts: Vec<Address>) -> WhResult<()> {
+        ITree::write_lock(&self.itree, "network_interface::update_hosts")?
+            .set_inode_hosts(ino, hosts)?;
         self.update_remote_hosts(ino)
     }
 
-    fn update_remote_hosts(&self, ino: InodeId) -> WhResult<()> {
-        let inode = Arbo::n_read_lock(&self.arbo, "update_remote_hosts")?
-            .n_get_inode(ino)?
+    fn update_remote_hosts(&self, ino: Ino) -> WhResult<()> {
+        let inode = ITree::read_lock(&self.itree, "update_remote_hosts")?
+            .get_inode(ino)?
             .clone();
 
         if let FsEntry::File(hosts) = &inode.entry {
-            if !Arbo::is_local_only(inode.id) {
+            if !ITree::is_local_only(inode.id) {
                 self.to_network_message_tx
                     .send(ToNetworkMessage::BroadcastMessage(
                         MessageContent::EditHosts(inode.id, hosts.clone()),
@@ -339,18 +222,19 @@ impl NetworkInterface {
         }
     }
 
-    pub fn aknowledge_new_hosts(&self, id: InodeId, new_hosts: Vec<Address>) -> io::Result<()> {
-        Arbo::write_lock(&self.arbo, "aknowledge_new_hosts")?.add_inode_hosts(id, new_hosts)
+    pub fn aknowledge_new_hosts(&self, id: Ino, new_hosts: Vec<Address>) -> WhResult<()> {
+        ITree::write_lock(&self.itree, "aknowledge_new_hosts")?.add_inode_hosts(id, new_hosts)
     }
 
-    pub fn aknowledge_hosts_removal(&self, id: InodeId, new_hosts: Vec<Address>) -> io::Result<()> {
-        Arbo::write_lock(&self.arbo, "aknowledge_hosts_removal")?.remove_inode_hosts(id, new_hosts)
+    pub fn aknowledge_hosts_removal(&self, id: Ino, new_hosts: Vec<Address>) -> WhResult<()> {
+        ITree::write_lock(&self.itree, "aknowledge_hosts_removal")?
+            .remove_inode_hosts(id, new_hosts)
     }
 
-    pub fn update_metadata(&self, id: InodeId, meta: Metadata) -> WhResult<()> {
-        let mut arbo = Arbo::n_write_lock(&self.arbo, "network_interface::update_metadata")?;
+    pub fn update_metadata(&self, id: Ino, meta: Metadata) -> WhResult<()> {
+        let mut itree = ITree::write_lock(&self.itree, "network_interface::update_metadata")?;
         let mut fixed_meta = meta;
-        let ref_meta = &arbo.n_get_inode(id)?.meta;
+        let ref_meta = &itree.get_inode(id)?.meta;
 
         // meta's SystemTime is fragile: it can be silently corrupted such that
         // serialization leads to a failure we can't deal with
@@ -370,10 +254,10 @@ impl NetworkInterface {
             fixed_meta.mtime = ref_meta.mtime;
         }
 
-        arbo.n_set_inode_meta(id, fixed_meta.clone())?;
-        drop(arbo);
+        itree.set_inode_meta(id, fixed_meta.clone())?;
+        drop(itree);
 
-        if !Arbo::is_local_only(id) {
+        if !ITree::is_local_only(id) {
             self.to_network_message_tx
                 .send(ToNetworkMessage::BroadcastMessage(
                     MessageContent::EditMetadata(id, fixed_meta),
@@ -392,7 +276,7 @@ impl NetworkInterface {
 
     // SECTION Redundancy related
 
-    pub fn apply_redundancy(&self, file_id: InodeId) {
+    pub fn apply_redundancy(&self, file_id: Ino) {
         self.to_redundancy_tx
             .send(RedundancyMessage::ApplyTo(file_id))
             .expect("network_interface::apply_redundancy: tx error");
@@ -419,7 +303,7 @@ impl NetworkInterface {
     //         .expect("register_to_others: unable to update modification on the network thread");
     // }
 
-    // pub async fn request_arbo(&self, to: Address) -> io::Result<bool> {
+    // pub async fn request_itree(&self, to: Address) -> io::Result<bool> {
     //     let callback = self.callbacks.create(Callback::PullFs)?;
 
     //     self.to_network_message_tx
@@ -427,7 +311,7 @@ impl NetworkInterface {
     //             (MessageContent::RequestFs, None),
     //             vec![to],
     //         ))
-    //         .expect("request_arbo: unable to update modification on the network thread");
+    //         .expect("request_itree: unable to update modification on the network thread");
 
     //     self.callbacks.async_wait_for(callback).await
     // }
@@ -444,18 +328,10 @@ impl NetworkInterface {
     //     }
     // }
 
-    pub fn send_arbo(&self, to: Address, global_config_bytes: Vec<u8>) -> io::Result<()> {
-        let arbo = Arbo::read_lock(&self.arbo, "send_arbo")?;
-        let mut entries = arbo.get_raw_entries();
-
-        //Remove ignored entries
-        entries.retain(|ino, _| !Arbo::is_local_only(*ino));
-        entries.entry(1u64).and_modify(|inode| {
-            if let FsEntry::Directory(childrens) = &mut inode.entry {
-                childrens.retain(|x| !Arbo::is_local_only(*x));
-            }
-        });
-
+    pub fn send_itree(&self, to: Address, global_config_bytes: Vec<u8>) -> WhResult<()> {
+        let clean_itree = ITree::read_lock(&self.itree, "send_itree")?
+            .clone()
+            .clean_local();
         if let Some(peers) = self.peers.try_read_for(LOCK_TIMEOUT) {
             let peers_address_list = peers
                 .iter()
@@ -472,10 +348,7 @@ impl NetworkInterface {
                 .send(ToNetworkMessage::SpecificMessage(
                     (
                         MessageContent::FsAnswer(
-                            FileSystemSerialized {
-                                fs_index: entries,
-                                next_inode: self.get_next_inode()?,
-                            },
+                            clean_itree,
                             peers_address_list,
                             global_config_bytes,
                         ),
@@ -483,27 +356,25 @@ impl NetworkInterface {
                     ),
                     vec![to],
                 ))
-                .expect("send_arbo: unable to update modification on the network thread");
+                .expect("send_itree: unable to update modification on the network thread");
             Ok(())
         } else {
-            Err(std::io::Error::new(
-                io::ErrorKind::WouldBlock,
-                "Deadlock while trying to read peers",
-            ))
+            Err(WhError::WouldBlock {
+                called_from: "send_tree".to_owned(),
+            })
         }
     }
 
-    pub fn disconnect_peer(&self, addr: Address) -> io::Result<()> {
+    pub fn disconnect_peer(&self, addr: Address) -> WhResult<()> {
         self.peers
             .try_write_for(LOCK_TIMEOUT)
-            .ok_or(std::io::Error::new(
-                std::io::ErrorKind::WouldBlock,
-                format!("disconnect_peer: can't write lock peers"),
-            ))?
+            .ok_or(WhError::WouldBlock {
+                called_from: "disconnect_peer: can't write lock peers".to_owned(),
+            })?
             .retain(|p| p.hostname != addr);
 
         log::debug!("Disconnecting {addr}. Removing from inodes hosts");
-        for inode in Arbo::write_lock(&self.arbo, "disconnect_peer")?.inodes_mut() {
+        for inode in ITree::write_lock(&self.itree, "disconnect_peer")?.inodes_mut() {
             if let FsEntry::File(hosts) = &mut inode.entry {
                 hosts.retain(|h| *h != addr);
             }
@@ -531,81 +402,44 @@ impl NetworkInterface {
             let content_debug = format!("{content:?}");
 
             let action_result = match content {
-                MessageContent::PullAnswer(id, binary) => fs_interface.recept_binary(id, binary),
+                MessageContent::PullAnswer(id, binary) => fs_interface.recept_binary(id, binary)
+                                                            .map_err(into_boxed_io),
                 MessageContent::RedundancyFile(id, binary) => fs_interface.recept_redundancy(id, binary)
-                    .map_err(|e| std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("WhError: {e}"),
-                )),
-                MessageContent::Inode(inode) => fs_interface.recept_inode(inode).or_else(|err| {
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("WhError: {err}"),
-                        ))
-                    }),
-                MessageContent::EditHosts(id, hosts) => fs_interface.recept_edit_hosts(id, hosts).or_else(|err| {
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("WhError: {err}"),
-                        ))
-                    }),
-                MessageContent::RevokeFile(id, host, meta) => fs_interface.recept_revoke_hosts(id, host, meta).or_else(|err| {
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("WhError: {err}"),
-                        ))
-                    }),
-                MessageContent::AddHosts(id, hosts) => fs_interface.recept_add_hosts(id, hosts),
+                                            .map_err(into_boxed_io),
+                MessageContent::Inode(inode) => fs_interface.recept_inode(inode).map_err(into_boxed_io),
+                MessageContent::EditHosts(id, hosts) => fs_interface.recept_edit_hosts(id, hosts).map_err(into_boxed_io),
+                MessageContent::RevokeFile(id, host, meta) => fs_interface.recept_revoke_hosts(id, host, meta).map_err(into_boxed_io),
+                MessageContent::AddHosts(id, hosts) => fs_interface.recept_add_hosts(id, hosts).map_err(into_boxed_io),
                 MessageContent::RemoveHosts(id, hosts) => {
-                    fs_interface.recept_remove_hosts(id, hosts)
-                }
+                                            fs_interface.recept_remove_hosts(id, hosts).map_err(into_boxed_io)
+                                        }
                 MessageContent::EditMetadata(id, meta) =>
-                    fs_interface.acknowledge_metadata(id, meta).or_else(|err| {
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("WhError: {err}"),
-                        ))
-                    }),
-                MessageContent::Remove(id) => fs_interface.recept_remove_inode(id).or_else(|err| {
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("WhError: {err}"),
-                        ))
-                    }),
-                MessageContent::RequestFile(inode, peer) => fs_interface.send_file(inode, peer),
-                MessageContent::RequestFs => fs_interface.send_filesystem(origin),
+                                            fs_interface.acknowledge_metadata(id, meta).map_err(into_boxed_io),
+                MessageContent::Remove(id) => fs_interface.recept_remove_inode(id).map_err(into_boxed_io),
+                MessageContent::RequestFile(inode) => fs_interface.send_file(inode, origin).map_err(into_boxed_io),
+                MessageContent::RequestFs => fs_interface.send_filesystem(origin).map_err(into_boxed_io),
                 MessageContent::Rename(parent, new_parent, name, new_name, overwrite) =>
-                    fs_interface
-                    .recept_rename(parent, new_parent, &name, &new_name, overwrite)
-                    .map_err(|err| {
-                        std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("WhError: {err}"),
-                        )
-                    }),
+                                            fs_interface
+                                            .recept_rename(parent, new_parent, name, new_name, overwrite)
+                                            .map_err(into_boxed_io),
                 MessageContent::SetXAttr(ino, key, data) => fs_interface
-                    .network_interface
-                    .recept_inode_xattr(ino, key, data)
-                    .or_else(|err| {
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("WhError: {err}"),
-                        ))
-                    }),
+                                            .network_interface
+                                            .recept_inode_xattr(ino, &key, data)
+                                            .map_err(into_boxed_io),
+
                 MessageContent::RemoveXAttr(ino, key) => fs_interface
-                    .network_interface
-                    .recept_remove_inode_xattr(ino, key)
-                    .or_else(|err| {
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("WhError: {err}"),
-                        ))
-                    }),
+                                            .network_interface
+                                            .recept_remove_inode_xattr(ino, &key)
+                                            .map_err(into_boxed_io),
                 MessageContent::FsAnswer(_, _, _) => {
-                    Err(io::Error::new(ErrorKind::InvalidInput,
-                        "Late answer from first connection, loaded network interface shouldn't recieve FsAnswer"))
-                },
-                MessageContent::Disconnect(addr) => fs_interface.network_interface.disconnect_peer(addr)
+                                            Err(io::Error::new(ErrorKind::InvalidInput,
+                                                "Late answer from first connection, loaded network interface shouldn't recieve FsAnswer"))
+                                        },
+                MessageContent::Disconnect => fs_interface.network_interface.disconnect_peer(origin).map_err(into_boxed_io),
+                MessageContent::FileDelta(ino, meta, sig, delta) => fs_interface.accept_delta(ino, meta, sig, delta, origin)
+                                            .map_err(into_boxed_io),
+                MessageContent::FileChanged(ino, meta) => fs_interface.accept_file_changed(ino, meta, origin).map_err(into_boxed_io),
+                MessageContent::DeltaRequest(ino, sig) => fs_interface.respond_delta(ino, sig, origin).map_err(into_boxed_io),
             };
             if let Err(error) = action_result {
                 log::error!(
@@ -634,18 +468,28 @@ impl NetworkInterface {
                     peers_tx.iter().for_each(|(channel, address)| {
                         channel
                             .send((message_content.clone(), None))
-                            .expect(&format!("failed to send message to peer {}", address))
+                            .unwrap_or_else(|e| {
+                                panic!("Failed to send message to peer {}: {e:?}", address)
+                            })
                     });
                 }
                 ToNetworkMessage::SpecificMessage((message_content, status_tx), origins) => {
-                    peers_tx
+                    let count = peers_tx
                         .iter()
                         .filter(|&(_, address)| origins.contains(address))
-                        .for_each(|(channel, address)| {
+                        .map(|(channel, address)| {
                             channel
-                                .send((message_content.clone(), status_tx.clone()))
-                                .expect(&format!("failed to send message to peer {}", address))
-                        });
+                                .send((message_content.clone(), status_tx.clone())) // warning: only the first peer channel can set a status
+                                .unwrap_or_else(|e| {
+                                    panic!("Failed to send message to peer {}: {e:?}", address)
+                                })
+                        })
+                        .count();
+                    if count == 0 {
+                        log::warn!(
+                            "contact_peers: {message_content}: No peers by hostname {origins:?}"
+                        )
+                    }
                 }
             };
         }

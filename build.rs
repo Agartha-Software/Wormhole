@@ -6,7 +6,7 @@ fn main() {
         winfsp::build::winfsp_link_delayload();
     }
     let git_hash: String = Command::new("git")
-        .args(&["rev-parse", "HEAD"])
+        .args(["rev-parse", "HEAD"])
         .output()
         .ok()
         .and_then(|output| String::from_utf8(output.stdout).ok())

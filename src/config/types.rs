@@ -1,11 +1,11 @@
-use std::{fs, net::SocketAddr, path::Path, str, sync::Arc};
+use std::{fs, path::Path, str, sync::Arc};
 
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{
-    error::{CliError, WhError, WhResult},
-    pods::arbo::LOCK_TIMEOUT,
+    error::{WhError, WhResult},
+    pods::itree::LOCK_TIMEOUT,
 };
 
 /** NOTE
@@ -14,7 +14,6 @@ use crate::{
  * Minors fields are named in the structure you added to Metadata
  * the section name is the same as the name of the value of your new struct in Metadata
  */
-
 pub trait Config: Serialize + DeserializeOwned {
     fn write<S: AsRef<Path>>(&self, path: S) -> Result<(), Box<dyn std::error::Error>> {
         let serialized = toml::to_string(self)?;
@@ -30,7 +29,6 @@ pub trait Config: Serialize + DeserializeOwned {
         Ok(toml::from_str(&contents)?)
     }
 
-    #[must_use]
     fn read_lock<'a, T: Config>(
         conf: &'a Arc<RwLock<T>>,
         called_from: &'a str,
@@ -40,7 +38,6 @@ pub trait Config: Serialize + DeserializeOwned {
         })
     }
 
-    #[must_use]
     fn write_lock<'a, T: Config>(
         conf: &'a Arc<RwLock<T>>,
         called_from: &'a str,
@@ -54,31 +51,6 @@ pub trait Config: Serialize + DeserializeOwned {
 impl<T: Serialize + DeserializeOwned> Config for T {}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct LocalConfig {
-    pub general: GeneralLocalConfig,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct GeneralLocalConfig {
-    // pub name: String,
-    pub hostname: String,
-    pub url: Option<String>,
-}
-
-impl LocalConfig {
-    pub fn constructor(&mut self, local: Self) -> Result<(), CliError> {
-        // self.general.name = local.general.name;
-        if local.general.hostname != self.general.hostname {
-            log::warn!("Local Config: Impossible to modify an ip address");
-            return Err(CliError::Unimplemented {
-                arg: "Local Config: Impossible to modify an ip address".to_owned(),
-            });
-        }
-        Ok(())
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct GlobalConfig {
     pub general: GeneralGlobalConfig,
     pub redundancy: RedundancyConfig,
@@ -87,11 +59,11 @@ pub struct GlobalConfig {
 impl GlobalConfig {
     pub fn add_hosts(
         mut self,
-        url: Option<SocketAddr>,
+        url: Option<String>,
         mut additional_hosts: Vec<String>,
     ) -> GlobalConfig {
         if let Some(url) = url {
-            additional_hosts.insert(0, url.to_string());
+            additional_hosts.insert(0, url);
         }
 
         self.general.entrypoints.extend(additional_hosts);

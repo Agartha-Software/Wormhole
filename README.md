@@ -10,7 +10,7 @@ You can think if it as the *[Kubernetes](https://github.com/kubernetes/kubernete
 
 Wormhole is an open-source project designed to provide a decentralized, scalable, and user-friendly data storage solution. By creating a virtual file system that spans multiple machines, Wormhole enables seamless data sharing and redundancy without the need for complex infrastructure management. Whether you're a small startup, a large enterprise, or an individual managing personal devices, Wormhole simplifies data storage and access with a native, intuitive interface. The storage space is integrated seamlessly in the usual files of your system.
 
-This `README` provides an introduction to Wormhole, setup instructions, and links to detailed documentation. For a comprehensive understanding of the project's goals and technical details, refer to the [Technical Specification](docs/technical/technical_spec.md).
+This `README` provides an introduction to Wormhole, setup instructions, and links to detailed documentation. For a comprehensive understanding of the project's goals and technical details, refer to the [Technical Specification](docs/technical/specifications/overview.md).
 
 ## Our Idea
 
@@ -31,26 +31,36 @@ For users and other softwares, the files behave like any normal files, while the
 - **Flexibility**: Supports dynamic addition/removal of nodes without service interruption.
 - **Configuration**: Declarative, file-based configuration using TOML for ease of use and sharing.
 
-For detailed use cases and technical details, see the [Technical Specification](docs/technical/technical_spec.md).
+For detailed use cases and technical details, see the [Technical Specification](docs/technical/specifications/overview.md).
 
 ## Documentation
 
-The Wormhole documentation is organized into the following sections:
+- **Getting Started**
+  - [Installation Guide](docs/getting-started/install.md): How to install Wormhole on Linux, Windows, NixOS, etc.
+  - [Getting Started](docs/getting-started/getting_started.md): Your first steps: starting the service, creating a pod, CLI commands.
+  - [Docker Guide](docs/getting-started/docker_guide.md): Using the official image (ghcr.io/agartha-software/wormhole) and Docker Compose.
+  - [Testing Environment](docs/getting-started/testing_environement_installation.md): Set up a local test mesh with multiple pods on a single machine.
 
-- **Getting Started**:
-  - [Getting Started](docs/getting-started/getting_started.md): Step-by-step instructions for setting up Wormhole.
-  - [Docker Guide](docs/getting-started/docker_guide.md): Instructions for running Wormhole in Docker containers.
-- **User Guide**:
-  - ~[Configuration Guide](docs/user-guide/configuration.md):~ How to configure Wormhole using TOML files. (need update)
-  - [Glossary](docs/user-guide/glossary.md): Definitions of key terms and concepts.
-- **Technical Documentation**:
-  - [Technical Specification](docs/technical/technical_spec.md): Detailed explanation of Wormhole’s architecture and features.
-  - [Technical Specification (French)](docs/technical/technical_spec_fr.md): French version of the technical specification.
-  - [Configuration Details](docs/technical/configuration/): In-depth configuration options (main, pod, and file-level).
-- **Beta Testing**:
-  - [Beta Test Plan](docs/beta-testing/beta_test_plan.md): Scenarios and criteria for testing the beta version.
-- **UML Diagrams**:
-  - Located in [docs/uml/](docs/uml/): Visual representations of Wormhole’s architecture.
+- **User Guide**
+  - [Glossary](docs/user-guide/glossary.md): Definitions of key terms (Pod, Node, Mesh, etc.).
+
+- **Technical Documentation**
+  - **Specifications**
+    - [Overview (English)](docs/technical/specifications/overview.md)
+    - [Overview (French)](docs/technical/specifications/overview_fr.md)
+    - **Configuration**
+      - [Global Configuration](docs/technical/specifications/configuration/global.md)
+      - [Local Configuration](docs/technical/specifications/configuration/local.md)
+  - **Architecture**
+    - [Logical Architecture](docs/technical/architecture/logical_architecture.md)
+    - [Code Architecture](docs/technical/architecture/code_architecture.md)
+  - **Internals & Maintenance**
+    - [Packages & Dependencies](docs/technical/internals/packages.md): How we build and publish for AUR, Nix, Debian, Docker (GHCR), etc.
+  - **Drafts**
+    - [Future Ideas](docs/technical/drafts/ideas.md)
+
+- **Project Management**
+  - [Beta Test Plan](README.md): Scenarios and criteria for testing the beta version.
 
 ---
 
@@ -58,8 +68,8 @@ The Wormhole documentation is organized into the following sections:
 
 Wormhole is an open-source project, and we welcome contributions from the community! To get involved:
 
-1. Read the [Technical Specification](docs/technical/technical_spec.md) to understand the project’s goals and architecture.
-2. Check the [Beta Test Plan](docs/beta-testing/beta_test_plan.md) to see testing scenarios and provide feedback.
+1. Read the [Technical Specification](docs/technical/specifications/overview.md) to understand the project's goals and architecture.
+2. Check the [known issues](README.md#known-issues-and-limitations) to see what needs work and provide feedback.
 3. Report issues or suggest improvements via the [GitHub Issues](https://github.com/Agartha-Software/Wormhole/issues) page.
 4. Submit pull requests with code contributions, following the guidelines in [Code Architecture](docs/technical/architecture/code_architecture.md).
 
@@ -69,12 +79,12 @@ For terminology, refer to the [Glossary](docs/user-guide/glossary.md) to underst
 
 ## Known Issues and Limitations
 
-The current beta version has some known limitations, detailed in the [Beta Test Plan](docs/beta-testing/beta_test_plan.md). Key issues include:
+The current beta version has some known limitations. Key issues include:
 
 - **Windows Support**: Incomplete, with some features not fully implemented.
 - **Documentation**: Some sections are incomplete and being expanded.
 - **Configuration**: The configuration files settings are not all implemented.
-- **Stability**: Some bugs persistes due to the early state of the project, check the issues.
+- **Stability**: Some bugs persist due to the early state of the project; check the [GitHub Issues](https://github.com/Agartha-Software/Wormhole/issues) for details.
 
 We are actively working on these issues and encourage community feedback to improve Wormhole.
 

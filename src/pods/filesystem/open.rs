@@ -1,9 +1,11 @@
 use crate::pods::{
-    arbo::{Arbo, InodeId},
     filesystem::{
+        diffs::{Sig, Signature},
         file_handle::{AccessMode, FileHandleManager, OpenFlags},
+        fs_interface::SimpleFileType,
         permissions::{has_execute_perm, has_read_perm, has_write_perm},
     },
+    itree::{ITree, Ino},
 };
 
 use crate::error::WhError;
@@ -19,6 +21,7 @@ custom_error! {pub OpenError
     MultipleAccessFlags = "Multiple access flags given",
 }
 
+#[cfg(target_os = "linux")]
 const FMODE_EXEC: i32 = 0x20;
 
 impl AccessMode {
@@ -74,44 +77,41 @@ pub fn check_permissions(
             Err(OpenError::WrongPermissions)
         }
         AccessMode::ReadWrite => Ok(AccessMode::ReadWrite),
-        AccessMode::Execute => {
-            if has_read_perm(inode_perm) {
-                Err(OpenError::WrongPermissions)
-            //Behavior is undefined, but most filesystems return EACCES
-            } else {
-                if !has_execute_perm(inode_perm) {
-                    Err(OpenError::WrongPermissions)
-                } else {
-                    Ok(AccessMode::Execute)
-                }
-            }
-        }
+        AccessMode::Execute if !has_execute_perm(inode_perm) => Err(OpenError::WrongPermissions),
+        AccessMode::Execute => Ok(AccessMode::Execute),
     }
 }
 
 impl FsInterface {
-    pub fn open(
-        &self,
-        ino: InodeId,
-        flags: OpenFlags,
-        access: AccessMode,
-    ) -> Result<UUID, OpenError> {
-        let inode_perm = Arbo::n_read_lock(&self.arbo, "open")?
-            .n_get_inode(ino)?
+    pub fn open(&self, ino: Ino, flags: OpenFlags, access: AccessMode) -> Result<UUID, OpenError> {
+        let meta = ITree::read_lock(&self.itree, "open")?
+            .get_inode(ino)?
             .meta
-            .perm;
+            .clone();
 
-        let perm = check_permissions(flags, access, inode_perm)?;
+        let perm = check_permissions(flags, access, meta.perm)?;
 
         if flags.trunc {
-            //TODO: Trunc over the network
+            //TODO: Trunc ~~over the network~~ locally only
         }
+
+        let sig =
+            if matches!(meta.kind, SimpleFileType::File) && matches!(access, AccessMode::Write) {
+                let file = self.get_whole_file_sync(ino).ok();
+                file.as_ref().and_then(|f| {
+                    Signature::new(f)
+                        .ok()
+                        .inspect(|sig| log::trace!("signing <<\n{:?}\n>> = {:?}", f, sig))
+                })
+            } else {
+                None
+            };
 
         // libc::O_CREAT is never set, The flag is set only with the create syscall
 
         let mut file_handles = FileHandleManager::write_lock(&self.file_handles, "open")?;
         file_handles
-            .insert_new_file_handle(flags, perm, ino)
+            .insert_new_file_handle(flags, perm, ino, sig)
             .map_err(|err| err.into())
     }
 }

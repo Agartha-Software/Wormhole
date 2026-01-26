@@ -1,144 +1,143 @@
-use std::{ffi::OsString, mem::MaybeUninit, os::windows::prelude::FileExt, path::Path};
+use std::{
+    os::windows::prelude::FileExt,
+    path::{Path, PathBuf},
+};
 
 use tokio::io;
 
-use windows::{
-    core::HSTRING,
-    Wdk::Storage::FileSystem::{FileFsSizeInformation, NtQueryVolumeInformationFile},
-    Win32::{
-        Foundation::{GetLastError, INVALID_HANDLE_VALUE},
-        Storage::FileSystem::{
-            CreateFileW, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OVERLAPPED, FILE_READ_ATTRIBUTES,
-            FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
-        },
-    },
+use crate::{
+    pods::{filesystem::fs_interface::SimpleFileType, itree::EntrySymlink, whpath::WhPath},
+    winfsp::winfsp_impl::aliased_path,
 };
-use winfsp::util::Win32SafeHandle;
-
-use crate::pods::whpath::WhPath;
-use windows::Wdk::System::SystemServices::FILE_FS_SIZE_INFORMATION;
-use windows::Win32::System::IO::IO_STATUS_BLOCK;
 
 use super::{DiskManager, DiskSizeInfo};
 
 #[derive(Debug)]
 pub struct WindowsDiskManager {
-    handle: Win32SafeHandle,
-    mount_point: WhPath, // mountpoint on linux and mirror mountpoint on windows
+    mount_point: PathBuf, // (aliased original location)
+    original_location: PathBuf,
+    stopped: bool,
 }
 
 impl WindowsDiskManager {
-    pub fn new(mount_point: WhPath) -> io::Result<Self> {
-        let (parent, name) = mount_point.split_folder_file();
-        let mut mount_point = WhPath::from(&parent);
-        mount_point.push(&format!(".{name}"));
+    /// On windows, the original dir is moved from "name" to ".name"
+    pub fn new(mount_point: &Path) -> io::Result<Self> {
+        let system_mount_point =
+            aliased_path(mount_point).map_err(|_| io::ErrorKind::InvalidFilename)?;
 
-        let path = HSTRING::from(OsString::from(&mount_point.inner));
-
-        let handle = unsafe {
-            CreateFileW(
-                &path,
-                FILE_READ_ATTRIBUTES.0,
-                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                None,
-                OPEN_EXISTING,
-                FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
-                None,
-            )?
-        };
-
-        if handle == INVALID_HANDLE_VALUE {
-            return Err(io::ErrorKind::InvalidInput.into());
+        if system_mount_point.exists() {
+            return Err(io::Error::new(io::ErrorKind::AlreadyExists, "System virtual mountpoint already existing (path/.mountpoint). Please delete it to create a pod here."));
         }
+        std::fs::rename(mount_point, &system_mount_point)?;
 
         Ok(Self {
-            mount_point,
-            handle: Win32SafeHandle::from(handle),
+            mount_point: system_mount_point,
+            original_location: mount_point.to_owned(),
+            stopped: false,
         })
     }
+}
 
-    fn get_volume_info_inner(&self) -> io::Result<DiskSizeInfo> {
-        let mut iosb: MaybeUninit<IO_STATUS_BLOCK> = MaybeUninit::zeroed();
-        let mut fsize_info: MaybeUninit<FILE_FS_SIZE_INFORMATION> = MaybeUninit::zeroed();
-
-        let fsize_info = unsafe {
-            NtQueryVolumeInformationFile(
-                *self.handle,
-                iosb.as_mut_ptr(),
-                fsize_info.as_mut_ptr().cast(),
-                size_of::<FILE_FS_SIZE_INFORMATION>() as u32,
-                FileFsSizeInformation,
-            )
-            .ok()?;
-
-            fsize_info.assume_init()
-        };
-
-        let sector_size = fsize_info.BytesPerSector;
-        let sectors_per_alloc_unit = fsize_info.SectorsPerAllocationUnit;
-        let alloc_unit = sector_size * sectors_per_alloc_unit;
-
-        Ok(DiskSizeInfo {
-            free_size: fsize_info.TotalAllocationUnits as usize * alloc_unit as usize,
-            total_size: fsize_info.AvailableAllocationUnits as usize * alloc_unit as usize,
-        })
+impl Drop for WindowsDiskManager {
+    fn drop(&mut self) {
+        if !self.stopped {
+            let _ = std::fs::rename(&self.mount_point, &self.original_location).inspect_err(|e| log::error!("WindowsDiskManager was unable to move the directory to its initial location (on drop): {e}"));
+        }
     }
 }
 
 /// always takes a WhPath and infers the real disk path
 impl DiskManager for WindowsDiskManager {
-    fn new_file(&self, path: &WhPath, permissions: u16) -> io::Result<()> {
-        std::fs::File::create(&self.mount_point.join(path).inner)?;
+    fn stop(&mut self) -> io::Result<()> {
+        log::trace!("Stop of WindowsDiskManager");
+
+        self.stopped = true;
+        std::fs::rename(&self.mount_point, &self.original_location)?;
+        Ok(())
+    }
+
+    fn new_file(&self, path: &WhPath, _permissions: u16) -> io::Result<()> {
+        std::fs::File::create(self.mount_point.join(path))?;
         Ok(())
     }
 
     fn remove_file(&self, path: &WhPath) -> io::Result<()> {
-        std::fs::remove_file(&self.mount_point.join(path).inner)
+        std::fs::remove_file(self.mount_point.join(path))
     }
 
     fn remove_dir(&self, path: &WhPath) -> io::Result<()> {
-        std::fs::remove_dir(&self.mount_point.join(path).inner)
+        std::fs::remove_dir(self.mount_point.join(path))
     }
 
     fn write_file(&self, path: &WhPath, binary: &[u8], offset: usize) -> io::Result<usize> {
-        return std::fs::File::open(&self.mount_point.join(path).inner)?
-            .seek_write(binary, offset as u64);
+        std::fs::File::options()
+            .write(true)
+            .open(self.mount_point.join(path))?
+            .seek_write(binary, offset as u64)
     }
 
     fn set_file_size(&self, path: &WhPath, size: usize) -> io::Result<()> {
-        std::fs::File::open(&self.mount_point.join(path).inner)?.set_len(size as u64)
+        std::fs::File::options()
+            .write(true)
+            .open(self.mount_point.join(path))?
+            .set_len(size as u64)
     }
 
     fn mv_file(&self, path: &WhPath, new_path: &WhPath) -> io::Result<()> {
         // let mut original_path = path.clone(); // NOTE - Would be better if rename was non mutable
         // original_path.rename(new_name);
-        std::fs::rename(
-            &self.mount_point.join(path).inner,
-            &self.mount_point.join(new_path).inner,
-        )
+        std::fs::rename(self.mount_point.join(path), self.mount_point.join(new_path))
     }
 
     fn read_file(&self, path: &WhPath, offset: usize, buf: &mut [u8]) -> io::Result<usize> {
-        std::fs::File::open(&self.mount_point.join(path).inner)?.seek_read(buf, offset as u64)
+        std::fs::File::open(self.mount_point.join(path))?.seek_read(buf, offset as u64)
     }
 
-    fn new_dir(&self, path: &WhPath, permissions: u16) -> io::Result<()> {
-        std::fs::create_dir(&self.mount_point.join(path).inner)
+    fn new_dir(&self, path: &WhPath, _permissions: u16) -> io::Result<()> {
+        std::fs::create_dir(self.mount_point.join(path))
     }
 
     fn size_info(&self) -> std::io::Result<super::DiskSizeInfo> {
-        self.get_volume_info_inner()
+        Ok(DiskSizeInfo {
+            free_size: fs2::free_space(&self.mount_point)? as usize,
+            total_size: fs2::total_space(&self.mount_point)? as usize,
+            files: 0,    // Will be filled by FsInterface
+            ffree: 0,    // Will be filled by FsInterface
+            bsize: 4096, // Standard block size
+        })
     }
 
-    fn log_arbo(&self, path: &WhPath) -> std::io::Result<()> {
-        todo!()
-    }
-
-    fn set_permisions(&self, path: &WhPath, permissions: u16) -> io::Result<()> {
+    fn set_permisions(&self, _path: &WhPath, _permissions: u16) -> io::Result<()> {
+        log::warn!("permissions not supported on windows");
         Ok(())
     }
 
     fn file_exists(&self, path: &WhPath) -> bool {
-        std::fs::exists(&self.mount_point.join(path).inner)
+        std::fs::exists(self.mount_point.join(path)).unwrap_or(false)
+    }
+
+    fn new_symlink(
+        &self,
+        path: &WhPath,
+        permissions: u16,
+        link: &EntrySymlink,
+    ) -> std::io::Result<()> {
+        // replace with a dummy file or folder
+        match link.hint {
+            Some(SimpleFileType::Directory) => self.new_dir(path, permissions),
+            _ => self.new_file(path, permissions),
+        }
+    }
+
+    fn remove_symlink(&self, path: &WhPath) -> std::io::Result<()> {
+        // replaced with a dummy file or folder
+        let path = self.mount_point.join(path);
+        if path.is_dir() {
+            std::fs::remove_dir(&path)
+        } else if path.is_file() {
+            std::fs::remove_file(&path)
+        } else {
+            Ok(())
+        }
     }
 }

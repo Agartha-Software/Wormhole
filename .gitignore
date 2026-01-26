@@ -25,3 +25,8 @@ Folder*
 .vscode
 .wormhole
 .direnv/
+
+.env
+.vs/
+.kube/
+/k8s/.env

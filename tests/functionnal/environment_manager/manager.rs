@@ -22,15 +22,15 @@ impl EnvironmentManager {
     pub fn new() -> Self {
         start_log();
         log::trace!("SLEEP_TIME for this test is {:?}", *SLEEP_TIME);
-        return EnvironmentManager {
+        EnvironmentManager {
             socket_id: MIN_SOCKET_ID..,
             pods_port: MIN_POD_PORT..,
             services: Vec::new(),
-        };
+        }
     }
 
     pub fn reserve_socket_id(&mut self) -> u16 {
-        return self.socket_id.next().expect("socket id range");
+        self.socket_id.next().expect("socket id range")
     }
 
     /// Create a service on the next available socket. No pods are created.
@@ -39,11 +39,11 @@ impl EnvironmentManager {
         log::info!("trying service on {socket}");
 
         // checks that no service is running on this socket
-        let (mut status, _, _) = cli_command(&["-s", &socket_from_id(socket), "status"]);
+        let (mut status, _, _) = cli_command(["-s", &socket_from_id(socket), "status"]);
         while status.success() {
             log::warn!("\nA service is already running on socket {socket}. Trying next socket...");
             socket = self.reserve_socket_id();
-            (status, _, _) = cli_command(&["-s", &socket_from_id(socket), "status"]);
+            (status, _, _) = cli_command(["-s", &socket_from_id(socket), "status"]);
         }
         assert!(
             socket < MAX_SOCKET_ID,
@@ -51,7 +51,7 @@ impl EnvironmentManager {
         );
 
         let mut instance = std::process::Command::new(SERVICE_BIN)
-            .args(&["-s", &socket_from_id(socket), "--nodeamon"])
+            .args(["-s", &socket_from_id(socket), "--nodeamon", "--clean"])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .stdin(Stdio::piped())
@@ -61,14 +61,14 @@ impl EnvironmentManager {
         std::thread::sleep(*SLEEP_TIME);
 
         // checks the service viability
-        let (status, _, _) = cli_command(&["-s", &socket_from_id(socket), "status"]);
+        let (status, _, _) = cli_command(["-s", &socket_from_id(socket), "status"]);
         if !status.success() {
             log::error!("\nCan't reach service on {}", socket_from_id(socket),);
 
             instance.kill().unwrap();
             let _ = instance.wait(); // necessary on some os
 
-            assert!(false, "Service {} isn't answering properly", socket);
+            panic!("Service {} isn't answering properly", socket);
         }
 
         let is_exited = instance.try_wait();
@@ -99,7 +99,7 @@ impl EnvironmentManager {
             StopMethod::Kill => self
                 .services
                 .iter_mut()
-                .filter(|service| service_filter(&port, &network, *service))
+                .filter(|service| service_filter(&port, &network, service))
                 .for_each(|s| assert!(s.instance.kill().is_ok())),
             StopMethod::CtrlD => (), // just dropping will send ctrl-d
             StopMethod::CliStop => todo!(),
@@ -125,15 +125,14 @@ impl EnvironmentManager {
         let conn_to = self
             .services
             .iter()
-            .map(|s| &s.pods)
-            .flatten()
+            .flat_map(|s| &s.pods)
             .find(|(nw, _, _)| *nw == network_name)
-            .map(|(_, ip, _)| ip.clone());
+            .map(|(_, ip, _)| *ip);
 
         self.services.iter_mut().fold(conn_to, |conn_to, service| {
             if let Some((_, port, _)) = service.pods.iter().find(|(nw, _, _)| *nw == network_name) {
                 // The service already runs a pod on this network
-                Some(port.clone())
+                Some(*port)
             } else {
                 // The service does not runs a pod on this network
                 let temp_dir = assert_fs::TempDir::new().expect("can't create temp dir");
@@ -161,10 +160,16 @@ impl EnvironmentManager {
                 );
                 service
                     .pods
-                    .push((network_name.clone(), pod_port.clone(), temp_dir));
+                    .push((network_name.clone(), pod_port, temp_dir));
                 Some(pod_port)
             }
         });
         Ok(())
+    }
+}
+
+impl Default for EnvironmentManager {
+    fn default() -> Self {
+        Self::new()
     }
 }

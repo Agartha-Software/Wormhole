@@ -1,10 +1,11 @@
-use std::path::PathBuf;
-
 use serde::{Deserialize, Serialize};
+use std::{net::IpAddr, path::PathBuf};
+use ts_rs::TS;
 
-use crate::cli::{IdentifyPodArgs, IdentifyPodGroup, Mode};
+use crate::cli::{ConfigType, IdentifyNewPodGroup, IdentifyPodArgs, IdentifyPodGroup, Mode};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum PodId {
     Name(String),
     Path(PathBuf),
@@ -21,45 +22,61 @@ impl From<IdentifyPodGroup> for PodId {
         if let Some(name) = group.name {
             PodId::Name(name)
         } else {
-            if let Some(path) = group.path {
-                PodId::Path(path)
-            } else {
-                panic!("One of path or name should always be defined, if both are missing Clap should block the cmd")
-            }
+            PodId::Path(group.path.expect("One of path or name should always be defined, if both are missing Clap should block the cmd"))
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct NewRequest {
-    pub name: String,
-    pub port: Option<u16>,
-    pub mountpoint: PathBuf,
-    pub url: Option<String>,
-    pub hostname: Option<String>,
-    pub listen_url: Option<String>,
-    pub additional_hosts: Vec<String>,
+impl From<IdentifyNewPodGroup> for PodId {
+    fn from(group: IdentifyNewPodGroup) -> Self {
+        if let Some(name) = group.name {
+            PodId::Name(name)
+        } else {
+            PodId::Path(group.path.expect("One of path or name should always be defined, if both are missing Clap should block the cmd"))
+        }
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct NewRequest {
+    pub name: String,
+    pub mountpoint: PathBuf,
+    pub url: Option<String>,
+    pub public_url: Option<String>,
+    pub ip_address: Option<IpAddr>,
+    pub port: Option<u16>,
+    pub hostname: Option<String>,
+    pub additional_hosts: Vec<String>,
+    pub allow_other_users: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct GetHostsRequest {
     pub path: PathBuf,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct RemoveRequest {
     pub pod: PodId,
     pub mode: Mode,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum Command {
     Unfreeze(PodId),
-    Remove(RemoveRequest),
     Freeze(PodId),
+    Remove(RemoveRequest),
+    Restart(PodId),
     New(NewRequest),
     GetHosts(GetHostsRequest),
     Inspect(PodId),
     Tree(PodId),
+    GenerateConfig(PodId, bool, ConfigType),
+    ShowConfig(PodId, ConfigType),
+    CheckConfig(PodId, ConfigType),
     Status,
 }

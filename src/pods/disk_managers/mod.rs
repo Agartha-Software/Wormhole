@@ -1,19 +1,23 @@
 use std::io;
 
-use super::whpath::WhPath;
 use std::fmt::Debug;
-pub mod dummy_disk_manager;
+
+use crate::pods::itree::EntrySymlink;
+use crate::pods::whpath::WhPath;
 #[cfg(target_os = "linux")]
 pub mod unix_disk_manager;
+#[cfg(target_os = "windows")]
+pub mod windows_disk_manager;
 
 pub struct DiskSizeInfo {
     pub free_size: usize,
     pub total_size: usize,
+    pub files: u64, // Total number of inodes (files)
+    pub ffree: u64, // Free inodes available
+    pub bsize: u32, // Block size in bytes
 }
 
 pub trait DiskManager: Send + Sync + Debug {
-    fn log_arbo(&self, path: &WhPath) -> io::Result<()>;
-
     fn new_file(&self, path: &WhPath, permissions: u16) -> io::Result<()>;
 
     fn set_permisions(&self, path: &WhPath, permissions: u16) -> io::Result<()>;
@@ -35,4 +39,10 @@ pub trait DiskManager: Send + Sync + Debug {
     fn size_info(&self) -> io::Result<DiskSizeInfo>;
 
     fn file_exists(&self, path: &WhPath) -> bool;
+
+    fn stop(&mut self) -> io::Result<()>;
+
+    fn new_symlink(&self, path: &WhPath, permissions: u16, link: &EntrySymlink) -> io::Result<()>;
+
+    fn remove_symlink(&self, path: &WhPath) -> io::Result<()>;
 }

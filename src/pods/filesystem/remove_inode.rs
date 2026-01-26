@@ -1,24 +1,23 @@
-use custom_error::custom_error;
+#[cfg(target_os = "linux")]
+use crate::pods::{filesystem::permissions::has_write_perm, whpath::InodeName};
 
 use crate::{
     error::WhError,
-    pods::{
-        arbo::{Arbo, FsEntry, InodeId},
-        filesystem::permissions::has_write_perm,
-    },
+    pods::itree::{FsEntry, ITree, Ino},
 };
+use custom_error::custom_error;
 
 use super::fs_interface::FsInterface;
 
 custom_error! {
-    /// Error describing the removal of a [Inode] from the [Arbo]
+    /// Error describing the removal of a [Inode] from the [ITree]
     pub RemoveInodeError
     WhError{source: WhError} = "{source}",
     NonEmpty = "Can't remove non-empty dir",
 }
 
 custom_error! {
-    /// Error describing the removal of a [Inode] from the [Arbo] and the local file or folder
+    /// Error describing the removal of a [Inode] from the [ITree] and the local file or folder
     pub RemoveFileError
     WhError{source: WhError} = "{source}",
     NonEmpty = "Can't remove non-empty dir",
@@ -36,31 +35,29 @@ impl From<RemoveInodeError> for RemoveFileError {
 }
 
 impl FsInterface {
-    // NOTE - system specific (fuse/winfsp) code that need access to arbo or other classes
-    pub fn fuse_remove_inode(
-        &self,
-        parent: InodeId,
-        name: &std::ffi::OsStr,
-    ) -> Result<(), RemoveFileError> {
+    // NOTE - system specific (fuse/winfsp) code that need access to itree or other classes
+    #[cfg(target_os = "linux")]
+    pub fn fuse_remove_inode(&self, parent: Ino, name: InodeName) -> Result<(), RemoveFileError> {
         let target = {
-            let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface::fuse_remove_inode")?;
-            let parent = arbo.n_get_inode(parent)?;
+            let itree = ITree::read_lock(&self.itree, "fs_interface::fuse_remove_inode")?;
+            let parent = itree.get_inode(parent)?;
             if !has_write_perm(parent.meta.perm) {
                 return Err(RemoveFileError::PermissionDenied);
             }
-            arbo.n_get_inode_child_by_name(parent, &name.to_string_lossy().to_string())?
-                .id
+            itree.get_inode_child_by_name(parent, name.as_ref())?.id
         };
 
         self.remove_inode(target)
     }
 
-    pub fn remove_inode_locally(&self, id: InodeId) -> Result<(), RemoveFileError> {
-        let arbo = Arbo::n_read_lock(&self.arbo, "fs_interface::remove_inode")?;
-        let to_remove_path = arbo.n_get_path_from_inode_id(id)?;
+    pub fn remove_inode_locally(&self, id: Ino) -> Result<(), RemoveFileError> {
+        let itree = ITree::read_lock(&self.itree, "fs_interface::remove_inode")?;
+        let to_remove_path = itree.get_path_from_inode_id(id)?;
+        let entry = itree.get_inode(id)?.entry.to_owned();
+        drop(itree);
 
-        match &arbo.n_get_inode(id)?.entry {
-            FsEntry::File(hosts) if hosts.contains(&self.network_interface.hostname()?) => self
+        match entry {
+            FsEntry::File(hosts) if hosts.contains(&self.network_interface.hostname) => self
                 .disk
                 .remove_file(&to_remove_path)
                 .map_err(|io| RemoveFileError::LocalDeletionFailed { io })?,
@@ -73,18 +70,29 @@ impl FsInterface {
                 .disk
                 .remove_dir(&to_remove_path)
                 .map_err(|io| RemoveFileError::LocalDeletionFailed { io })?,
+            #[cfg(target_os = "linux")]
             FsEntry::Directory(_) => return Err(RemoveFileError::NonEmpty),
+            #[cfg(target_os = "windows")]
+            FsEntry::Directory(children) => {
+                children.iter().try_for_each(|c| self.remove_inode(*c))?
+            }
+            FsEntry::Symlink(_) => self
+                .disk
+                .remove_symlink(&to_remove_path)
+                .map_err(|io| RemoveFileError::LocalDeletionFailed { io })?,
         };
         Ok(())
     }
 
-    pub fn remove_inode(&self, id: InodeId) -> Result<(), RemoveFileError> {
+    /// Remove an [Inode] from the ITree
+    /// Immediately replicated to other peers
+    pub fn remove_inode(&self, id: Ino) -> Result<(), RemoveFileError> {
         self.remove_inode_locally(id)?;
         self.network_interface.unregister_inode(id)?;
         Ok(())
     }
 
-    pub fn recept_remove_inode(&self, id: InodeId) -> Result<(), RemoveFileError> {
+    pub fn recept_remove_inode(&self, id: Ino) -> Result<(), RemoveFileError> {
         self.remove_inode_locally(id)?;
         self.network_interface.acknowledge_unregister_inode(id)?;
         Ok(())

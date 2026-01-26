@@ -1,10 +1,12 @@
 use crate::fuse::linux_attrs::time_or_now_to_system_time;
 use crate::fuse::linux_mknod::filetype_from_mode;
 use crate::pods::filesystem::attrs::SetAttrError;
-use crate::pods::filesystem::file_handle::{AccessMode, OpenFlags};
+use crate::pods::filesystem::file_handle::{AccessMode, FileHandleManager, OpenFlags};
+use crate::pods::filesystem::flush::FlushError;
 use crate::pods::filesystem::fs_interface::{FsInterface, SimpleFileType};
 use crate::pods::filesystem::make_inode::MakeInodeError;
 use crate::pods::filesystem::open::{check_permissions, OpenError};
+use crate::pods::filesystem::permissions::SYMLINK_DEFAULT_PERMISSION;
 use crate::pods::filesystem::read::ReadError;
 
 use crate::pods::filesystem::readdir::ReadDirError;
@@ -12,8 +14,10 @@ use crate::pods::filesystem::remove_inode::RemoveFileError;
 use crate::pods::filesystem::rename::RenameError;
 use crate::pods::filesystem::write::WriteError;
 use crate::pods::filesystem::xattrs::GetXAttrError;
+use crate::pods::itree::EntrySymlink;
+use crate::pods::itree::FsEntry;
 use crate::pods::network::pull_file::PullError;
-use crate::pods::whpath::WhPath;
+use crate::pods::whpath::{osstr_to_str, InodeName};
 use fuser::{
     BackgroundSession, Filesystem, MountOption, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty,
     ReplyEntry, ReplyXattr, Request,
@@ -21,6 +25,8 @@ use fuser::{
 use libc::{XATTR_CREATE, XATTR_REPLACE};
 use std::ffi::OsStr;
 use std::io;
+use std::os::unix::ffi::OsStrExt;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -31,15 +37,18 @@ pub struct FuseController {
     pub fs_interface: Arc<FsInterface>,
 }
 
-// REVIEW - should later invest in proper error handling
 impl Filesystem for FuseController {
+    ////////////////////////////////////////////////////////////////////////////
     // READING
+    ////////////////////////////////////////////////////////////////////////////
 
     fn lookup(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
-        match self
-            .fs_interface
-            .get_entry_from_name(parent, name.to_string_lossy().to_string())
-        {
+        let name: InodeName = match name.to_owned().try_into() {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
+        match self.fs_interface.get_entry_from_name(parent, name.as_ref()) {
             Ok(Some(inode)) => {
                 reply.entry(&TTL, &inode.meta.with_ids(req.uid(), req.gid()), 0);
             }
@@ -47,13 +56,13 @@ impl Filesystem for FuseController {
                 reply.error(libc::EACCES);
             }
             Err(e) => {
-                reply.error(libc::ENOENT);
+                reply.error(e.to_libc());
             }
-        };
+        }
     }
 
     fn getattr(&mut self, req: &Request, ino: u64, _fh: Option<u64>, reply: ReplyAttr) {
-        let attrs = self.fs_interface.n_get_inode_attributes(ino);
+        let attrs = self.fs_interface.get_inode_attributes(ino);
 
         match attrs {
             Ok(attrs) => reply.attr(&TTL, &attrs.with_ids(req.uid(), req.gid())),
@@ -61,6 +70,373 @@ impl Filesystem for FuseController {
                 log::error!("getattr error: {:?}", err);
                 reply.error(err.to_libc())
             }
+        }
+    }
+
+    fn open(&mut self, _req: &Request<'_>, ino: u64, flags: i32, reply: fuser::ReplyOpen) {
+        match AccessMode::from_libc(flags).and_then(|access| {
+            self.fs_interface
+                .open(ino, OpenFlags::from_libc(flags), access)
+        }) {
+            Ok(file_handle) => reply.opened(file_handle, flags as u32), // TODO - check flags ?,
+            Err(OpenError::WhError { source }) => reply.error(source.to_libc()),
+            Err(OpenError::MultipleAccessFlags) => reply.error(libc::EINVAL),
+            Err(OpenError::TruncReadOnly) => reply.error(libc::EPERM),
+            Err(OpenError::WrongPermissions) => reply.error(libc::EACCES),
+        };
+    }
+
+    fn release(
+        &mut self,
+        _req: &Request<'_>,
+        _ino: u64,
+        file_handle: u64,
+        _flags: i32,
+        _lock_owner: Option<u64>,
+        _flush: bool,
+        reply: fuser::ReplyEmpty,
+    ) {
+        match self.fs_interface.release(file_handle) {
+            Ok(()) => reply.ok(),
+            Err(FlushError::DiffError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::PullError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::ReadError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::WriteError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::WhError { source }) => reply.error(source.to_libc()),
+        }
+    }
+
+    fn listxattr(&mut self, _req: &Request<'_>, ino: u64, size: u32, reply: ReplyXattr) {
+        match self.fs_interface.list_inode_xattr(ino) {
+            Ok(keys) => {
+                let mut bytes = vec![];
+
+                for key in keys {
+                    bytes.extend_from_slice(key.as_bytes());
+                    bytes.push(0);
+                }
+                if size == 0 {
+                    reply.size(bytes.len() as u32);
+                } else if size >= bytes.len() as u32 {
+                    reply.data(&bytes);
+                } else {
+                    reply.error(libc::ERANGE)
+                }
+            }
+            Err(err) => match err.to_libc() {
+                libc::ENOENT => reply.error(libc::EBADF), // Not found became Bad file descriptor
+                or => reply.error(or),
+            },
+        }
+    }
+
+    fn read(
+        &mut self,
+        _req: &Request,
+        ino: u64,
+        file_handle: u64,
+        offset: i64,
+        size: u32,
+        _flags: i32,
+        _lock: Option<u64>,
+        reply: ReplyData,
+    ) {
+        let mut buf = vec![0; size as usize];
+        match self.fs_interface.read_file(
+            ino,
+            offset.try_into().expect("read::read offset negative"),
+            &mut buf,
+            file_handle,
+        ) {
+            Ok(size) => {
+                buf.resize(size, 0);
+                reply.data(&buf)
+            }
+            Err(ReadError::WhError { source }) => reply.error(source.to_libc()),
+            Err(ReadError::PullError {
+                source: PullError::WhError { source },
+            }) => reply.error(source.to_libc()),
+            Err(ReadError::CantPull) => reply.error(libc::ENETUNREACH),
+            Err(ReadError::LocalReadFailed { io }) => reply.error(
+                io.raw_os_error()
+                    .expect("Local read error should always be the underling libc::open os error"),
+            ),
+            Err(ReadError::PullError {
+                source: PullError::NoHostAvailable,
+            }) => reply.error(libc::ENETUNREACH),
+            Err(ReadError::PullError {
+                source: PullError::WriteError { io: _ },
+            }) => reply.error(libc::ENETUNREACH),
+            Err(ReadError::NoFileHandle) => reply.error(libc::EBADFD), // Shouldn't happend
+            //According to the man EBADF if the fd is not a valid file descriptor or is not open for reading.
+            Err(ReadError::NoReadPermission) => reply.error(libc::EBADFD),
+        }
+    }
+
+    fn readdir(
+        &mut self,
+        _req: &Request,
+        ino: u64,
+        _fh: u64,
+        offset: i64,
+        mut reply: ReplyDirectory,
+    ) {
+        let entries = match self.fs_interface.read_dir(ino) {
+            Ok(entries) => entries,
+            Err(ReadDirError::PermissionError) => {
+                log::error!("readdir: EACCES {ino}");
+                reply.error(libc::EACCES);
+                return;
+            }
+            Err(ReadDirError::WhError { source: e }) => {
+                log::error!("readdir: {e} {ino}");
+                reply.error(e.to_libc());
+                return;
+            }
+        };
+
+        for (i, (id, name, meta)) in entries.into_iter().enumerate().skip(offset as usize) {
+            if reply.add(
+                id,
+                // i + 1 means offset of the next entry
+                i as i64 + 1, // NOTE - in case of error, try i + 1
+                meta.kind.into(),
+                name,
+            ) {
+                break;
+            }
+        }
+        reply.ok();
+    }
+
+    fn readlink(&mut self, _req: &Request<'_>, ino: u64, reply: ReplyData) {
+        match self.fs_interface.readlink(ino) {
+            Ok(symlink) => reply.data(
+                symlink
+                    .read(&self.fs_interface.mountpoint)
+                    .as_os_str()
+                    .as_bytes(),
+            ),
+            Err(e) => reply.error(e.to_libc()),
+        }
+    }
+
+    fn getxattr(
+        &mut self,
+        _req: &Request<'_>,
+        ino: u64,
+        name: &OsStr,
+        size: u32,
+        reply: ReplyXattr,
+    ) {
+        let name = match osstr_to_str(name) {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
+        let attr = self.fs_interface.get_inode_xattr(ino, name);
+
+        let data = match attr {
+            Ok(data) => data,
+            Err(GetXAttrError::KeyNotFound) => {
+                reply.error(libc::ERANGE);
+                return;
+            }
+            Err(GetXAttrError::WhError { source }) => {
+                reply.error(source.to_libc());
+                return;
+            }
+        };
+
+        if size == 0 {
+            reply.size(data.len() as u32);
+        } else {
+            reply.data(&data);
+        }
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // ^ READING
+    ////////////////////////////////////////////////////////////////////////////
+    // WRITING
+    ////////////////////////////////////////////////////////////////////////////
+
+    fn mknod(
+        &mut self,
+        req: &Request<'_>,
+        parent: u64,
+        name: &OsStr,
+        mode: u32,
+        _umask: u32,
+        _rdev: u32,
+        reply: ReplyEntry,
+    ) {
+        let name: InodeName = match name.to_owned().try_into() {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
+        let permissions = mode as u16;
+        let kind = match filetype_from_mode(mode) {
+            Some(kind) => kind,
+            None => {
+                // If it's not a file or a directory it's not yet supported
+                reply.error(libc::EACCES);
+                return;
+            }
+        };
+
+        let entry = match kind {
+            SimpleFileType::File => FsEntry::new_file(),
+            SimpleFileType::Directory => FsEntry::new_directory(),
+            SimpleFileType::Symlink => return reply.error(libc::EINVAL),
+        };
+
+        match self
+            .fs_interface
+            .make_inode(parent, name, permissions, entry)
+        {
+            Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
+            Err(MakeInodeError::LocalCreationFailed { io }) => {
+                reply.error(io.raw_os_error().expect(
+                    "Local creation error should always be the underling libc::open os error",
+                ))
+            }
+            Err(MakeInodeError::WhError { source }) => reply.error(source.to_libc()),
+            Err(MakeInodeError::AlreadyExist) => reply.error(libc::EEXIST),
+            Err(MakeInodeError::ParentNotFound) => reply.error(libc::ENOENT),
+            Err(MakeInodeError::ParentNotFolder) => reply.error(libc::ENOTDIR),
+            Err(MakeInodeError::ProtectedNameIsFolder) => reply.error(libc::EISDIR),
+            Err(MakeInodeError::PermissionDenied) => reply.error(libc::EACCES),
+        }
+    }
+
+    fn mkdir(
+        &mut self,
+        req: &Request<'_>,
+        parent: u64,
+        name: &OsStr,
+        mode: u32,
+        _umask: u32,
+        reply: ReplyEntry,
+    ) {
+        let name: InodeName = match name.to_owned().try_into() {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
+        match self
+            .fs_interface
+            .make_inode(parent, name, mode as u16, FsEntry::new_directory())
+            .inspect_err(|e| log::error!("mkdir: {e}"))
+        {
+            Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
+            Err(MakeInodeError::LocalCreationFailed { io }) => {
+                reply.error(io.raw_os_error().expect(
+                    "Local creation error should always be the underling libc::open os error",
+                ))
+            }
+            Err(MakeInodeError::WhError { source }) => reply.error(source.to_libc()),
+            Err(MakeInodeError::AlreadyExist) => reply.error(libc::EEXIST),
+            Err(MakeInodeError::ParentNotFound) => reply.error(libc::ENOENT),
+            Err(MakeInodeError::ParentNotFolder) => reply.error(libc::ENOTDIR),
+            Err(MakeInodeError::ProtectedNameIsFolder) => reply.error(libc::EISDIR),
+            Err(MakeInodeError::PermissionDenied) => reply.error(libc::EACCES),
+        }
+    }
+
+    fn unlink(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
+        let name: InodeName = match name.to_owned().try_into() {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
+        match self.fs_interface.fuse_remove_inode(parent, name) {
+            Ok(()) => reply.ok(),
+            Err(RemoveFileError::WhError { source }) => reply.error(source.to_libc()),
+            Err(RemoveFileError::LocalDeletionFailed { io }) => {
+                reply.error(io.raw_os_error().expect(
+                    "Local creation error should always be the underling libc::open os error",
+                ))
+            }
+            Err(RemoveFileError::NonEmpty) => reply.error(libc::ENOTEMPTY),
+            Err(RemoveFileError::PermissionDenied) => reply.error(libc::EACCES),
+        }
+    }
+
+    fn rmdir(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
+        let name: InodeName = match name.to_owned().try_into() {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
+        match self.fs_interface.fuse_remove_inode(parent, name) {
+            Ok(()) => reply.ok(),
+            Err(RemoveFileError::WhError { source }) => reply.error(source.to_libc()),
+            Err(RemoveFileError::LocalDeletionFailed { io }) => {
+                reply.error(io.raw_os_error().expect(
+                    "Local creation error should always be the underling libc::open os error",
+                ))
+            }
+            Err(RemoveFileError::NonEmpty) => reply.error(libc::ENOTEMPTY),
+            Err(RemoveFileError::PermissionDenied) => reply.error(libc::EACCES),
+        }
+    }
+
+    fn rename(
+        &mut self,
+        _req: &Request<'_>,
+        parent: u64,
+        name: &OsStr,
+        new_parent: u64,
+        newname: &OsStr,
+        flags: u32,
+        reply: fuser::ReplyEmpty,
+    ) {
+        let name: InodeName = match name.to_owned().try_into() {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+        let newname: InodeName = match newname.to_owned().try_into() {
+            Ok(newname) => newname,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
+        match self
+            .fs_interface
+            .rename(
+                parent,
+                new_parent,
+                name,
+                newname,
+                flags & libc::RENAME_NOREPLACE == 0,
+            )
+            .inspect_err(|err| log::error!("rename: {err}"))
+        {
+            Ok(()) => reply.ok(),
+            Err(RenameError::WhError { source }) => reply.error(source.to_libc()),
+            Err(RenameError::LocalRenamingFailed { io }) => {
+                reply.error(io.raw_os_error().expect(
+                    "Local renaming error should always be the underling libc::open os error",
+                ))
+            }
+            Err(RenameError::LocalOverwriteFailed { io }) => reply.error(io.raw_os_error().expect(
+                "Local overwrite error should always be the underling libc::open os error",
+            )),
+            Err(RenameError::OverwriteNonEmpty) => reply.error(libc::ENOTEMPTY),
+            Err(RenameError::DestinationExists) => reply.error(libc::EEXIST),
+            Err(RenameError::SourceParentNotFolder) => reply.error(libc::ENOTDIR),
+            Err(RenameError::SourceParentNotFound) => reply.error(libc::ENOENT),
+            Err(RenameError::DestinationParentNotFolder) => reply.error(libc::ENOTDIR),
+            Err(RenameError::DestinationParentNotFound) => reply.error(libc::ENOENT),
+            Err(RenameError::ProtectedNameIsFolder) => reply.error(libc::ENOTDIR),
+            Err(RenameError::ReadFailed { source: _ }) => reply.error(libc::EIO), // TODO
+            Err(RenameError::FlushError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(RenameError::PermissionDenied) => reply.error(libc::EACCES),
+            Err(RenameError::LocalWriteFailed { io }) => reply.error(
+                io.raw_os_error()
+                    .expect("Local read error should always be the underling os error"),
+            ),
         }
     }
 
@@ -90,8 +466,8 @@ impl Filesystem for FuseController {
                 uid,
                 gid,
                 size,
-                atime.map(|time| time_or_now_to_system_time(time)),
-                mtime.map(|time| time_or_now_to_system_time(time)),
+                atime.map(time_or_now_to_system_time),
+                mtime.map(time_or_now_to_system_time),
                 ctime,
                 file_handle,
                 flags,
@@ -100,7 +476,7 @@ impl Filesystem for FuseController {
         {
             Ok(meta) => reply.attr(&TTL, &meta.with_ids(req.uid(), req.gid())),
             Err(SetAttrError::WhError { source }) => reply.error(source.to_libc()),
-            Err(SetAttrError::SizeNoPerm) => reply.error(libc::EPERM),
+            Err(SetAttrError::SizeNoPerm) => reply.error(libc::EACCES),
             Err(SetAttrError::InvalidFileHandle) => reply.error(libc::EBADFD),
             Err(SetAttrError::SetFileSizeIoError { io }) => {
                 reply.error(io.raw_os_error().expect(
@@ -113,380 +489,6 @@ impl Filesystem for FuseController {
                 ))
             }
         }
-    }
-
-    fn getxattr(
-        &mut self,
-        _req: &Request<'_>,
-        ino: u64,
-        name: &OsStr,
-        size: u32,
-        reply: ReplyXattr,
-    ) {
-        let attr = self
-            .fs_interface
-            .get_inode_xattr(ino, &name.to_string_lossy().to_string());
-
-        let data = match attr {
-            Ok(data) => data,
-            Err(GetXAttrError::KeyNotFound) => {
-                reply.error(libc::ENODATA);
-                return;
-            }
-            Err(GetXAttrError::WhError { source }) => {
-                reply.error(source.to_libc());
-                return;
-            }
-        };
-
-        if size == 0 {
-            reply.size(data.len() as u32);
-        } else {
-            reply.data(&data);
-        }
-    }
-
-    fn setxattr(
-        &mut self,
-        _req: &Request<'_>,
-        ino: u64,
-        name: &OsStr,
-        data: &[u8],
-        flags: i32,
-        _position: u32, // Postion undocumented
-        reply: ReplyEmpty,
-    ) {
-        // As we follow linux implementation in spirit, data size limit at 64kb
-        if data.len() > 64000 {
-            return reply.error(libc::ENOSPC);
-        }
-
-        let key = name.to_string_lossy().to_string();
-
-        if flags == XATTR_CREATE || flags == XATTR_REPLACE {
-            match self.fs_interface.xattr_exists(ino, &key) {
-                Ok(true) => {
-                    if flags == XATTR_CREATE {
-                        return reply.error(libc::EEXIST);
-                    }
-                }
-                Ok(false) => {
-                    if flags == XATTR_REPLACE {
-                        return reply.error(libc::ENODATA);
-                    }
-                }
-                Err(err) => {
-                    return reply.error(err.to_libc());
-                }
-            }
-        }
-
-        // TODO - Implement After permission implementation
-        // let attr = self.fs_interface.get_inode_attributes(ino);
-        // if attr.unwrap().perm == valid {
-        //     reply.error(libc::EPERM);
-        // }
-
-        match self
-            .fs_interface
-            .network_interface
-            .set_inode_xattr(ino, key, data.to_vec())
-        {
-            Ok(_) => reply.ok(),
-            Err(err) => reply.error(err.to_libc()),
-        }
-    }
-
-    fn removexattr(
-        &mut self,
-        _req: &fuser::Request<'_>,
-        ino: u64,
-        name: &OsStr,
-        reply: ReplyEmpty,
-    ) {
-        match self
-            .fs_interface
-            .network_interface
-            .remove_inode_xattr(ino, name.to_string_lossy().to_string())
-        {
-            Ok(_) => reply.ok(),
-            Err(err) => reply.error(err.to_libc()),
-        }
-    }
-
-    fn listxattr(&mut self, _req: &Request<'_>, ino: u64, size: u32, reply: ReplyXattr) {
-        match self.fs_interface.list_inode_xattr(ino) {
-            Ok(keys) => {
-                let mut bytes = vec![];
-
-                for key in keys {
-                    bytes.extend(key.bytes());
-                    bytes.push(0);
-                }
-                if size == 0 {
-                    reply.size(bytes.len() as u32);
-                } else if size >= bytes.len() as u32 {
-                    reply.data(&bytes);
-                } else {
-                    reply.error(libc::ERANGE)
-                }
-                return;
-            }
-            Err(err) => match err.to_libc() {
-                libc::ENOENT => reply.error(libc::EBADF), // Not found became Bad file descriptor
-                or => reply.error(or),
-            },
-        }
-    }
-
-    fn read(
-        &mut self,
-        _req: &Request,
-        ino: u64,
-        file_handle: u64,
-        offset: i64,
-        size: u32,
-        _flags: i32,
-        _lock: Option<u64>,
-        reply: ReplyData,
-    ) {
-        let mut buf = vec![];
-        buf.resize(size as usize, 0);
-        match self.fs_interface.read_file(
-            ino,
-            offset.try_into().expect("read::read offset negative"),
-            &mut buf,
-            file_handle,
-        ) {
-            Ok(size) => {
-                buf.resize(size, 0);
-                reply.data(&buf)
-            }
-            Err(ReadError::WhError { source }) => reply.error(source.to_libc()),
-            Err(ReadError::PullError {
-                source: PullError::WhError { source },
-            }) => reply.error(source.to_libc()),
-            Err(ReadError::CantPull) => reply.error(libc::ENETUNREACH),
-            Err(ReadError::LocalReadFailed { io }) => reply.error(
-                io.raw_os_error()
-                    .expect("Local read error should always be the underling libc::open os error"),
-            ),
-            Err(ReadError::PullError {
-                source: PullError::NoHostAvailable,
-            }) => reply.error(libc::ENETUNREACH),
-            Err(ReadError::NoFileHandle) => reply.error(libc::EBADFD), // Shouldn't happend
-            //According to the man EBADF if the fd is not a valid file descriptor or is not open for reading.
-            Err(ReadError::NoReadPermission) => reply.error(libc::EBADFD),
-        }
-    }
-
-    fn readdir(
-        &mut self,
-        _req: &Request,
-        ino: u64,
-        _fh: u64,
-        offset: i64,
-        mut reply: ReplyDirectory,
-    ) {
-        let entries = match self.fs_interface.read_dir(ino) {
-            Ok(entries) => entries,
-            Err(ReadDirError::PermissionError) => {
-                log::error!("readdir: EPERM {ino}");
-                reply.error(libc::EACCES);
-                return;
-            }
-            Err(ReadDirError::WhError { source: e }) => {
-                log::error!("readdir: {e} {ino}");
-                reply.error(e.to_libc());
-                return;
-            }
-        };
-
-        for (i, entry) in entries.into_iter().enumerate().skip(offset as usize) {
-            if reply.add(
-                entry.id,
-                // i + 1 means offset of the next entry
-                i as i64 + 1, // NOTE - in case of error, try i + 1
-                entry.entry.get_filetype().into(),
-                entry.name,
-            ) {
-                break;
-            }
-        }
-        reply.ok();
-    }
-
-    // ^ READING
-
-    // WRITING
-
-    fn mknod(
-        &mut self,
-        req: &Request<'_>,
-        parent: u64,
-        name: &OsStr,
-        mode: u32,
-        _umask: u32,
-        _rdev: u32,
-        reply: ReplyEntry,
-    ) {
-        let permissions = mode as u16;
-        let kind = match filetype_from_mode(mode) {
-            Some(kind) => kind,
-            None => {
-                // If it's not a file or a directory it's not yet supported
-                reply.error(libc::EACCES);
-                return;
-            }
-        };
-
-        match self.fs_interface.make_inode(
-            parent,
-            name.to_string_lossy().to_string(),
-            permissions,
-            kind,
-        ) {
-            Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
-            Err(MakeInodeError::LocalCreationFailed { io }) => {
-                reply.error(io.raw_os_error().expect(
-                    "Local creation error should always be the underling libc::open os error",
-                ))
-            }
-            Err(MakeInodeError::WhError { source }) => reply.error(source.to_libc()),
-            Err(MakeInodeError::AlreadyExist) => reply.error(libc::EEXIST),
-            Err(MakeInodeError::ParentNotFound) => reply.error(libc::ENOENT),
-            Err(MakeInodeError::ParentNotFolder) => reply.error(libc::ENOTDIR),
-            Err(MakeInodeError::ProtectedNameIsFolder) => reply.error(libc::EISDIR),
-            Err(MakeInodeError::PermissionDenied) => reply.error(libc::EACCES),
-        }
-    }
-
-    fn mkdir(
-        &mut self,
-        req: &Request<'_>,
-        parent: u64,
-        name: &OsStr,
-        mode: u32,
-        _umask: u32,
-        reply: ReplyEntry,
-    ) {
-        match self
-            .fs_interface
-            .make_inode(
-                parent,
-                name.to_string_lossy().to_string(),
-                mode as u16,
-                SimpleFileType::Directory,
-            )
-            .inspect_err(|e| log::error!("mkdir({parent}, {}): {e}", name.display()))
-        {
-            Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
-            Err(MakeInodeError::LocalCreationFailed { io }) => {
-                reply.error(io.raw_os_error().expect(
-                    "Local creation error should always be the underling libc::open os error",
-                ))
-            }
-            Err(MakeInodeError::WhError { source }) => reply.error(source.to_libc()),
-            Err(MakeInodeError::AlreadyExist) => reply.error(libc::EEXIST),
-            Err(MakeInodeError::ParentNotFound) => reply.error(libc::ENOENT),
-            Err(MakeInodeError::ParentNotFolder) => reply.error(libc::ENOTDIR),
-            Err(MakeInodeError::ProtectedNameIsFolder) => reply.error(libc::EISDIR),
-            Err(MakeInodeError::PermissionDenied) => reply.error(libc::EACCES),
-        }
-    }
-
-    fn unlink(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
-        match self.fs_interface.fuse_remove_inode(parent, name) {
-            Ok(()) => reply.ok(),
-            Err(RemoveFileError::WhError { source }) => reply.error(source.to_libc()),
-            Err(RemoveFileError::LocalDeletionFailed { io }) => {
-                reply.error(io.raw_os_error().expect(
-                    "Local creation error should always be the underling libc::open os error",
-                ))
-            }
-            Err(RemoveFileError::NonEmpty) => reply.error(libc::ENOTEMPTY),
-            Err(RemoveFileError::PermissionDenied) => reply.error(libc::EACCES),
-        }
-    }
-
-    fn rmdir(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: fuser::ReplyEmpty) {
-        match self.fs_interface.fuse_remove_inode(parent, name) {
-            Ok(()) => reply.ok(),
-            Err(RemoveFileError::WhError { source }) => reply.error(source.to_libc()),
-            Err(RemoveFileError::LocalDeletionFailed { io }) => {
-                reply.error(io.raw_os_error().expect(
-                    "Local creation error should always be the underling libc::open os error",
-                ))
-            }
-            Err(RemoveFileError::NonEmpty) => reply.error(libc::ENOTEMPTY),
-            Err(RemoveFileError::PermissionDenied) => reply.error(libc::EACCES),
-        }
-    }
-
-    fn rename(
-        &mut self,
-        _req: &Request<'_>,
-        parent: u64,
-        name: &OsStr,
-        new_parent: u64,
-        newname: &OsStr,
-        flags: u32,
-        reply: fuser::ReplyEmpty,
-    ) {
-        match self
-            .fs_interface
-            .rename(
-                parent,
-                new_parent,
-                &name //TODO move instead of ref because of the clone down the line
-                    .to_owned()
-                    .into_string()
-                    .expect("Don't support non unicode yet"), //TODO support OsString smartly
-                &newname
-                    .to_owned()
-                    .into_string()
-                    .expect("Don't support non unicode yet"),
-                flags & libc::RENAME_NOREPLACE == 0,
-            )
-            .inspect_err(|err| log::error!("rename: {err}"))
-        {
-            Ok(()) => reply.ok(),
-            Err(RenameError::WhError { source }) => reply.error(source.to_libc()),
-            Err(RenameError::LocalRenamingFailed { io }) => {
-                reply.error(io.raw_os_error().expect(
-                    "Local renaming error should always be the underling libc::open os error",
-                ))
-            }
-            Err(RenameError::LocalOverwriteFailed { io }) => reply.error(io.raw_os_error().expect(
-                "Local overwrite error should always be the underling libc::open os error",
-            )),
-            Err(RenameError::OverwriteNonEmpty) => reply.error(libc::ENOTEMPTY),
-            Err(RenameError::DestinationExists) => reply.error(libc::EEXIST),
-            Err(RenameError::SourceParentNotFolder) => reply.error(libc::ENOTDIR),
-            Err(RenameError::SourceParentNotFound) => reply.error(libc::ENOENT),
-            Err(RenameError::DestinationParentNotFolder) => reply.error(libc::ENOTDIR),
-            Err(RenameError::DestinationParentNotFound) => reply.error(libc::ENOENT),
-            Err(RenameError::ProtectedNameIsFolder) => reply.error(libc::ENOTDIR),
-            Err(RenameError::ReadFailed { source: _ }) => reply.error(libc::EIO), // TODO
-            Err(RenameError::PermissionDenied) => reply.error(libc::EACCES),
-            Err(RenameError::LocalWriteFailed { io }) => reply.error(
-                io.raw_os_error()
-                    .expect("Local read error should always be the underling os error"),
-            ),
-        }
-    }
-
-    fn open(&mut self, _req: &Request<'_>, ino: u64, flags: i32, reply: fuser::ReplyOpen) {
-        match AccessMode::from_libc(flags).and_then(|access| {
-            self.fs_interface
-                .open(ino, OpenFlags::from_libc(flags), access)
-        }) {
-            Ok(file_handle) => reply.opened(file_handle, flags as u32), // TODO - check flags ?,
-            Err(OpenError::WhError { source }) => reply.error(source.to_libc()),
-            Err(OpenError::MultipleAccessFlags) => reply.error(libc::EINVAL),
-            Err(OpenError::TruncReadOnly) => reply.error(libc::EPERM),
-            Err(OpenError::WrongPermissions) => reply.error(libc::EACCES),
-        };
     }
 
     fn write(
@@ -523,103 +525,98 @@ impl Filesystem for FuseController {
         }
     }
 
-    // ^ WRITING
-
-    // fn create(
-    //     &mut self,
-    //     req: &Request<'_>,
-    //     parent: u64,
-    //     name: &OsStr,
-    //     mode: u32,
-    //     _umask: u32,
-    //     flags: i32,
-    //     reply: fuser::ReplyCreate,
-    // ) {
-    //     let permissions = mode as u16;
-    //     let kind = match filetype_from_mode(mode) {
-    //         Some(kind) => kind,
-    //         None => {
-    //             // If it's not a file or a directory it's not yet supported
-    //             reply.error(libc::EPERM);
-    //             return;
-    //         }
-    //     };
-
-    //     match AccessMode::from_libc(flags)
-    //         .map_err(|source| CreateError::OpenError { source })
-    //         .and_then(|access| {
-    //             self.fs_interface.create(
-    //                 parent,
-    //                 name.to_string_lossy().to_string(),
-    //                 kind,
-    //                 OpenFlags::from_libc(flags),
-    //                 access,
-    //                 permissions,
-    //             )
-    //         }) {
-    //         Ok((inode, fh)) => reply.created(
-    //             &TTL,
-    //             &inode.meta.with_ids(req.uid(), req.gid()),
-    //             0,
-    //             fh,
-    //             flags as u32,
-    //         ),
-    //         Err(CreateError::MakeInode {
-    //             source: MakeInodeError::LocalCreationFailed { io },
-    //         }) => {
-    //             reply.error(io.raw_os_error().expect(
-    //                 "Local creation error should always be the underling libc::open os error",
-    //             ))
-    //         }
-    //         Err(CreateError::MakeInode {
-    //             source: MakeInodeError::WhError { source },
-    //         }) => reply.error(source.to_libc()),
-    //         Err(CreateError::MakeInode {
-    //             source: MakeInodeError::AlreadyExist,
-    //         }) => reply.error(libc::EEXIST),
-    //         Err(CreateError::MakeInode {
-    //             source: MakeInodeError::ParentNotFound,
-    //         }) => reply.error(libc::ENOENT),
-    //         Err(CreateError::MakeInode {
-    //             source: MakeInodeError::ParentNotFolder,
-    //         }) => reply.error(libc::ENOTDIR),
-    //         Err(CreateError::MakeInode {
-    //             source: MakeInodeError::ProtectedNameIsFolder,
-    //         }) => reply.error(libc::EISDIR),
-    //         Err(CreateError::WhError { source }) => reply.error(source.to_libc()),
-    //         Err(CreateError::OpenError {
-    //             source: OpenError::WhError { source },
-    //         }) => reply.error(source.to_libc()),
-    //         Err(CreateError::OpenError {
-    //             source: OpenError::MultipleAccessFlags,
-    //         }) => reply.error(libc::EINVAL),
-    //         Err(CreateError::OpenError {
-    //             source: OpenError::TruncReadOnly,
-    //         }) => reply.error(libc::EACCES),
-    //         Err(CreateError::OpenError {
-    //             source: OpenError::WrongPermissions,
-    //         }) => reply.error(libc::EPERM),
-    //     }
-    // }
-
-    fn release(
+    fn setxattr(
         &mut self,
         _req: &Request<'_>,
-        _ino: u64,
-        file_handle: u64,
-        _flags: i32,
-        _lock_owner: Option<u64>,
-        _flush: bool,
-        reply: fuser::ReplyEmpty,
+        ino: u64,
+        name: &OsStr,
+        data: &[u8],
+        flags: i32,
+        _position: u32, // Postion undocumented
+        reply: ReplyEmpty,
     ) {
-        match self.fs_interface.release(file_handle) {
-            Ok(()) => reply.ok(),
+        // NOTE - 65536 = limits.h: XATTR_SIZE_MAX = 65536
+        if data.len() > 65536 {
+            return reply.error(libc::ENOSPC);
+        }
+
+        let name = match osstr_to_str(name) {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
+        if flags == XATTR_CREATE || flags == XATTR_REPLACE {
+            match self.fs_interface.xattr_exists(ino, name) {
+                Ok(true) => {
+                    if flags == XATTR_CREATE {
+                        return reply.error(libc::EEXIST);
+                    }
+                }
+                Ok(false) => {
+                    if flags == XATTR_REPLACE {
+                        return reply.error(libc::ENODATA);
+                    }
+                }
+                Err(err) => {
+                    return reply.error(err.to_libc());
+                }
+            }
+        }
+
+        match self
+            .fs_interface
+            .network_interface
+            .set_inode_xattr(ino, name, data.to_vec())
+        {
+            Ok(_) => reply.ok(),
             Err(err) => reply.error(err.to_libc()),
         }
     }
 
+    fn removexattr(
+        &mut self,
+        _req: &fuser::Request<'_>,
+        ino: u64,
+        name: &OsStr,
+        reply: ReplyEmpty,
+    ) {
+        let name = match osstr_to_str(name) {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
+        match self
+            .fs_interface
+            .network_interface
+            .remove_inode_xattr(ino, name)
+        {
+            Ok(_) => reply.ok(),
+            Err(err) => reply.error(err.to_libc()),
+        }
+    }
+
+    fn fsync(&mut self, _req: &Request<'_>, ino: u64, fh: u64, _datasync: bool, reply: ReplyEmpty) {
+        let mut file_handles =
+            match FileHandleManager::write_lock(&self.fs_interface.file_handles, "release") {
+                Ok(handles) => handles,
+                Err(_) => {
+                    reply.error(libc::EWOULDBLOCK);
+                    return;
+                }
+            };
+        let handle = file_handles.handles.get_mut(&fh);
+        match self.fs_interface.flush(ino, handle) {
+            Ok(_) => reply.ok(),
+            Err(FlushError::DiffError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::PullError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::ReadError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::WriteError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::WhError { source }) => reply.error(source.to_libc()),
+        }
+    }
+
     fn access(&mut self, _req: &Request<'_>, ino: u64, mask: i32, reply: ReplyEmpty) {
-        let meta = match self.fs_interface.n_get_inode_attributes(ino) {
+        let meta = match self.fs_interface.get_inode_attributes(ino) {
             Ok(meta) => meta,
             Err(err) => {
                 log::error!("access({ino}, {mask}): {err}");
@@ -628,8 +625,10 @@ impl Filesystem for FuseController {
             }
         };
 
-        let mut flags = OpenFlags::default();
-        flags.exec = (mask & libc::X_OK) != 0;
+        let flags = OpenFlags {
+            exec: (mask & libc::X_OK) != 0,
+            ..Default::default()
+        };
         let mode = match mask & (libc::R_OK | libc::W_OK) {
             libc::F_OK => Ok(AccessMode::Void),
             libc::R_OK => Ok(AccessMode::Read),
@@ -649,18 +648,103 @@ impl Filesystem for FuseController {
             Err(OpenError::WhError { source }) => reply.error(source.to_libc()),
         };
     }
+
+    fn statfs(&mut self, _req: &Request<'_>, _ino: u64, reply: fuser::ReplyStatfs) {
+        match self.fs_interface.get_size_info() {
+            Ok(info) => {
+                let bsize = info.bsize as u64;
+                let blocks = (info.total_size as u64) / bsize;
+                let bfree = (info.free_size as u64) / bsize;
+
+                reply.statfs(
+                    blocks, bfree, bfree, info.files, // Total number of inodes (files)
+                    info.ffree, // Free inodes available
+                    info.bsize, // Block size in bytes
+                    255,        // namelen - maximum length of a file name
+                    info.bsize, // Fragment size (same as block size)
+                );
+            }
+            Err(e) => {
+                log::error!("statfs error: {}", e);
+                reply.error(libc::EIO);
+            }
+        }
+    }
+
+    fn symlink(
+        &mut self,
+        req: &Request<'_>,
+        parent_ino: u64,
+        link_name: &OsStr,
+        // target path is identicall to given to command,
+        // and is already relative to the link, not to CWD
+        target: &Path,
+        reply: ReplyEntry,
+    ) {
+        let name: InodeName = match link_name.to_owned().try_into() {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
+        let entry = match EntrySymlink::parse(target, &self.fs_interface.mountpoint) {
+            Ok(symlink) => FsEntry::Symlink(symlink),
+            Err(symlink) => FsEntry::Symlink(symlink),
+        };
+
+        match self
+            .fs_interface
+            .make_inode(parent_ino, name, SYMLINK_DEFAULT_PERMISSION, entry)
+        {
+            Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
+            Err(MakeInodeError::LocalCreationFailed { io }) => {
+                reply.error(io.raw_os_error().expect(
+                    "Local creation error should always be the underling libc::open os error",
+                ))
+            }
+            Err(MakeInodeError::WhError { source }) => reply.error(source.to_libc()),
+            Err(MakeInodeError::AlreadyExist) => reply.error(libc::EEXIST),
+            Err(MakeInodeError::ParentNotFound) => reply.error(libc::ENOENT),
+            Err(MakeInodeError::ParentNotFolder) => reply.error(libc::ENOTDIR),
+            Err(MakeInodeError::ProtectedNameIsFolder) => reply.error(libc::EISDIR),
+            Err(MakeInodeError::PermissionDenied) => reply.error(libc::EACCES),
+        }
+    }
+
+    // fn link(
+    //     &mut self,
+    //     _req: &Request<'_>,
+    //     ino: u64,
+    //     newparent: u64,
+    //     newname: &OsStr,
+    //     reply: ReplyEntry,
+    // ) {
+    //     log::warn!(
+    //         "[Not Implemented] link(ino: {ino:#x?}, newparent: {newparent:#x?}, newname: {newname:?})"
+    //     );
+    //     reply.error(libc::EPERM);
+    // }
 }
 
 pub fn mount_fuse(
-    mount_point: &WhPath,
+    mount_point: &Path,
+    allow_other_users: bool,
     fs_interface: Arc<FsInterface>,
 ) -> io::Result<BackgroundSession> {
-    let options = vec![
+    let mut options = vec![
         MountOption::RW,
-        // MountOption::DefaultPermissions,
-        MountOption::FSName(format!("wormhole@{}", mount_point.get_end())),
+        MountOption::DefaultPermissions,
+        MountOption::FSName(format!(
+            "wormhole@{}",
+            mount_point
+                .file_name()
+                .ok_or(io::ErrorKind::InvalidFilename)?
+                .to_string_lossy()
+        )),
     ];
+    if allow_other_users {
+        options.push(MountOption::AllowOther);
+    };
     let ctrl = FuseController { fs_interface };
 
-    fuser::spawn_mount2(ctrl, mount_point.to_string(), &options)
+    fuser::spawn_mount2(ctrl, mount_point, &options)
 }

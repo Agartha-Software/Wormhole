@@ -1,469 +1,366 @@
+use camino::{FromPathBufError, Iter, Utf8Path, Utf8PathBuf};
+use custom_error::custom_error;
+#[cfg(target_os = "linux")]
+use openat::AsPath;
 use serde::{Deserialize, Serialize};
-use std::ffi::{OsStr, OsString};
-use std::str::FromStr;
-use std::{fmt, path::Path};
+#[cfg(target_os = "linux")]
+use std::ffi::CString;
+use std::fmt::{Debug, Display};
+use std::io;
+use std::ops::Deref;
+use std::{
+    ffi::{OsStr, OsString},
+    path::{Path, PathBuf},
+};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Eq, Hash)]
-pub enum PathType {
-    Absolute,
-    Relative,
-    NoPrefix,
-    Empty,
+custom_error! {pub WhPathError
+    NotRelative = "Path is not relative",
+    ConversionError{source: ConversionError} = "{source}",
+    NotNormalized = "Path is not normal",
+    InvalidOperation = "Operation would compromise WhPath integrity",
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Eq, Hash)]
+custom_error! { pub InodeNameError{} = "Name contains forbidden character(s)" }
+custom_error! { pub ConversionError{} = "Could not be converted to valid UTF-8" }
+
+impl ConversionError {
+    pub fn to_libc(&self) -> i32 {
+        libc::EILSEQ
+    }
+
+    pub fn into_io(self) -> io::Error {
+        io::ErrorKind::InvalidData.into()
+    }
+}
+
+impl InodeNameError {
+    pub fn to_io(self) -> io::Error {
+        io::Error::new(io::ErrorKind::InvalidFilename, self.to_string())
+    }
+
+    pub fn to_libc(self) -> i32 {
+        libc::EACCES
+    }
+}
+
+impl From<FromPathBufError> for WhPathError {
+    fn from(_: FromPathBufError) -> Self {
+        Self::ConversionError {
+            source: ConversionError {},
+        }
+    }
+}
+
+impl WhPathError {
+    pub fn to_io(&self) -> io::Error {
+        match self {
+            WhPathError::NotRelative => io::Error::other(self.to_string()),
+            WhPathError::ConversionError { source } => {
+                io::Error::new(io::ErrorKind::InvalidData, source.to_string())
+            }
+            WhPathError::NotNormalized => {
+                io::Error::new(io::ErrorKind::InvalidFilename, self.to_string())
+            }
+            WhPathError::InvalidOperation => io::Error::other(self.to_string()),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct WhPath {
-    pub inner: String,
-    pub kind: PathType,
+    inner: Utf8PathBuf,
 }
 
-pub trait JoinPath {
-    fn as_str(&self) -> &str;
-}
+impl TryFrom<PathBuf> for WhPath {
+    type Error = WhPathError;
 
-impl JoinPath for OsStr {
-    fn as_str(&self) -> &str {
-        self.to_str().expect("OsStr conversion to str failed")
+    fn try_from(p: PathBuf) -> Result<Self, Self::Error> {
+        is_valid_for_whpath(&p)?;
+
+        Ok(Self {
+            inner: Utf8PathBuf::try_from(p)?,
+        })
     }
 }
 
-impl JoinPath for &str {
-    fn as_str(&self) -> &str {
-        self
+impl TryFrom<&Path> for WhPath {
+    type Error = WhPathError;
+
+    fn try_from(p: &Path) -> Result<Self, Self::Error> {
+        Self::try_from(p.to_path_buf())
     }
 }
 
-impl JoinPath for str {
-    fn as_str(&self) -> &str {
-        self
+impl TryFrom<OsString> for WhPath {
+    type Error = WhPathError;
+
+    fn try_from(p: OsString) -> Result<Self, Self::Error> {
+        Self::try_from(PathBuf::from(p))
     }
 }
 
-impl JoinPath for String {
-    fn as_str(&self) -> &str {
-        self.as_str()
+impl TryFrom<&OsStr> for WhPath {
+    type Error = WhPathError;
+
+    fn try_from(p: &OsStr) -> Result<Self, Self::Error> {
+        Self::try_from(PathBuf::from(p))
     }
 }
 
-impl JoinPath for Path {
-    fn as_str(&self) -> &str {
-        self.to_str().expect("Path conversion to str failed")
+impl TryFrom<String> for WhPath {
+    type Error = WhPathError;
+
+    fn try_from(p: String) -> Result<Self, Self::Error> {
+        Self::try_from(PathBuf::from(p))
     }
 }
 
-impl JoinPath for WhPath {
-    fn as_str(&self) -> &str {
+impl TryFrom<&str> for WhPath {
+    type Error = WhPathError;
+
+    fn try_from(p: &str) -> Result<Self, Self::Error> {
+        Self::try_from(PathBuf::from(p))
+    }
+}
+
+impl TryFrom<Utf8PathBuf> for WhPath {
+    type Error = WhPathError;
+
+    fn try_from(p: Utf8PathBuf) -> Result<Self, Self::Error> {
+        is_valid_for_whpath(&p)?;
+
+        Ok(Self { inner: p })
+    }
+}
+
+impl TryFrom<&Utf8Path> for WhPath {
+    type Error = WhPathError;
+
+    fn try_from(p: &Utf8Path) -> Result<Self, Self::Error> {
+        is_valid_for_whpath(p)?;
+
+        Ok(Self { inner: p.into() })
+    }
+}
+
+impl From<&InodeName> for WhPath {
+    /// From InodeName is UNCHECKED as InodeNames names should already be correct
+    fn from(value: &InodeName) -> Self {
+        let p = Utf8PathBuf::from(value);
+
+        Self { inner: p }
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl TryFrom<&winfsp::U16CStr> for WhPath {
+    type Error = WhPathError;
+
+    fn try_from(value: &winfsp::U16CStr) -> Result<Self, Self::Error> {
+        Self::try_from(value.to_string().map_err(|_| ConversionError {})?)
+    }
+}
+
+impl From<WhPath> for String {
+    fn from(val: WhPath) -> String {
+        val.inner.into_string()
+    }
+}
+
+impl<T> AsRef<T> for WhPath
+where
+    T: ?Sized,
+    Utf8PathBuf: AsRef<T>,
+{
+    fn as_ref(&self) -> &T {
+        self.inner.as_ref()
+    }
+}
+
+impl Deref for WhPath {
+    type Target = Utf8PathBuf;
+
+    fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl fmt::Display for PathType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let path_type: &str = match self {
-            &PathType::Absolute => "Asbolute",
-            &PathType::Relative => "Relative",
-            &PathType::NoPrefix => "NoPrefix",
-            &PathType::Empty => "Empty",
-        };
-        write!(f, "{}", path_type)
+#[cfg(target_os = "linux")]
+impl AsPath for &WhPath {
+    type Buffer = CString;
+    fn to_path(self) -> Option<CString> {
+        CString::new(self.inner.as_str().as_bytes()).ok()
     }
 }
 
-impl fmt::Display for WhPath {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.inner)
-    }
-}
-
-impl<T> From<&T> for WhPath
-where
-    T: JoinPath + ?Sized,
-{
-    fn from(path: &T) -> Self {
-        let mut wh_path = WhPath {
-            #[cfg(target_os = "windows")]
-            inner: path.as_str().to_string().replace("\\", "/"), // todo: properly handle backslashes
-            #[cfg(target_os = "linux")]
-            inner: path.as_str().to_string(),
-            kind: PathType::Empty,
-        };
-        wh_path.update_kind();
-        wh_path
-    }
-}
-
-impl Into<OsString> for &WhPath {
-    fn into(self) -> OsString {
-        OsString::from_str(&self.inner).expect("infaillable")
-    }
-}
-
-impl AsRef<Path> for WhPath {
-    fn as_ref(&self) -> &Path {
-        Path::new(&self.inner)
+impl Display for WhPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.inner.as_str(), f)
     }
 }
 
 impl WhPath {
-    pub fn new() -> Self {
-        WhPath {
-            inner: String::from(""),
-            kind: PathType::Empty,
+    pub fn root() -> Self {
+        Self {
+            inner: Utf8PathBuf::default(),
         }
     }
 
-    /// Add a segment to the current WhPath. If the segment starts with a `/` or `./` or `../`, the leading slash is removed.
-    /// If the current WhPath is empty, the segment is added as is.
-    /// If the current WhPath is not empty, the segment is added after adding a slash at the end of the current WhPath.
-    /// # Examples
+    /// Allows for a easy path.typed_ref<T>() instead of a heavy rust type notation of AsRef
+    pub fn typed_ref<T>(&self) -> &T
+    where
+        T: ?Sized,
+        Utf8PathBuf: AsRef<T>,
+    {
+        self.as_ref()
+    }
+
+    /// Create a relative path from a full path
     ///
-    pub fn push<T>(&mut self, segment: &T) -> &Self
-    where
-        T: JoinPath + ?Sized,
-    {
-        self.add_last_slash();
-        let seg = Self::remove_leading_slash(segment.as_str());
-        self.inner = format!("{}{}", self.inner, seg);
-        self
+    /// Useful to remove the pod's mountpoint from the full file path
+    pub fn make_relative<T: AsRef<Path>>(
+        full_path: T,
+        make_relative_to: T,
+    ) -> Result<Self, WhPathError> {
+        let relative_path = full_path
+            .as_ref()
+            .strip_prefix(make_relative_to)
+            .map_err(|_| WhPathError::InvalidOperation)?;
+        Self::try_from(relative_path)
     }
 
-    /// Join the current path with a new segment. If the segment starts with a `/` or `./` or `../`, the leading slash is removed.
-    /// If the current path is empty, the segment is added as is.
-    /// If the current path is not empty, the segment is added after adding a slash at the end of the current path.
-    /// If the segment is hidden (`is_hidden()` return true), the segment is added as is, without adding a slash.
-    /// # Examples
+    #[cfg(target_os = "windows")]
+    /// On Windows, '/' is not considered absolute (see PathBuf impl).
+    /// However "\\" (that should be considered relative) is not considered same as "" (also relative)
     ///
-    pub fn join<T>(&self, segment: &T) -> Self
-    where
-        T: JoinPath + ?Sized,
-    {
-        let mut pth = self.clone();
-
-        pth.add_last_slash();
-
-        let seg = Self::remove_leading_slash(segment.as_str());
-        pth.inner = format!("{}{}", pth.inner, seg);
-        pth
+    /// Should be used with winfsp that gives paths starting with "\\"
+    pub fn from_fake_absolute(path: &winfsp::U16CStr) -> Result<Self, WhPathError> {
+        path.to_string()
+            .map_err(|_| ConversionError {})?
+            .trim_start_matches("\\")
+            .try_into()
     }
 
-    /// Remove the requested part
-    /// “/my/file/path/”.remove(“file/path”) == “/my/”
-    pub fn remove<T>(&mut self, delete_this_part: &T) -> &Self
-    where
-        T: JoinPath + ?Sized,
-    {
-        self.inner = self.inner.replace(delete_this_part.as_str(), "");
-        self.delete_double_slash();
-        self.convert_path(self.kind.clone());
-        self
+    pub fn iter(&self) -> Iter<'_> {
+        self.inner.iter()
     }
 
-    /// Modify the path to match the new name.
-    /// Can only modify the last element of the path.
-    pub fn rename<T>(&mut self, file_name: &T) -> &Self
-    where
-        T: JoinPath + ?Sized,
-    {
-        let file = Self::remove_leading_slash(file_name.as_str());
-        if let Some(pos) = self.inner.rfind('/') {
-            if pos == self.inner.len() - 1 {
-                self.inner.pop();
-                self.rename(file_name);
-                self.inner.push('/');
-                return self;
-            }
-            self.inner = format!("{}/{}", &self.inner[..pos], file);
-        } else {
-            self.inner = file.to_string();
-        }
-        self.update_kind();
-        self
+    pub fn push(&mut self, path: WhPath) {
+        self.inner.push(path.inner);
     }
 
-    pub fn kind(&self) -> PathType {
-        if self.is_empty() {
-            return PathType::Empty;
-        }
-        if self.inner.chars().next() == Some('.') {
-            return PathType::Relative;
-        } else if self.inner.chars().next() == Some('/') {
-            return PathType::Absolute;
-        } else {
-            return PathType::NoPrefix;
+    pub fn join(&self, path: &WhPath) -> Self {
+        Self {
+            inner: self.inner.join(&path.inner),
         }
     }
 
-    pub fn update_kind(&mut self) {
-        self.kind = self.kind();
-    }
-
-    /// Change the path for "./path"
-    pub fn set_relative(mut self) -> Self {
-        if !self.is_empty() && !Self::is_relative(&self) {
-            self.convert_path(PathType::Relative);
-        }
-        self
-    }
-
-    /// Change the path for "/path"
-    pub fn set_absolute(mut self) -> Self {
-        if !self.is_empty() && !Self::is_absolute(&self) {
-            self.convert_path(PathType::Absolute);
-        }
-        self
-    }
-
-    /// Change the path for "path"
-    pub fn remove_prefix(mut self) -> Self {
-        if !self.is_empty() && !Self::has_no_prefix(&self) {
-            self.convert_path(PathType::NoPrefix);
-        }
-        self
-    }
-
-    pub fn is_relative(&self) -> bool {
-        self.kind == PathType::Relative
-    }
-
-    pub fn is_absolute(&self) -> bool {
-        self.kind == PathType::Absolute
-    }
-
-    pub fn has_no_prefix(&self) -> bool {
-        self.kind == PathType::NoPrefix
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.inner.is_empty()
-    }
-
-    /// Put or not a '/' at the end
-    pub fn set_end(&mut self, end: bool) -> &Self {
-        if end {
-            self.add_last_slash();
-        } else {
-            self.remove_last_slash();
-        };
-        self
-    }
-
-    /// Return true if the requested path is in the original path
-    pub fn is_in<T>(&self, segment: &T) -> bool
-    where
-        T: JoinPath + ?Sized,
-    {
-        self.inner.starts_with(segment.as_str())
-    }
-
-    /// Give the last element of the path
-    pub fn get_end(&self) -> String {
-        let mut path = self.clone();
-        path.remove_last_slash();
-        match path.inner.rsplit('/').next() {
-            Some(last) => last.to_string(),
-            _none => String::new(),
-        }
-    }
-
-    /// Returns all but the last element
-    pub fn get_folder(&self) -> String {
-        let mut path = self.clone();
-        path.remove_last_slash();
-        match path.inner.rsplit_once('/') {
-            Some((first, _)) => first.to_string(),
-            _none => String::new(),
-        }
-    }
-
-    pub fn split_folder_file(&self) -> (String, String) {
-        let mut path = self.clone();
-        path.remove_last_slash();
-        match path.inner.rsplit_once('/') {
-            Some((first, last)) => (first.to_string(), last.to_string()),
-            None => (String::new(), path.inner),
-        }
-    }
-
-    pub fn pop(&mut self) -> &Self {
-        self.remove_last_slash();
-        if let Some(pos) = self.inner.rfind('/') {
-            self.inner = self.inner[..(pos + 1)].to_string();
-        } else {
-            self.convert_path(PathType::Empty);
-        }
-        return self;
-    }
-
-    pub fn to_vector(&mut self) -> Vec<String> {
-        let mut elements: Vec<String> = vec![];
-
-        while !self.is_empty() {
-            if !self.get_end().is_empty() {
-                elements.push(self.get_end());
-            }
-            self.pop();
-        }
-        let elements = elements.into_iter().rev().collect();
-        elements
-    }
-
-    //FIXME - Do I need to modify it for Windows by adding the '\'?
-    //FIXME - Do I need to modify it to take hidden files into account?
-    fn remove_leading_slash(segment: &str) -> &str {
-        let mut j = 0;
-        let mut i = 0;
-        let chars: Vec<char> = segment.chars().collect();
-        while i < chars.len() {
-            if chars[i] == '.' {
-                if i + 1 < chars.len() && (chars[i + 1] == '/' || chars[i + 1] == '.') {
-                    i += 1;
-                    j += 2;
-                } else {
-                    break;
-                }
-            } else if chars[i] == '/' {
-                j += 1;
-            } else {
-                break;
-            }
-            i += 1;
-        }
-        return &segment[j..];
-    }
-
-    //FIXME - Should we modify it for Windows by adding the ‘\’?
-    fn add_last_slash(&mut self) -> &Self {
-        if self.kind != PathType::Empty && self.inner.chars().last() != Some('/') {
-            self.inner = format!("{}/", self.inner);
-        }
-        return self;
-    }
-
-    //FIXME - Should we modify it for Windows by adding the ‘\’?
-    fn remove_last_slash(&mut self) -> &Self {
-        if let Some(pos) = self.inner.rfind('/') {
-            if pos == self.inner.len() - 1 {
-                self.inner.pop();
-            }
-        }
-        return self;
-    }
-
-    fn delete_double_slash(&mut self) -> &Self {
-        let mut i = 0;
-        let mut index = 0;
-        while index < self.inner.len() {
-            i = if self.inner.as_bytes()[index] == b'/' {
-                i + 1
-            } else {
-                0
-            };
-            if i == 2 {
-                self.inner.remove(index);
-                i -= 1;
-                continue;
-            }
-
-            index += 1;
-        }
-        return self;
-    }
-
-    //FIXME - Should we modify it for Windows by adding the ‘\’?
-    fn convert_path(&mut self, pathtype: PathType) -> &Self {
-        if pathtype == PathType::Empty || self.inner == String::new() {
-            self.inner = String::new();
-            self.kind = PathType::Empty;
-            return self;
-        }
-        self.inner = Self::remove_leading_slash(&self.inner.clone()).to_string();
-        if pathtype == PathType::Absolute {
-            self.inner = format!("/{}", self.inner);
-        }
-        if pathtype == PathType::Relative {
-            self.inner = format!("./{}", self.inner);
-        } else {
-        }
-        self.update_kind();
-        return self;
+    pub fn parent(&self) -> Option<WhPath> {
+        // REVIEW - clones for now, as can't make a Whpath that has '&Utf8Path' as inner type
+        Some(Self {
+            inner: self.inner.parent()?.into(),
+        })
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn test_whpath_remove_leading_slash() {
-        assert_eq!(WhPath::remove_leading_slash("bar"), "bar");
-        assert_eq!(WhPath::remove_leading_slash("./bar"), "bar");
-        assert_eq!(WhPath::remove_leading_slash("/bar"), "bar");
-        assert_eq!(WhPath::remove_leading_slash(""), "");
-        assert_eq!(WhPath::remove_leading_slash(".bar"), ".bar");
+pub fn osstring_to_string(osstr: OsString) -> Result<String, ConversionError> {
+    osstr.into_string().map_err(|_| ConversionError {})
+}
+
+pub fn osstr_to_str(osstr: &OsStr) -> Result<&str, ConversionError> {
+    osstr.to_str().ok_or(ConversionError {})
+}
+
+/// Checks for:
+/// - Path is NOT absolute
+/// - Path is normalized
+pub fn is_valid_for_whpath<T: AsRef<Path>>(p: T) -> Result<(), WhPathError> {
+    let p = p.as_ref();
+
+    if p.is_absolute() {
+        return Err(WhPathError::NotRelative);
+    }
+    if p.components()
+        .any(|c| c.as_os_str() == ".." || c.as_os_str() == ".")
+    {
+        return Err(WhPathError::NotNormalized);
+    }
+    Ok(())
+}
+
+// SECTION Name
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct InodeName(String);
+
+impl InodeName {
+    pub fn check(name: &str) -> Result<(), InodeNameError> {
+        let patterns = ["\\", "/"];
+        match patterns.into_iter().any(|pat| name.contains(pat)) {
+            true => Err(InodeNameError {}),
+            false => Ok(()),
+        }
     }
 
-    #[test]
-    fn test_whpath_add_last_slash() {
-        let mut empty = WhPath::new();
-        let mut basic_folder = WhPath::from("foo/");
-        let mut no_slash = WhPath::from("baz");
-
-        assert_eq!(empty.add_last_slash(), &WhPath::new());
-        assert_eq!(basic_folder.add_last_slash(), &WhPath::from("foo/"));
-        assert_eq!(no_slash.add_last_slash(), &WhPath::from("baz/"));
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
     }
+}
 
-    #[test]
-    fn test_whpath_remove_last_slash() {
-        let mut empty = WhPath::new();
-        let mut basic_folder = WhPath::from("foo/");
-        let mut no_slash = WhPath::from("baz/bar");
+impl TryFrom<String> for InodeName {
+    type Error = InodeNameError;
 
-        assert_eq!(empty.remove_last_slash(), &WhPath::new());
-        assert_eq!(basic_folder.remove_last_slash(), &WhPath::from("foo"));
-        assert_eq!(no_slash.remove_last_slash(), &WhPath::from("baz/bar"));
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        InodeName::check(&value)?;
+        Ok(Self(value))
     }
+}
 
-    #[test]
-    fn test_whpath_delete_double_slash() {
-        let mut empty = WhPath::new();
-        let mut basic_folder = WhPath::from("foo/");
-        let mut mid_double_slash = WhPath::from("baz//bar");
-        let mut end_double_slash = WhPath::from("baz/bar//");
+#[cfg(target_os = "windows")]
+impl TryFrom<&winfsp::U16CStr> for InodeName {
+    type Error = InodeNameError;
 
-        assert_eq!(empty.delete_double_slash(), &WhPath::new());
-        assert_eq!(basic_folder.delete_double_slash(), &WhPath::from("foo/"));
-        assert_eq!(
-            mid_double_slash.delete_double_slash(),
-            &WhPath::from("baz/bar")
-        );
-        assert_eq!(
-            end_double_slash.delete_double_slash(),
-            &WhPath::from("baz/bar/")
-        );
+    fn try_from(value: &winfsp::U16CStr) -> Result<Self, Self::Error> {
+        Self::try_from(value.to_string().map_err(|_| InodeNameError {})?)
     }
+}
 
-    #[test]
-    fn test_whpath_convert_path() {
-        let mut path = WhPath::from("foo");
-        let mut relative = WhPath::from("./foo");
-        let mut no_prefix = WhPath::from("foo");
-        let mut absolute = WhPath::from("/foo");
-        let mut empty = WhPath::from("");
+impl TryFrom<OsString> for InodeName {
+    type Error = InodeNameError;
 
-        assert_eq!(relative.convert_path(PathType::NoPrefix), &no_prefix);
-        assert_eq!(no_prefix.convert_path(PathType::Absolute), &absolute);
-        assert_eq!(absolute.convert_path(PathType::Empty), &empty);
-        assert_eq!(empty.convert_path(PathType::Absolute), &WhPath::new());
-        assert_eq!(
-            path.convert_path(PathType::Relative),
-            &WhPath::from("./foo")
-        );
+    fn try_from(p: OsString) -> Result<Self, Self::Error> {
+        Self::try_from(osstring_to_string(p).map_err(|_| InodeNameError {})?)
     }
+}
 
-    #[test]
-    fn test_whpath_to_vector() {
-        let mut path = WhPath::from("foo/pouet/lol");
+impl From<InodeName> for String {
+    fn from(val: InodeName) -> String {
+        val.0
+    }
+}
 
-        assert_eq!(path.to_vector(), vec!["foo", "pouet", "lol"]);
+impl<T> AsRef<T> for InodeName
+where
+    T: ?Sized,
+    String: AsRef<T>,
+{
+    fn as_ref(&self) -> &T {
+        self.0.as_ref()
+    }
+}
+
+impl<T> PartialEq<T> for InodeName
+where
+    T: ?Sized + std::cmp::PartialEq,
+    String: AsRef<T>,
+{
+    fn eq(&self, other: &T) -> bool {
+        other == self.0.as_ref()
+    }
+}
+
+impl From<&WhPath> for InodeName {
+    fn from(value: &WhPath) -> Self {
+        Self((*value).file_name().unwrap().to_owned()) // NOTE - unwrap allowed as only fails if path end on "..", which can't be the case on a WhPath
     }
 }
