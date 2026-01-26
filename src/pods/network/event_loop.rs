@@ -74,8 +74,8 @@ impl EventLoop {
                 },
                 to_network = self.to_network.recv() => match to_network {
                     Some(ToNetworkMessage::AnswerMessage(message, status, peer)) => self.send_with_answer(message, status, peer),
-                    Some(ToNetworkMessage::SpecificMessage(message, to)) => self.send_to_multiple(message, to),
-                    Some(ToNetworkMessage::BroadcastMessage(message)) => self.send_to_multiple(message, self.swarm.connected_peers().cloned().collect()),
+                    Some(ToNetworkMessage::SpecificMessage(message, to)) => self.send_to_multiple(message, &to),
+                    Some(ToNetworkMessage::BroadcastMessage(message)) => self.send_to_multiple(message, &self.swarm.connected_peers().copied().collect::<Vec<_>>()),
                     Some(ToNetworkMessage::CloseNetwork) => {
                         self.close();
                         return;
@@ -103,10 +103,10 @@ impl EventLoop {
         self.answers.insert(answer, status);
     }
 
-    fn send_to_multiple(&mut self, message: Request, mut to: Vec<PeerId>) {
-        if let Some(last) = to.pop() {
+    fn send_to_multiple(&mut self, message: Request, to: &[PeerId]) {
+        if let Some(last) = to.last() {
             // Just to don't clone the message on first peer, lot's of message have only one peer and messages can be very heavy quickly
-            for peer in to {
+            for peer in &to[1..] {
                 self.swarm
                     .behaviour_mut()
                     .request_response
@@ -192,11 +192,11 @@ impl EventLoop {
             Request::Inode(inode) => self.fs_interface.recept_inode(inode).map_err(into_boxed_io),
             Request::AddHosts(id, hosts) => self
                 .fs_interface
-                .recept_add_hosts(id, hosts)
+                .recept_add_hosts(id, &hosts)
                 .map_err(into_boxed_io),
             Request::RemoveHosts(id, hosts) => self
                 .fs_interface
-                .recept_remove_hosts(id, hosts)
+                .recept_remove_hosts(id, &hosts)
                 .map_err(into_boxed_io),
             Request::EditMetadata(id, meta) => self
                 .fs_interface

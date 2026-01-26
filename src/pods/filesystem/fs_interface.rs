@@ -140,16 +140,16 @@ impl FsInterface {
             .expect("disk error");
 
         self.network_interface
-            .add_inode_hosts(ino, [self.network_interface.id].to_vec())?;
+            .add_inode_hosts(ino, &[self.network_interface.id])?;
         Ok(Response::Success)
     }
 
-    pub fn recept_add_hosts(&self, id: Ino, hosts: Vec<PeerId>) -> WhResult<Response> {
+    pub fn recept_add_hosts(&self, id: Ino, hosts: &[PeerId]) -> WhResult<Response> {
         self.network_interface.aknowledge_new_hosts(id, hosts)?;
         Ok(Response::Success)
     }
 
-    pub fn recept_remove_hosts(&self, id: Ino, hosts: Vec<PeerId>) -> WhResult<Response> {
+    pub fn recept_remove_hosts(&self, id: Ino, hosts: &[PeerId]) -> WhResult<Response> {
         if hosts.contains(&self.network_interface.id) {
             if let Err(e) = self.disk.remove_file(
                 &ITree::read_lock(&self.network_interface.itree, "recept_remove_hosts")?

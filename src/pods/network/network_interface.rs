@@ -132,25 +132,25 @@ impl NetworkInterface {
         ITree::write_lock(&self.itree, "acknowledge_unregister_inode")?.remove_inode(id)
     }
 
-    pub fn add_inode_hosts(&self, ino: Ino, hosts: Vec<PeerId>) -> WhResult<()> {
+    pub fn add_inode_hosts(&self, ino: Ino, hosts: &[PeerId]) -> WhResult<()> {
         ITree::write_lock(&self.itree, "network_interface::update_hosts")?
-            .add_inode_hosts(ino, hosts.clone())?;
+            .add_inode_hosts(ino, hosts)?;
 
         if !ITree::is_local_only(ino) {
             self.to_network_message_tx
                 .send(ToNetworkMessage::BroadcastMessage(Request::AddHosts(
-                    ino, hosts,
+                    ino, hosts.to_vec(),
                 )))
                 .expect("update_remote_hosts: unable to update modification on the network thread");
         }
         Ok(())
     }
 
-    pub fn aknowledge_new_hosts(&self, id: Ino, new_hosts: Vec<PeerId>) -> WhResult<()> {
+    pub fn aknowledge_new_hosts(&self, id: Ino, new_hosts: &[PeerId]) -> WhResult<()> {
         ITree::write_lock(&self.itree, "aknowledge_new_hosts")?.add_inode_hosts(id, new_hosts)
     }
 
-    pub fn aknowledge_hosts_removal(&self, id: Ino, new_hosts: Vec<PeerId>) -> WhResult<()> {
+    pub fn aknowledge_hosts_removal(&self, id: Ino, new_hosts: &[PeerId]) -> WhResult<()> {
         ITree::write_lock(&self.itree, "aknowledge_hosts_removal")?
             .remove_inode_hosts(id, new_hosts)
     }

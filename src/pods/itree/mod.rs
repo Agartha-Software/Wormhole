@@ -359,11 +359,11 @@ impl ITree {
     ///
     /// Only works on inodes pointing files (no folders)
     /// Ignore already existing hosts to avoid duplicates
-    pub fn add_inode_hosts(&mut self, ino: Ino, mut new_hosts: Vec<PeerId>) -> WhResult<()> {
+    pub fn add_inode_hosts(&mut self, ino: Ino, new_hosts: &[PeerId]) -> WhResult<()> {
         let inode = self.get_inode_mut(ino)?;
 
         if let FsEntry::File(hosts) = &mut inode.entry {
-            hosts.append(&mut new_hosts);
+            hosts.extend_from_slice(new_hosts);
             hosts.sort();
             hosts.dedup();
             Ok(())
@@ -375,7 +375,7 @@ impl ITree {
     /// Remove hosts from an inode
     ///
     /// Only works on inodes pointing files (no folders)
-    pub fn remove_inode_hosts(&mut self, ino: Ino, remove_hosts: Vec<PeerId>) -> WhResult<()> {
+    pub fn remove_inode_hosts(&mut self, ino: Ino, remove_hosts: &[PeerId]) -> WhResult<()> {
         let inode = self.get_inode_mut(ino)?;
 
         match &mut inode.entry {

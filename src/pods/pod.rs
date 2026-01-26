@@ -210,7 +210,7 @@ impl Pod {
     /// for a given file, will try to send it to one host, trying each until succes
     async fn send_file_to_possible_hosts(
         &self,
-        possible_hosts: &Vec<PeerId>,
+        possible_hosts: &[PeerId],
         ino: Ino,
     ) -> Result<(), PodStopError> {
         let file_content =
