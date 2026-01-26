@@ -5,14 +5,14 @@
 
 pkgname=wormhole
 pkgver=0.4.0
-pkgrel=1
+pkgrel=2
 pkgdesc='Simple decentralized file storage'
 url='https://github.com/Agartha-Software/Wormhole'
 license=('AGPL-3.0-only')
 makedepends=(cargo git)
 depends=(fuse3 gcc-libs)
 arch=('x86_64')
-source=('git+https://github.com/Agartha-Software/Wormhole.git#commit=5b585db061b5e47d6e24f445a2930678ac9b933d')
+source=('git+https://github.com/Agartha-Software/Wormhole.git#commit=b655263c6dc9e267390b58637f94472ceadf8482')
 b2sums=("SKIP") # will be added once we point a real release
 
 prepare() {
