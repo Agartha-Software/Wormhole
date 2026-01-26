@@ -8,8 +8,11 @@ use crate::{
     config::GlobalConfig,
     error::{WhError, WhResult},
     ipc::answers::PeerInfo,
-    network::message::{RedundancyMessage, Request, Response, ToNetworkMessage},
-    pods::{filesystem::make_inode::MakeInodeError, whpath::InodeName},
+    network::message::{Request, Response, ToNetworkMessage},
+    pods::{
+        filesystem::make_inode::MakeInodeError, network::redundancy::RedundancyMessage,
+        whpath::InodeName,
+    },
 };
 use libp2p::{Multiaddr, PeerId};
 use parking_lot::RwLock;
@@ -203,6 +206,12 @@ impl NetworkInterface {
             .expect("network_interface::apply_redundancy: tx error");
     }
 
+    pub fn check_integrity(&self) {
+        self.to_redundancy_tx
+            .send(RedundancyMessage::CheckIntegrity)
+            .expect("network_interface::apply_redundancy: tx error");
+    }
+
     // !SECTION ^ Redundancy related
 
     // SECTION Node related
@@ -267,9 +276,7 @@ impl NetworkInterface {
                 hosts.retain(|h| *h != addr);
             }
         }
-        self.to_redundancy_tx
-            .send(RedundancyMessage::CheckIntegrity)
-            .unwrap();
+        self.check_integrity();
         Ok(Response::Success)
     }
 }

@@ -322,6 +322,7 @@ impl EventLoop {
                     .peers
                     .write()
                     .push(peer_id);
+                self.fs_interface.network_interface.check_integrity();
             }
             e => log::trace!("identify: {e:?}"),
         }
