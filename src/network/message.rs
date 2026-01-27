@@ -135,7 +135,7 @@ impl fmt::Debug for Request {
 /// this distinction is because of typing
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerInfoNet {
-    pub name: String,
+    pub nickname: String,
     pub listen_addrs: Vec<Multiaddr>,
 }
 
@@ -186,7 +186,7 @@ impl PeerInfoNet {
 
     pub fn to_ipc(&self) -> crate::ipc::PeerInfo {
         crate::ipc::PeerInfo {
-            name: self.name.clone(),
+            nickname: self.nickname.clone(),
             listen_addrs: self
                 .listen_addrs
                 .iter()

@@ -11,7 +11,6 @@ use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
 
 use crate::{
     network::{
-        self,
         message::{Request, Response, ToNetworkMessage},
     },
     pods::{
@@ -316,22 +315,7 @@ impl EventLoop {
                         .send_request(&peer_id, Request::RequestFs);
                     self.need_initialisation = Some(Some(request_id));
                 };
-                self.fs_interface
-                    .network_interface
-                    .peers_info
-                    .write()
-                    .insert(
-                        peer_id,
-                        network::PeerInfo {
-                            name: info.agent_version,
-                            listen_addrs: info.listen_addrs,
-                        },
-                    );
-                self.fs_interface
-                    .network_interface
-                    .peers
-                    .write()
-                    .push(peer_id);
+                self.fs_interface.network_interface.connect_peer(peer_id, info)
             }
             e => log::trace!("identify: {e:?}"),
         }

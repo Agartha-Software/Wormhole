@@ -13,7 +13,7 @@ use crate::{
     },
     pods::{filesystem::make_inode::MakeInodeError, whpath::InodeName},
 };
-use libp2p::{Multiaddr, PeerId};
+use libp2p::{Multiaddr, PeerId, identify::Info};
 use parking_lot::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -285,6 +285,17 @@ impl NetworkInterface {
             peers_address_list,
             global_config,
         ))
+    }
+
+    pub fn connect_peer(&self, peer_id: PeerId, info: Info) {
+        self.peers_info.write().insert(
+            peer_id,
+            network::PeerInfo {
+                nickname: info.agent_version,
+                listen_addrs: info.listen_addrs,
+            },
+        );
+        self.peers.write().push(peer_id);
     }
 
     pub fn disconnect_peer(&self, addr: PeerId) -> WhResult<Response> {

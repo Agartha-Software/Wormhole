@@ -135,6 +135,10 @@ pub struct NewArgs {
     /// Network to join
     #[arg(long, short)]
     pub url: Option<String>,
+    /// nickname name to report to the network
+    /// defaults to your machine's hostname + ':' + name of the pod
+    #[arg(long, short='k')]
+    pub nickname: Option<String>,
     /// Ip address this Pod listen [default: 127.0.0.1]
     #[arg(long, short)]
     pub ip_address: Option<IpAddr>,

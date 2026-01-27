@@ -11,6 +11,7 @@ use std::path::PathBuf;
 pub struct PodPrototype {
     pub global_config: GlobalConfig,
     pub name: String,
+    pub nickname: String,
     pub listen_addrs: Vec<Multiaddr>,
     pub mountpoint: PathBuf,
     pub should_restart: bool,
@@ -40,6 +41,7 @@ impl PodPrototype {
             frozen: true,
             listen_addrs,
             name: self.name.clone(),
+            nickname: self.nickname.clone(),
             connected_peers: vec![],
             mount: self.mountpoint.clone(),
         }

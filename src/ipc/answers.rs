@@ -94,7 +94,7 @@ pub enum StatusAnswer {
 /// this distinction is because of typing
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerInfoIPC {
-    pub name: String,
+    pub nickname: String,
     pub listen_addrs: Vec<String>,
 }
 
@@ -108,8 +108,8 @@ impl std::fmt::Display for PeerInfoIPC {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Name: \"{}\", Addresses: [ {} ]",
-            self.name,
+            "Nickname: \"{}\", Addresses: [ {} ]",
+            self.nickname,
             self.listen_addrs
                 .join(", ")
         )
@@ -121,6 +121,7 @@ pub struct InspectInfo {
     pub frozen: bool,
     pub listen_addrs: Vec<String>,
     pub name: String,
+    pub nickname: String,
     pub connected_peers: Vec<PeerInfoIPC>,
     pub mount: PathBuf,
 }
