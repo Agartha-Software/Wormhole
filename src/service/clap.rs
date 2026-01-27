@@ -13,6 +13,6 @@ pub struct ServiceArgs {
     pub clean: bool,
     /// nickname name to report to the network
     /// defaults to your machine's hostname
-    #[arg(long, short='n')]
+    #[arg(long, short = 'n')]
     pub nickname: Option<String>,
 }
