@@ -1,7 +1,7 @@
 use interprocess::local_socket::tokio::Stream;
 use std::io;
 
-use crate::ipc::answers::{InspectAnswer, PeerInfo};
+use crate::ipc::{self, answers::InspectAnswer};
 
 use crate::{
     cli::connection::{recieve_answer, send_command},
@@ -9,7 +9,7 @@ use crate::{
     ipc::commands::{Command, PodId},
 };
 
-fn display_peers(peers: Vec<PeerInfo>) -> String {
+fn display_peers(peers: Vec<ipc::PeerInfo>) -> String {
     if peers.is_empty() {
         "[ ]".to_string()
     } else {

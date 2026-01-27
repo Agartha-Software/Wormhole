@@ -7,8 +7,10 @@ use std::{
 use crate::{
     config::GlobalConfig,
     error::{WhError, WhResult},
-    ipc::answers::PeerInfo,
-    network::message::{RedundancyMessage, Request, Response, ToNetworkMessage},
+    network::{
+        self,
+        message::{RedundancyMessage, Request, Response, ToNetworkMessage},
+    },
     pods::{filesystem::make_inode::MakeInodeError, whpath::InodeName},
 };
 use libp2p::{Multiaddr, PeerId};
@@ -28,7 +30,7 @@ pub struct NetworkInterface {
     pub global_config: Arc<RwLock<GlobalConfig>>,
     pub listen_addrs: Arc<RwLock<HashSet<Multiaddr>>>,
     pub peers: Arc<RwLock<Vec<PeerId>>>,
-    pub peers_info: Arc<RwLock<HashMap<PeerId, PeerInfo>>>, // Only used to store state for restart and inspect
+    pub peers_info: Arc<RwLock<HashMap<PeerId, network::PeerInfo>>>, // Only used to store state for restart and inspect
 }
 
 impl NetworkInterface {

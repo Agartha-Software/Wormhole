@@ -10,8 +10,10 @@ use libp2p::{
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
 
 use crate::{
-    ipc::answers::PeerInfo,
-    network::message::{Request, Response, ToNetworkMessage},
+    network::{
+        self,
+        message::{Request, Response, ToNetworkMessage},
+    },
     pods::{
         filesystem::fs_interface::FsInterface,
         itree::creation::initiate_itree,
@@ -320,7 +322,7 @@ impl EventLoop {
                     .write()
                     .insert(
                         peer_id,
-                        PeerInfo {
+                        network::PeerInfo {
                             name: info.agent_version,
                             listen_addrs: info.listen_addrs,
                         },

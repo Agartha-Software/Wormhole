@@ -1,4 +1,3 @@
-use libp2p::Multiaddr;
 use serde::{Deserialize, Serialize};
 use std::{net::IpAddr, path::PathBuf};
 use ts_rs::TS;
@@ -44,7 +43,7 @@ pub struct NewRequest {
     pub mountpoint: PathBuf,
     pub ip_address: Option<IpAddr>,
     pub port: Option<u16>,
-    pub hosts: Vec<Multiaddr>,
+    pub hosts: Vec<String>,
     pub allow_other_users: bool,
 }
 

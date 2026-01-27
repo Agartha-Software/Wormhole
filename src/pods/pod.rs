@@ -8,7 +8,11 @@ use crate::data::tree_hosts::CliHostTree;
 use crate::error::WhError;
 #[cfg(target_os = "linux")]
 use crate::fuse::fuse_impl::mount_fuse;
-use crate::ipc::answers::{InspectInfo, PeerInfo, PodCreationError};
+use crate::ipc::{
+    self,
+    answers::{InspectInfo, PodCreationError},
+};
+use crate::network;
 use crate::network::message::{Request, Response, ToNetworkMessage};
 #[cfg(target_os = "linux")]
 use crate::pods::disk_managers::unix_disk_manager::UnixDiskManager;
@@ -26,7 +30,7 @@ use crate::winfsp::winfsp_impl::{mount_fsp, WinfspHost};
 use custom_error::custom_error;
 #[cfg(target_os = "linux")]
 use fuser;
-use libp2p::PeerId;
+use libp2p::{multiaddr, PeerId};
 use parking_lot::RwLock;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -105,7 +109,11 @@ impl Pod {
             .entrypoints
             .iter()
             .cloned()
-            .find_map(|peer| swarm.dial(peer).ok())
+            .find_map(|peer| {
+                multiaddr::from_url(&format!("ws://{peer}"))
+                    .ok()
+                    .and_then(|p| swarm.dial(p).ok())
+            })
             .is_some();
 
         let itree = generate_itree(&proto.mountpoint, &swarm.local_peer_id().clone())
@@ -388,8 +396,8 @@ impl Pod {
                 .network_interface
                 .listen_addrs
                 .read()
-                .clone()
-                .into_iter()
+                .iter()
+                .filter_map(|m| network::PeerInfo::display_address(m).ok())
                 .collect(),
         }
     }
@@ -400,18 +408,18 @@ impl Pod {
             .network_interface
             .listen_addrs
             .read()
-            .clone()
-            .into_iter()
+            .iter()
+            .map(|m| network::PeerInfo::display_address(m).unwrap_or_else(|m| m.to_string()))
             .collect();
 
-        let peers_info = self
+        let peers_info: Vec<ipc::PeerInfo> = self
             .fs_interface
             .network_interface
             .peers_info
             .read()
             .values()
-            .cloned()
-            .collect::<Vec<PeerInfo>>();
+            .map(Into::into)
+            .collect();
 
         InspectInfo {
             frozen: false,
