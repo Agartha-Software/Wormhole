@@ -4,13 +4,12 @@ use std::{
     sync::Arc,
 };
 
-use libp2p::PeerId;
+use libp2p::{Multiaddr, PeerId};
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
 use crate::{
     config::GlobalConfig,
-    ipc::answers::PeerInfo,
     pods::{
         filesystem::diffs::{Delta, Signature},
         itree::{ITree, Ino, Inode, Metadata},
@@ -130,12 +129,79 @@ impl fmt::Debug for Request {
     }
 }
 
+/// Not to be confused with [PeerInfo](crate::ipc::answers::PeerInfo)
+/// though the two are the same data, this one is exclusively for Network messaging
+/// the other is exclusively for the CLI messaging
+/// this distinction is because of typing
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeerInfoNet {
+    pub nickname: String,
+    pub listen_addrs: Vec<Multiaddr>,
+}
+
+impl PeerInfoNet {
+    /// convert a MultiAddr to a simple {hostname}:{port} or {ip}:{port} address
+    /// error handling here is simple because we don't expect to run into any errors
+    /// it's there to ensure we fail safe and to document behavior for future debugging
+    pub fn display_address(multi: &Multiaddr) -> Result<String, &'static str> {
+        use libp2p::multiaddr::Protocol as P;
+        let mut host = None;
+        let mut port = None;
+        for protocol in multi.iter() {
+            match protocol {
+                P::Dns(cow) | P::Dns4(cow) | P::Dns6(cow) | P::Dnsaddr(cow) => {
+                    host.is_none()
+                        .then_some(())
+                        .ok_or("multiple domain names set")?;
+                    host = Some(cow)
+                }
+                P::Ip4(addr) => {
+                    host.is_none()
+                        .then_some(())
+                        .ok_or("multiple addresses set")?;
+                    host = Some(addr.to_string().into())
+                }
+                P::Ip6(addr) => {
+                    host.is_none()
+                        .then_some(())
+                        .ok_or("multiple addresses set")?;
+                    host = Some(addr.to_string().into())
+                }
+                P::Tcp(tcp) => {
+                    port.is_none()
+                        .then_some(())
+                        .ok_or("multiple port names set")?;
+                    port = Some(tcp)
+                }
+                P::Udp(_) => Err("transport set to udp")?,
+                _ => {}
+            }
+        }
+        if let Some((host, port)) = host.zip(port) {
+            Ok(format!("{host}:{port}"))
+        } else {
+            Err("missing port or hostname/ip")
+        }
+    }
+
+    pub fn to_ipc(&self) -> crate::ipc::PeerInfo {
+        crate::ipc::PeerInfo {
+            nickname: self.nickname.clone(),
+            listen_addrs: self
+                .listen_addrs
+                .iter()
+                .map(|m| Self::display_address(m).unwrap_or_else(ToString::to_string))
+                .collect(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub enum Response {
     /// Request a file delta from this base signature
     DeltaRequest(Ino, Signature),
     // (ITree, peers, global_config)
-    FsAnswer(ITree, HashMap<PeerId, PeerInfo>, GlobalConfig),
+    FsAnswer(ITree, HashMap<PeerId, PeerInfoNet>, GlobalConfig),
     RequestedFile(Vec<u8>),
     Success,
     Failed,

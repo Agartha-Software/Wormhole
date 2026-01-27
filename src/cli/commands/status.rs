@@ -9,8 +9,16 @@ pub async fn status(mut stream: Stream) -> io::Result<String> {
     send_command(Command::Status, &mut stream).await?;
 
     match recieve_answer::<StatusAnswer>(&mut stream).await? {
-        StatusAnswer::Success(StatusSuccess { running, frozen }) => Ok(format!(
-            "Service running: \n  Running Pods:\t[ {} ]\n  Frozen Pods:\t[ {} ]",
+        StatusAnswer::Success(StatusSuccess {
+            nickname,
+            running,
+            frozen,
+        }) => Ok(format!(
+            "Service running: \n\
+            \tNickname:\t{}\n\
+            \tRunning Pods:\t[ {} ]\n\
+            \tFrozen Pods:\t[ {} ]",
+            nickname.escape_debug(),
             running.join(", "),
             frozen.join(", ")
         )),

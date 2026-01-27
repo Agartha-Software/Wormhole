@@ -1,6 +1,5 @@
 use std::{fs, path::Path, str, sync::Arc};
 
-use libp2p::Multiaddr;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
@@ -58,7 +57,7 @@ pub struct GlobalConfig {
 }
 
 impl GlobalConfig {
-    pub fn add_hosts(mut self, mut additional_hosts: Vec<Multiaddr>) -> GlobalConfig {
+    pub fn add_hosts(mut self, mut additional_hosts: Vec<String>) -> GlobalConfig {
         additional_hosts.extend(self.general.entrypoints);
         self.general.entrypoints = additional_hosts;
         self
@@ -70,7 +69,7 @@ pub struct GeneralGlobalConfig {
     /// name of the network
     pub name: String,
     /// network urls to join the netwoek from
-    pub entrypoints: Vec<Multiaddr>,
+    pub entrypoints: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

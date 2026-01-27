@@ -8,14 +8,14 @@ use std::{error::Error, time::Duration};
 
 const PROTOCOL_VERSION: &str = "/wormhole/1.0.0";
 
-pub async fn create_swarm(name: String) -> Result<Swarm<Behaviour>, Box<dyn Error>> {
+pub async fn create_swarm(nickname: String) -> Result<Swarm<Behaviour>, Box<dyn Error>> {
     let swarm = libp2p::SwarmBuilder::with_new_identity()
         .with_tokio()
         .with_websocket(noise::Config::new, yamux::Config::default)
         .await?
         .with_behaviour(|key| {
             let cfg = identify::Config::new(PROTOCOL_VERSION.to_string(), key.public())
-                .with_agent_version(name);
+                .with_agent_version(nickname);
 
             Behaviour {
                 request_response: request_response::Behaviour::new(

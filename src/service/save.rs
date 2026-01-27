@@ -117,7 +117,7 @@ impl Service {
                 self.frozen_pods.insert(prototype.name.clone(), prototype);
             } else {
                 let name = prototype.name.clone();
-                match Pod::new(prototype).await {
+                match Pod::new(prototype, self.nickname.clone()).await {
                     Ok((pod, _)) => self.pods.insert(name, pod),
                     Err(err) => {
                         log::trace!("Failed to create the pod '{name}': {err:?}");

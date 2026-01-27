@@ -66,6 +66,8 @@ impl Service {
             Err(err) => return send_answer(NewAnswer::InvalidIp(err.to_string()), stream).await,
         };
 
+        let display_addr = format!("{}:{}", ip, port);
+
         let prototype = PodPrototype {
             global_config,
             listen_addrs: vec![listen_address.clone()],
@@ -75,15 +77,15 @@ impl Service {
             allow_other_users: args.allow_other_users,
         };
 
-        match Pod::new(prototype).await {
+        match Pod::new(prototype, self.nickname.clone()).await {
             Ok((pod, dialed)) => {
                 self.pods.insert(args.name, pod);
                 if dialed {
-                    println!("New pod created successfully, listening to '{listen_address}', connected to a network.");
+                    println!("New pod created successfully, listening to '{display_addr}', connected to a network.");
                 } else {
-                    println!("New pod created successfully, listening to '{listen_address}', no valid peers found.");
+                    println!("New pod created successfully, listening to '{display_addr}', no valid peers found.");
                 }
-                send_answer(NewAnswer::Success(listen_address, dialed), stream).await
+                send_answer(NewAnswer::Success(display_addr, dialed), stream).await
             }
             Err(err) => send_answer(err, stream).await,
         }
