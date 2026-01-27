@@ -366,7 +366,6 @@ impl ITree {
         }
     }
 
-
     /// Add hosts to an inode
     ///
     /// Only works on inodes pointing files (no folders)

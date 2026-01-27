@@ -141,7 +141,8 @@ impl NetworkInterface {
         if !ITree::is_local_only(ino) {
             self.to_network_message_tx
                 .send(ToNetworkMessage::BroadcastMessage(Request::AddHosts(
-                    ino, hosts.to_vec(),
+                    ino,
+                    hosts.to_vec(),
                 )))
                 .expect("update_remote_hosts: unable to update modification on the network thread");
         }
