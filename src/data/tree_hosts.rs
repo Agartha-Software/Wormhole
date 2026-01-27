@@ -10,7 +10,7 @@ use crate::pods::{
 
 pub type TreeLine = (u8, Ino, WhPath, FsEntry); // (indentation_level, ino, path, hosts)
 
-#[derive(Clone, Serialize, Deserialize, TS)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum TreeEntry {
     Directory(Inode, Vec<TreeEntry>),
     File(Inode),

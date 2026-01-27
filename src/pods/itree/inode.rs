@@ -22,7 +22,7 @@ pub const ROOT: Ino = 1;
 
 pub type XAttrs = HashMap<String, Vec<u8>>;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, TS)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Inode {
     pub parent: Ino,
     pub id: Ino,

@@ -66,9 +66,10 @@ impl FsInterface {
         offset: usize,
         buf: &mut [u8],
     ) -> Result<usize, ReadError> {
-        match self.network_interface.pull_file_sync(ino)? {
+        match self.pull_file_sync(ino)? {
             None => Ok(self.disk.read_file(
-                &ITree::read_lock(&self.itree, "read_file")?.get_path_from_inode_id(ino)?,
+                &ITree::read_lock(&self.network_interface.itree, "read_file")?
+                    .get_path_from_inode_id(ino)?,
                 offset,
                 buf,
             )?),
@@ -82,6 +83,41 @@ impl FsInterface {
         }
     }
 
+    /// Pull the file from the network
+    /// Affects the itree and the disk
+    ///
+    /// # Panics
+    ///
+    /// This function panics if called within an asynchronous execution
+    /// context.
+    ///
+    pub fn pull_file_sync(&self, ino: Ino) -> Result<Option<Vec<u8>>, PullError> {
+        let data = match self.network_interface.pull_file(ino)? {
+            Some(data) => data,
+            None => return Ok(None),
+        };
+
+        let (path, perms) = {
+            let itree = self.network_interface.itree.read();
+
+            let path = itree.get_path_from_inode_id(ino)?;
+            let inode = itree.get_inode(ino)?;
+            (path, inode.meta.perm)
+        };
+
+        let _created = self.disk.new_file(&path, perms);
+
+        self.disk
+            .write_file(&path, &data, 0)
+            .inspect_err(|e| log::error!("writing pulled file: {e}"))
+            .map_err(|e| PullError::WriteError { io: Arc::new(e) })?;
+
+        self.network_interface
+            .add_inode_hosts(ino, &[self.network_interface.id])
+            .expect("can't update inode hosts");
+        Ok(Some(data))
+    }
+
     /// Get or pull the file from storage or network
     ///
     /// # Panics
@@ -90,11 +126,11 @@ impl FsInterface {
     /// context.
     ///
     pub fn get_whole_file_sync(&self, ino: Ino) -> Result<File, ReadError> {
-        match self.network_interface.pull_file_sync(ino)? {
+        match self.pull_file_sync(ino)? {
             None => self
                 .get_local_file(ino)
                 .map(|o| o.expect("promised by pull_file_sync")),
-            Some(data) => Ok(File(data)),
+            Some(data) => Ok(File(Arc::new(data))),
         }
     }
 
@@ -103,10 +139,10 @@ impl FsInterface {
     /// returns Ok(None) if the file is not tracked
     pub fn get_local_file(&self, ino: Ino) -> Result<Option<File>, ReadError> {
         let mut buf = Vec::new();
-        let itree = self.itree.read();
+        let itree = self.network_interface.itree.read();
         let size = itree.get_inode(ino).and_then(|inode| match &inode.entry {
             FsEntry::File(hosts) => Ok(hosts
-                .contains(&self.network_interface.hostname)
+                .contains(&self.network_interface.id)
                 .then_some(inode.meta.size as usize)),
             _ => Err(WhError::InodeIsADirectory),
         })?;
@@ -114,7 +150,8 @@ impl FsInterface {
         if let Some(mut size) = size {
             buf.resize(size, 0);
             size = self.disk.read_file(
-                &ITree::read_lock(&self.itree, "read_file")?.get_path_from_inode_id(ino)?,
+                &ITree::read_lock(&self.network_interface.itree, "read_file")?
+                    .get_path_from_inode_id(ino)?,
                 0,
                 &mut buf[..],
             )?;

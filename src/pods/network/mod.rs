@@ -1,5 +1,8 @@
-pub mod callbacks;
+pub mod behaviour;
+pub mod codec;
+pub mod event_loop;
 pub mod network_interface;
 pub mod pull_file;
 pub mod redundancy;
+pub mod swarm;
 pub mod xattrs;

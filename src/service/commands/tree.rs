@@ -6,11 +6,11 @@ use crate::pods::itree::{ITreeIndex, Ino, ROOT};
 use crate::pods::pod::Pod;
 use crate::pods::whpath::WhPath;
 use crate::service::connection::send_answer;
-use std::collections::HashMap;
+use crate::service::Service;
 use std::io;
 
 fn get_tree(pod: &Pod, path: Option<&WhPath>) -> TreeAnswer {
-    let itree = pod.fs_interface.itree.read();
+    let itree = pod.fs_interface.network_interface.itree.read();
     let start = path
         .map(|p| itree.get_inode_from_path(p).map(|inode| inode.id))
         .unwrap_or(Ok(ROOT));
@@ -50,38 +50,40 @@ fn recurse_build_tree(itree: &mut ITreeIndex, ino: Ino) -> Option<TreeEntry> {
     }
 }
 
-pub async fn tree<Stream>(
-    args: PodId,
-    pods: &HashMap<String, Pod>,
-    stream: &mut either::Either<&mut Stream, &mut String>,
-) -> std::io::Result<bool>
-where
-    Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
-{
-    let answer = match args {
-        PodId::Name(name) => {
-            if let Some(pod) = pods.get(&name) {
-                get_tree(pod, None)
-            } else {
-                TreeAnswer::PodNotFound
+impl Service {
+    pub async fn tree<Stream>(
+        &self,
+        args: PodId,
+        stream: &mut either::Either<&mut Stream, &mut String>,
+    ) -> std::io::Result<()>
+    where
+        Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
+    {
+        let answer = match args {
+            PodId::Name(name) => {
+                if let Some(pod) = self.pods.get(&name) {
+                    get_tree(pod, None)
+                } else {
+                    TreeAnswer::PodNotFound
+                }
             }
-        }
-        PodId::Path(path) => {
-            match pods
-                .iter()
-                .find(|(_, pod)| path.starts_with(pod.get_mountpoint()))
-            {
-                Some((_, pod)) => get_tree(
-                    pod,
-                    Some(
-                        &WhPath::make_relative(&path, pod.get_mountpoint())
-                            .map_err(|_| std::io::ErrorKind::InvalidFilename)?,
+            PodId::Path(path) => {
+                match self
+                    .pods
+                    .iter()
+                    .find(|(_, pod)| path.starts_with(pod.get_mountpoint()))
+                {
+                    Some((_, pod)) => get_tree(
+                        pod,
+                        Some(
+                            &WhPath::make_relative(&path, pod.get_mountpoint())
+                                .map_err(|_| std::io::ErrorKind::InvalidFilename)?,
+                        ),
                     ),
-                ),
-                None => TreeAnswer::PodNotFound,
+                    None => TreeAnswer::PodNotFound,
+                }
             }
-        }
-    };
-    send_answer(answer, stream).await?;
-    Ok(false)
+        };
+        send_answer(answer, stream).await
+    }
 }

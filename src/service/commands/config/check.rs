@@ -1,68 +1,71 @@
-use std::collections::HashMap;
-
 use crate::{
     cli::ConfigType,
     config::{local_file::LocalConfigFile, types::Config, GlobalConfig},
-    ipc::{answers::CheckConfigAnswer, commands::PodId},
+    ipc::{
+        answers::{CheckConfigAnswer, ConfigFileError},
+        commands::PodId,
+    },
     pods::{
         itree::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
         pod::Pod,
     },
-    service::{commands::find_pod, connection::send_answer},
+    service::{commands::find_pod, connection::send_answer, Service},
 };
 
-pub async fn check<Stream>(
-    args: PodId,
-    config_type: ConfigType,
-    pods: &HashMap<String, Pod>,
-    stream: &mut either::Either<&mut Stream, &mut String>,
-) -> std::io::Result<bool>
-where
-    Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
-{
-    match find_pod(&args, pods) {
-        Some((_, pod)) => {
-            let mut local_path = pod.get_mountpoint().clone();
-            local_path.push(LOCAL_CONFIG_FNAME);
+pub fn get_config_from_file(
+    pod: &Pod,
+    config_type: &ConfigType,
+) -> Result<(Option<LocalConfigFile>, Option<GlobalConfig>), ConfigFileError> {
+    let mut local_path = pod.get_mountpoint().clone();
+    local_path.push(LOCAL_CONFIG_FNAME);
 
-            let mut global_path = pod.get_mountpoint().clone();
-            global_path.push(GLOBAL_CONFIG_FNAME);
+    let mut global_path = pod.get_mountpoint().clone();
+    global_path.push(GLOBAL_CONFIG_FNAME);
 
-            match (
-                local_path.exists() || !config_type.is_local(),
-                global_path.exists() || !config_type.is_global(),
-            ) {
-                (true, true) => (),
-                (false, true) => send_answer(CheckConfigAnswer::MissingLocal, stream).await?,
-                (true, false) => send_answer(CheckConfigAnswer::MissingGlobal, stream).await?,
-                (false, false) => send_answer(CheckConfigAnswer::MissingBoth, stream).await?,
-            }
+    match (
+        local_path.exists() || !config_type.is_local(),
+        global_path.exists() || !config_type.is_global(),
+    ) {
+        (true, true) => Ok(()),
+        (false, true) => Err(ConfigFileError::MissingLocal),
+        (true, false) => Err(ConfigFileError::MissingGlobal),
+        (false, false) => Err(ConfigFileError::MissingBoth),
+    }?;
 
-            match (
-                LocalConfigFile::read(local_path)
-                    .err()
-                    .filter(|_| config_type.is_local()),
-                GlobalConfig::read(global_path)
-                    .err()
-                    .filter(|_| config_type.is_global()),
-            ) {
-                (None, None) => send_answer(CheckConfigAnswer::Success, stream),
-                (Some(local_err), None) => send_answer(
-                    CheckConfigAnswer::InvalidLocal(local_err.to_string()),
-                    stream,
-                ),
-                (None, Some(global_err)) => send_answer(
-                    CheckConfigAnswer::InvalidGlobal(global_err.to_string()),
-                    stream,
-                ),
-                (Some(local_err), Some(global_err)) => send_answer(
-                    CheckConfigAnswer::InvalidBoth(local_err.to_string(), global_err.to_string()),
-                    stream,
-                ),
-            }
-            .await?;
-        }
-        None => send_answer(CheckConfigAnswer::PodNotFound, stream).await?,
+    match (
+        config_type
+            .is_local()
+            .then(|| LocalConfigFile::read(local_path)),
+        config_type
+            .is_global()
+            .then(|| GlobalConfig::read(global_path)),
+    ) {
+        (Some(Err(local_err)), Some(Err(global_err))) => Err(ConfigFileError::InvalidBoth(
+            local_err.to_string(),
+            global_err.to_string(),
+        )),
+        (Some(Err(local_err)), _) => Err(ConfigFileError::InvalidLocal(local_err.to_string())),
+        (_, Some(Err(global_err))) => Err(ConfigFileError::InvalidGlobal(global_err.to_string())),
+        (local, global) => Ok((local.map(|l| l.unwrap()), global.map(|g| g.unwrap()))),
     }
-    Ok(false)
+}
+
+impl Service {
+    pub async fn check<Stream>(
+        &self,
+        args: PodId,
+        config_type: ConfigType,
+        stream: &mut either::Either<&mut Stream, &mut String>,
+    ) -> std::io::Result<()>
+    where
+        Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
+    {
+        match find_pod(&args, &self.pods) {
+            Some((_, pod)) => match get_config_from_file(pod, &config_type) {
+                Ok(_) => send_answer(CheckConfigAnswer::Success, stream).await,
+                Err(err) => send_answer(CheckConfigAnswer::ConfigFileError(err), stream).await,
+            },
+            None => send_answer(CheckConfigAnswer::PodNotFound, stream).await,
+        }
+    }
 }

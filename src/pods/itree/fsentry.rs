@@ -5,12 +5,12 @@ use std::{
 };
 
 use camino::Utf8PathBuf;
+use libp2p::PeerId;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::{
     error::{WhError, WhResult},
-    network::message::Address,
     pods::{
         filesystem::fs_interface::SimpleFileType,
         itree::Ino,
@@ -18,7 +18,7 @@ use crate::{
     },
 };
 
-pub type Hosts = Vec<Address>;
+pub type Hosts = Vec<PeerId>;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, TS)]
 pub enum SymlinkPath {
@@ -172,7 +172,7 @@ fn normalize(path: &Path) -> std::vec::IntoIter<&OsStr> {
     result.into_iter()
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, TS)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 /// Should be extended until meeting [fuser::FileType]
 pub enum FsEntry {
     File(Hosts),

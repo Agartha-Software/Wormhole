@@ -4,6 +4,7 @@ use custom_error::custom_error;
 
 use crate::{
     error::WhError,
+    network::message::Response,
     pods::{
         filesystem::{
             file_handle::{AccessMode, FileHandleManager, UUID},
@@ -34,8 +35,8 @@ impl FsInterface {
         &self,
         ino: Ino,
         meta: Metadata,
-    ) -> Result<(), AcknoledgeSetAttrError> {
-        let mut itree = ITree::write_lock(&self.itree, "acknowledge_metadata")?;
+    ) -> Result<Response, AcknoledgeSetAttrError> {
+        let mut itree = ITree::write_lock(&self.network_interface.itree, "acknowledge_metadata")?;
         let path = itree.get_path_from_inode_id(ino)?;
         let inode = itree.get_inode_mut(ino)?;
 
@@ -47,10 +48,10 @@ impl FsInterface {
                     });
                 }
                 FsEntry::File(hosts) => {
-                    if hosts.contains(&self.network_interface.hostname) {
+                    if hosts.contains(&self.network_interface.id) {
                         let created = match &inode.entry {
                             FsEntry::File(old_hosts) => {
-                                !old_hosts.contains(&self.network_interface.hostname)
+                                !old_hosts.contains(&self.network_interface.id)
                             }
                             _ => false,
                         };
@@ -86,7 +87,7 @@ impl FsInterface {
         }
 
         itree.get_inode_mut(ino)?.meta = meta;
-        Ok(())
+        Ok(Response::Success)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -103,7 +104,7 @@ impl FsInterface {
         file_handle: Option<UUID>,
         flags: Option<u32>,
     ) -> Result<Metadata, SetAttrError> {
-        let itree = ITree::read_lock(&self.itree, "setattr")?;
+        let itree = ITree::read_lock(&self.network_interface.itree, "setattr")?;
         let path = itree.get_path_from_inode_id(ino)?;
         let mut meta = itree.get_inode(ino)?.meta.clone();
         drop(itree);
