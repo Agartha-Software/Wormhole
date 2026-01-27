@@ -78,6 +78,7 @@ pub enum RemoveAnswer {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct StatusSuccess {
+    pub nickname: String,
     pub running: Vec<String>,
     pub frozen: Vec<String>,
 }
@@ -121,7 +122,6 @@ pub struct InspectInfo {
     pub frozen: bool,
     pub listen_addrs: Vec<String>,
     pub name: String,
-    pub nickname: String,
     pub connected_peers: Vec<PeerInfoIPC>,
     pub mount: PathBuf,
 }

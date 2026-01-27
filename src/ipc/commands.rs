@@ -42,7 +42,6 @@ pub struct NewRequest {
     pub name: String,
     pub mountpoint: PathBuf,
     pub ip_address: Option<IpAddr>,
-    pub nickname: Option<String>,
     pub port: Option<u16>,
     pub hosts: Vec<String>,
     pub allow_other_users: bool,

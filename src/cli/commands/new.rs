@@ -25,7 +25,6 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<String> {
         allow_other_users,
         ip_address,
         port,
-        nickname,
         ..
     } = args;
 
@@ -37,7 +36,6 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<String> {
         mountpoint: mountpoint.clone(),
         name: name.clone(),
         ip_address,
-        nickname,
         port,
         hosts: additional_hosts,
         allow_other_users,

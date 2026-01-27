@@ -68,11 +68,6 @@ impl Service {
 
         let display_addr = format!("{}:{}", ip, port);
 
-        let nickname = args.nickname.unwrap_or_else(||{
-            let hostname = gethostname::gethostname().to_string_lossy().to_string();
-            format!("{hostname}:{}", args.name)
-        });
-
         let prototype = PodPrototype {
             global_config,
             listen_addrs: vec![listen_address.clone()],
@@ -80,10 +75,9 @@ impl Service {
             mountpoint: args.mountpoint,
             should_restart: local_config.restart.unwrap_or(true),
             allow_other_users: args.allow_other_users,
-            nickname,
         };
 
-        match Pod::new(prototype).await {
+        match Pod::new(prototype, self.nickname.clone()).await {
             Ok((pod, dialed)) => {
                 self.pods.insert(args.name, pod);
                 if dialed {

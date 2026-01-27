@@ -55,7 +55,6 @@ pub struct Pod {
     redundancy_worker_handle: JoinHandle<()>,
     pub global_config: Arc<RwLock<GlobalConfig>>,
     name: String,
-    pub nickname: String,
     pub should_restart: bool,
     allow_other_users: bool,
 }
@@ -78,7 +77,7 @@ custom_error! {pub PodStopError
 }
 
 impl Pod {
-    pub async fn new(proto: PodPrototype) -> Result<(Self, bool), PodCreationError> {
+    pub async fn new(proto: PodPrototype, host_nickname: String) -> Result<(Self, bool), PodCreationError> {
         let (senders_in, senders_out) = mpsc::unbounded_channel();
 
         let (redundancy_tx, redundancy_rx) = mpsc::unbounded_channel();
@@ -94,7 +93,11 @@ impl Pod {
                 .map_err(|err| PodCreationError::DiskAccessError(err.into()))?,
         );
 
-        let mut swarm = create_swarm(proto.nickname.clone())
+        let mut nickname = host_nickname;
+        nickname.push(':');
+        nickname.push_str(&proto.name);
+
+        let mut swarm = create_swarm(nickname.clone())
             .await
             .map_err(|err| PodCreationError::TransportError(err.to_string()))?;
 
@@ -179,7 +182,6 @@ impl Pod {
                 global_config: global.clone(),
                 redundancy_worker_handle,
                 name: proto.name,
-                nickname: proto.nickname,
                 should_restart: proto.should_restart,
                 allow_other_users: proto.allow_other_users,
             },
@@ -376,7 +378,6 @@ impl Pod {
         Some(PodPrototype {
             global_config,
             name: self.name.clone(),
-            nickname: self.nickname.clone(),
             listen_addrs: self
                 .network_interface
                 .listen_addrs
@@ -428,7 +429,6 @@ impl Pod {
             frozen: false,
             listen_addrs,
             name: self.name.clone(),
-            nickname: self.nickname.clone(),
             connected_peers: peers_info,
             mount: self.mountpoint.clone(),
         }
