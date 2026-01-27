@@ -54,6 +54,7 @@ pub struct Pod {
     redundancy_worker_handle: JoinHandle<()>,
     pub global_config: Arc<RwLock<GlobalConfig>>,
     pub name: String,
+    pub nickname: String,
     pub should_restart: bool,
     allow_other_users: bool,
 }
@@ -184,6 +185,7 @@ impl Pod {
                 global_config: global.clone(),
                 redundancy_worker_handle,
                 name: proto.name,
+                nickname,
                 should_restart: proto.should_restart,
                 allow_other_users: proto.allow_other_users,
             },

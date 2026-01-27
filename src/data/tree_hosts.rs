@@ -1,23 +1,72 @@
-use std::fmt::{self, Debug};
+use std::{
+    collections::HashMap,
+    fmt::{self, Debug},
+    io,
+};
 
+use libp2p::PeerId;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::pods::{
-    itree::{FsEntry, Ino, Inode},
-    whpath::WhPath,
+use crate::{
+    error::WhError,
+    ipc::answers::TreeAnswer,
+    pods::{
+        itree::{EntrySymlink, FsEntry, ITreeIndex, Ino, Inode, ROOT},
+        pod::Pod,
+        whpath::WhPath,
+    },
 };
 
-pub type TreeLine = (u8, Ino, WhPath, FsEntry); // (indentation_level, ino, path, hosts)
+#[derive(Clone, Serialize, Deserialize, TS)]
+enum FsEntryInfo {
+    Directory,
+    Symlink(EntrySymlink),
+    File(Vec<String>),
+}
 
-#[derive(Clone, Serialize, Deserialize)]
-pub enum TreeEntry {
-    Directory(Inode, Vec<TreeEntry>),
-    File(Inode),
+impl FsEntryInfo {
+    fn from(value: FsEntry, infos: &HashMap<PeerId, String>) -> Self {
+        match value {
+            FsEntry::File(peer_ids) => Self::File(
+                peer_ids
+                    .iter()
+                    .map(|s| infos.get(s).cloned().expect(&format!("peer {s} is missing")))
+                    // unwrap_or_else(|| s.to_base58()))
+                    .collect(),
+            ),
+            FsEntry::Directory(_) => Self::Directory,
+            FsEntry::Symlink(symlink) => Self::Symlink(symlink.clone()),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, TS)]
+struct InodeInfo {
+    name: String,
+    ino: Ino,
+    entry: FsEntryInfo,
+    // entry: FsEntryInfo,
+}
+
+impl InodeInfo {
+    fn from(value: Inode, infos: &HashMap<PeerId, String>) -> Self {
+        Self {
+            name: value.name.to_string(),
+            ino: value.id,
+            entry: FsEntryInfo::from(value.entry, infos),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, TS)]
+enum TreeEntry {
+    Directory(InodeInfo, Vec<TreeEntry>),
+    File(InodeInfo),
 }
 #[derive(Serialize, Deserialize, TS)]
 pub struct TreeData {
-    pub tree: TreeEntry,
+    tree: TreeEntry,
 }
 
 impl Debug for TreeData {
@@ -87,7 +136,7 @@ impl fmt::Debug for TreeEntry {
         match self {
             TreeEntry::Directory(inode, items) => {
                 let name = &inode.name;
-                let ino = &inode.id;
+                let ino = &inode.ino;
                 write!(f, "{name} ({ino})")?;
                 if !items.is_empty() {
                     f.write_char('\n')?;
@@ -110,12 +159,12 @@ impl fmt::Debug for TreeEntry {
             }
             TreeEntry::File(inode) => {
                 let name = &inode.name;
-                let ino = &inode.id;
+                let ino = &inode.ino;
                 let data = match &inode.entry {
-                    FsEntry::File(hosts) => format!(" : {hosts:?}"),
-                    FsEntry::Symlink(symlink) => format!(" -> {}", symlink.target),
+                    FsEntryInfo::File(hosts) => format!(" : {hosts:?}"),
+                    FsEntryInfo::Symlink(symlink) => format!(" -> {}", symlink.target),
                     // should never happen, but is a sane fallback:
-                    FsEntry::Directory(_) => "".to_owned(),
+                    FsEntryInfo::Directory => "".to_owned(),
                 };
                 write!(f, "{name} ({ino}){data}")
             }
@@ -129,56 +178,101 @@ impl fmt::Display for TreeData {
     }
 }
 
+fn recurse_build_tree(
+    itree: &mut ITreeIndex,
+    ino: Ino,
+    infos: &HashMap<PeerId, String>,
+) -> Option<TreeEntry> {
+    if let Some(inode) = itree.remove(&ino) {
+        match &inode.entry {
+            crate::pods::itree::FsEntry::Directory(children) => {
+                let children = children
+                    .iter()
+                    .flat_map(|ino| recurse_build_tree(itree, *ino, infos))
+                    .collect();
+                Some(TreeEntry::Directory(
+                    InodeInfo::from(inode, infos),
+                    children,
+                ))
+            }
+            _ => Some(TreeEntry::File(InodeInfo::from(inode, infos))),
+        }
+    } else {
+        None
+    }
+}
+
+pub fn get_tree(pod: &Pod, path: Option<&WhPath>) -> TreeAnswer {
+    let infos = HashMap::from_iter(
+        pod.network_interface
+            .peers_info
+            .read()
+            .iter()
+            .map(|(k, v)| (*k, v.nickname.clone())).chain([(pod.network_interface.id, pod.nickname.clone())]),
+    );
+    log::info!("INFOS: {infos:#?}");
+
+    let itree = pod.fs_interface.network_interface.itree.read();
+    let start = path
+        .map(|p| itree.get_inode_from_path(p).map(|inode| inode.id))
+        .unwrap_or(Ok(ROOT));
+
+    let mut itree = {
+        let owned = itree.raw_entries().clone();
+        drop(itree);
+        owned
+    };
+
+    let tree = start.and_then(|start| {
+        recurse_build_tree(&mut itree, start, &infos).ok_or(WhError::InodeNotFound)
+    });
+
+    match tree {
+        Ok(tree) => TreeAnswer::Tree(Box::new(TreeData { tree })),
+        Err(err) => {
+            log::error!("Failed in an unexpected way when getting tree: {err}");
+            TreeAnswer::PodTreeFailed(io::Error::other(err).into())
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::{
-        data::tree_hosts::TreeEntry,
-        pods::{
-            itree::{EntrySymlink, FsEntry, Inode},
-            whpath::InodeName,
-        },
+        data::tree_hosts::{FsEntryInfo, InodeInfo, TreeEntry},
+        pods::itree::{EntrySymlink, ROOT},
     };
 
     #[test]
     pub fn test_formatting() {
-        let root = Inode::new(
-            InodeName::try_from("".to_owned()).expect("\"\" is a valid InodeName"),
-            1,
-            1,
-            FsEntry::new_directory(),
-            0,
-        );
-        let folder = Inode::new(
-            InodeName::try_from("folder".to_owned()).expect("\"folder\" is a valid InodeName"),
-            1,
-            10,
-            FsEntry::new_directory(),
-            0,
-        );
-        let file = Inode::new(
-            InodeName::try_from("file".to_owned()).expect("\"file\" is a valid InodeName"),
-            10,
-            11,
-            FsEntry::new_file(),
-            0,
-        );
-        let empty = Inode::new(
-            InodeName::try_from("empty".to_owned()).expect("\"empty\" is a valid InodeName"),
-            10,
-            12,
-            FsEntry::new_directory(),
-            0,
-        );
-        let link = Inode::new(
-            InodeName::try_from("link".to_owned()).expect("\"link\" is a valid InodeName"),
-            10,
-            13,
-            FsEntry::Symlink(
+        let root = InodeInfo {
+            name: "/".to_owned(),
+            ino: ROOT,
+            entry: FsEntryInfo::Directory,
+        };
+        let folder = InodeInfo {
+            name: "folder".to_owned(),
+            ino: 10,
+            entry: FsEntryInfo::Directory,
+        };
+        let file = InodeInfo {
+            name: "file".to_owned(),
+            ino: 11,
+            entry: FsEntryInfo::File(vec![]),
+        };
+        let empty = InodeInfo {
+            name: "empty".to_owned(),
+            ino: 12,
+            entry: FsEntryInfo::Directory,
+        };
+        let link = InodeInfo {
+            name: "link".to_owned(),
+            ino: 13,
+            entry: FsEntryInfo::Symlink(
                 EntrySymlink::parse("/mountpoint/folder/file", "/mountpoint")
                     .expect("this symlink is valid"),
             ),
-            0,
-        );
+        };
 
         let t_file = TreeEntry::File(file.clone());
         let t_link = TreeEntry::File(link.clone());

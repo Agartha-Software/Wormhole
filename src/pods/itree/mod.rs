@@ -9,7 +9,6 @@ use libp2p::PeerId;
 #[cfg(target_os = "windows")]
 pub use crate::pods::itree::WINDOWS_DEFAULT_PERMS_MODE;
 use crate::{
-    data::tree_hosts::TreeLine,
     error::WhResult,
     pods::whpath::{InodeName, InodeNameError, WhPath},
 };
@@ -420,34 +419,6 @@ impl ITree {
 
         inode.xattrs.remove(key);
         Ok(())
-    }
-
-    pub fn get_file_tree_and_hosts(&self, path: Option<&WhPath>) -> WhResult<Vec<TreeLine>> {
-        let ino = if let Some(path) = path {
-            self.get_inode_from_path(path)
-                .map_err(|_| WhError::InodeNotFound)?
-                .id
-        } else {
-            ROOT
-        };
-
-        self.recurse_tree(ino, 0)
-    }
-
-    /// given ino is not checked -> must exist in itree
-    fn recurse_tree(&self, ino: Ino, indentation: u8) -> WhResult<Vec<TreeLine>> {
-        let entry = &self.get_inode(ino)?.entry;
-        let path = self.get_path_from_inode_id(ino)?;
-        match entry {
-            FsEntry::Directory(children) => Ok(children
-                .iter()
-                .map(|c| self.recurse_tree(*c, indentation + 1))
-                .collect::<WhResult<Vec<Vec<TreeLine>>>>()?
-                .into_iter()
-                .flatten()
-                .collect::<Vec<TreeLine>>()),
-            entry => Ok(vec![(indentation, ino, path, entry.clone())]),
-        }
     }
 }
 
