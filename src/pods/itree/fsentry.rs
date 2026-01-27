@@ -5,11 +5,11 @@ use std::{
 };
 
 use camino::Utf8PathBuf;
+use libp2p::PeerId;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     error::{WhError, WhResult},
-    network::message::Address,
     pods::{
         filesystem::fs_interface::SimpleFileType,
         itree::Ino,
@@ -17,7 +17,7 @@ use crate::{
     },
 };
 
-pub type Hosts = Vec<Address>;
+pub type Hosts = Vec<PeerId>;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum SymlinkPath {

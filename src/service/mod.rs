@@ -1,14 +1,16 @@
 pub mod clap;
 pub mod commands;
 pub mod connection;
+pub mod save;
 pub mod socket;
 pub mod tcp;
 
 use crate::ipc::commands::Command;
 use crate::ipc::error::ListenerError;
 use crate::pods::pod::Pod;
-use crate::pods::save::{delete_saved_pods, load_saved_pods, ServiceKey};
+use crate::pods::prototype::PodPrototype;
 use crate::service::clap::ServiceArgs;
+use crate::service::save::{delete_saved_pods, save_prototype, ServiceKey};
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use interprocess::local_socket::tokio::Listener;
 use interprocess::local_socket::traits::tokio::Listener as TokioListenerExt;
@@ -23,7 +25,9 @@ use tokio::sync::oneshot::{self, Sender};
 
 pub struct Service {
     pub pods: HashMap<String, Pod>,
+    pub frozen_pods: HashMap<String, PodPrototype>,
     pub socket: String,
+    pub nickname: String,
     rest_service: tokio::task::JoinHandle<Result<(), std::io::Error>>,
     web_request_rx: Receiver<(Command, Sender<String>)>,
     socket_listener: Listener,
@@ -45,27 +49,35 @@ impl Service {
         let (socket_listener, socket) = new_socket_listener(args.socket)
             .inspect_err(|err| eprintln!("{err}"))
             .ok()?;
-        let mut pods = HashMap::new();
 
-        let service_key = ServiceKey::from_path(&socket);
+        let nickname = args
+            .nickname
+            .unwrap_or_else(|| gethostname::gethostname().to_string_lossy().to_string());
+
+        let mut service = Service {
+            pods: HashMap::new(),
+            frozen_pods: HashMap::new(),
+            socket,
+            nickname,
+            rest_service,
+            web_request_rx: rx,
+            socket_listener,
+        };
+
         if args.clean {
+            let service_key = ServiceKey::from_path(&service.socket);
             delete_saved_pods(&service_key)
                 .inspect_err(|err| eprintln!("Failed to delete saved pods: {:?}", err))
                 .ok()?;
         } else {
-            load_saved_pods(&mut pods, args.allow_other_users, &service_key)
+            service
+                .load_saved_pods()
                 .await
                 .inspect_err(|err| eprintln!("Failed to load saved pods: {:?}", err))
                 .ok()?;
         }
 
-        Some(Service {
-            pods,
-            socket,
-            rest_service,
-            web_request_rx: rx,
-            socket_listener,
-        })
+        Some(service)
     }
 
     pub async fn stop_all_pods(self) -> ExitCode {
@@ -73,10 +85,13 @@ impl Service {
         let mut status = ExitCode::SUCCESS;
         for (name, pod) in self.pods.into_iter() {
             if pod.should_restart {
-                let _ = pod
-                    .save(&service_key)
-                    .await
-                    .inspect_err(|err| log::error!("Couldn't save the pod data: {err}"));
+                match pod.try_generate_prototype() {
+                    Some(prototype) => {
+                        let _ = save_prototype(prototype, &service_key, false)
+                            .inspect_err(|e| log::error!("Couldn't save the pod data: {e:?}"));
+                    }
+                    None => log::error!("Couldn't access pod {} while saving.", name),
+                }
             }
 
             match pod.stop().await {
@@ -87,6 +102,12 @@ impl Service {
                 }
             }
         }
+
+        for prototype in self.frozen_pods.into_values() {
+            let _ = save_prototype(prototype, &service_key, true)
+                .inspect_err(|e| log::error!("Couldn't save the frozen pod data: {e:?}"));
+        }
+
         log::info!("Wormhole stopped");
         status
     }

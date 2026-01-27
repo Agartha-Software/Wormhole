@@ -4,6 +4,7 @@ COPY --from=wormhole:latest /build/target/release/wormholed /bin/wormholed
 COPY --from=wormhole:latest /build/target/release/wormhole /bin/wormhole
 
 COPY tests/xfstests/run_xfstests_docker.sh /tests/run_xfstests_docker.sh
+COPY tests/xfstests/generate_test_list.sh /tests/generate_test_list.sh
 COPY tests/xfstests/mount.fuse.wormhole /sbin/mount.fuse.wormhole
 
 RUN useradd -m fsgqa && \
@@ -54,6 +55,6 @@ COPY tests/xfstests/xfstests_exclude.txt /opt/xfstests-dev/exclude_tests
 
 RUN mkdir -p /mnt/test /mnt/scratch
 
-RUN chmod +x /tests/run_xfstests_docker.sh /sbin/mount.fuse.wormhole
+RUN chmod +x /tests/run_xfstests_docker.sh /tests/generate_test_list.sh /sbin/mount.fuse.wormhole
 
 WORKDIR /opt/xfstests-dev

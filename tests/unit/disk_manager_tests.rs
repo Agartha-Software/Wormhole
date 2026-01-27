@@ -191,7 +191,7 @@ pub fn test_generic_disk<D: DiskManager, A: PathAssert + PathChild + AsRef<std::
 #[cfg(target_os = "linux")]
 pub fn test_unix_disk() {
     let temp_dir = assert_fs::TempDir::new().expect("creating temp dir");
-    let disk = UnixDiskManager::new(&temp_dir.path()).expect("creating disk manager");
+    let disk = UnixDiskManager::new(temp_dir.path()).expect("creating disk manager");
 
     test_generic_disk(&disk, &temp_dir);
 }

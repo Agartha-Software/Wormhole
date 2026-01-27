@@ -24,10 +24,14 @@ pub struct Cli {
 pub enum CliCommand {
     /// Create a new pod and if possible join a network, otherwise create a new one
     New(NewArgs),
-    // /// Pause a given pod
-    // Freeze(IdentifyPodArgs),
-    // /// Restart a given pod
-    // UnFreeze(IdentifyPodArgs),
+    /// Pause a given pod
+    Freeze(IdentifyPodArgs),
+    /// Unpause a given pod
+    Unfreeze(IdentifyPodArgs),
+    /// Restart a given pod
+    Restart(IdentifyPodArgs),
+    /// Remove a pod from its network and stop it
+    Remove(RemoveArgs),
     /// Interact with the configuration of a pod (Write, Show, Validate)
     #[command(subcommand)]
     Config(ConfigCommand),
@@ -37,12 +41,6 @@ pub enum CliCommand {
     GetHosts(GetHostsArgs),
     /// Display the file tree at a given pod or path and show the hosts for each files
     Tree(IdentifyPodArgs),
-    /// Remove a pod from its network and stop it
-    Remove(RemoveArgs),
-    // /// Apply a new configuration to a pod
-    // Apply(PodConfArgs),
-    // /// Restore many or a specific file configuration
-    // Restore(PodConfArgs),
     /// Checks if the service is working
     Status,
     // /// Start the service
@@ -137,14 +135,7 @@ pub struct NewArgs {
     /// Network to join
     #[arg(long, short)]
     pub url: Option<String>,
-    /// Name for this pod to use as a machine name with the network. Defaults to your Machine's name
-    #[arg(long, short = 'H')]
-    pub hostname: Option<String>,
-    /// Url this Pod reports to other to reach it
-    /// defaults to the Machine's real hostname and the used port
-    #[arg(long, short)]
-    pub listen_url: Option<String>, // listen_url in the Cli and public_url in the code because the -p would conflict with the port
-    /// Ip address this Pod listen [default: 0.0.0.0]
+    /// Ip address this Pod listen [default: 127.0.0.1]
     #[arg(long, short)]
     pub ip_address: Option<IpAddr>,
     /// Local port for the pod to use. By default automatically find a port on the range [default: 40000-40100]

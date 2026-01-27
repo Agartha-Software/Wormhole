@@ -11,6 +11,8 @@ pub struct ServiceArgs {
     pub socket: Option<String>,
     #[arg(short, long)]
     pub clean: bool,
-    #[arg(long)]
-    pub allow_other_users: bool,
+    /// nickname name to report to the network
+    /// defaults to your machine's hostname
+    #[arg(long, short = 'n')]
+    pub nickname: Option<String>,
 }

@@ -1,15 +1,16 @@
+pub mod creation;
 mod fsentry;
 mod inode;
 
 pub use fsentry::*;
 pub use inode::*;
+use libp2p::PeerId;
 
 #[cfg(target_os = "windows")]
 pub use crate::pods::itree::WINDOWS_DEFAULT_PERMS_MODE;
 use crate::{
     data::tree_hosts::TreeLine,
     error::WhResult,
-    network::message::Address,
     pods::whpath::{InodeName, InodeNameError, WhPath},
 };
 
@@ -113,17 +114,13 @@ impl ITree {
     pub fn mark_reserved_ino(&mut self, new: Ino) -> WhResult<()> {
         let next = &mut self.next_ino;
 
-        if next.start < new {
+        if next.start > new {
             return Err(WhError::WouldBlock {
                 called_from: "mark_reserved_ino: new is less than current".to_owned(),
             });
         }
-        *next = new..;
+        *next = new + 1..;
         Ok(())
-    }
-
-    pub fn overwrite_self(&mut self, entries: ITreeIndex) {
-        self.entries = entries;
     }
 
     /// Removed 'local only' files from the tree
@@ -190,7 +187,7 @@ impl ITree {
 
     pub fn files_hosted_only_by<'a>(
         &'a self,
-        host: &'a Address,
+        host: &'a PeerId,
     ) -> impl Iterator<Item = &'a Inode> + use<'a> {
         self.iter()
             .filter_map(move |(_, inode)| match &inode.entry {
@@ -358,25 +355,26 @@ impl ITree {
         Ok(actual_inode)
     }
 
-    pub fn set_inode_hosts(&mut self, ino: Ino, hosts: Vec<Address>) -> WhResult<()> {
-        let inode = self.get_inode_mut(ino)?;
+    /// Get the hosts of a file
+    pub fn get_inode_hosts(&self, ino: Ino) -> WhResult<&[PeerId]> {
+        let inode = self.get_inode(ino)?;
 
-        inode.entry = match &inode.entry {
-            FsEntry::File(_) => FsEntry::File(hosts),
-            _ => return Err(WhError::InodeIsADirectory),
-        };
-        Ok(())
+        if let FsEntry::File(hosts) = &inode.entry {
+            Ok(hosts)
+        } else {
+            Err(WhError::InodeIsADirectory)
+        }
     }
 
     /// Add hosts to an inode
     ///
     /// Only works on inodes pointing files (no folders)
     /// Ignore already existing hosts to avoid duplicates
-    pub fn add_inode_hosts(&mut self, ino: Ino, mut new_hosts: Vec<Address>) -> WhResult<()> {
+    pub fn add_inode_hosts(&mut self, ino: Ino, new_hosts: &[PeerId]) -> WhResult<()> {
         let inode = self.get_inode_mut(ino)?;
 
         if let FsEntry::File(hosts) = &mut inode.entry {
-            hosts.append(&mut new_hosts);
+            hosts.extend_from_slice(new_hosts);
             hosts.sort();
             hosts.dedup();
             Ok(())
@@ -388,7 +386,7 @@ impl ITree {
     /// Remove hosts from an inode
     ///
     /// Only works on inodes pointing files (no folders)
-    pub fn remove_inode_hosts(&mut self, ino: Ino, remove_hosts: Vec<Address>) -> WhResult<()> {
+    pub fn remove_inode_hosts(&mut self, ino: Ino, remove_hosts: &[PeerId]) -> WhResult<()> {
         let inode = self.get_inode_mut(ino)?;
 
         match &mut inode.entry {
@@ -473,7 +471,7 @@ fn index_folder_recursive(
     itree: &mut ITree,
     parent: Ino,
     path: &Path,
-    host: &String,
+    host: &PeerId,
     mountpoint: &Path,
 ) -> io::Result<()> {
     for entry in fs::read_dir(path)? {
@@ -509,7 +507,7 @@ fn index_folder_recursive(
 
         let fs_entry = match ftype.try_into()? {
             SimpleFileType::Directory => FsEntry::new_directory(),
-            SimpleFileType::File => FsEntry::File(vec![host.clone()]),
+            SimpleFileType::File => FsEntry::File(vec![*host]),
             SimpleFileType::Symlink => {
                 let target = std::fs::read_link(entry.path());
                 let link = EntrySymlink::parse(&target?, mountpoint);
@@ -538,15 +536,4 @@ fn index_folder_recursive(
         };
     }
     Ok(())
-}
-
-pub fn generate_itree(mountpoint: &Path, host: &String) -> io::Result<ITree> {
-    if let Some(itree) = recover_serialized_itree(mountpoint) {
-        Ok(itree)
-    } else {
-        let mut itree = ITree::new();
-
-        index_folder_recursive(&mut itree, ROOT, mountpoint, host, mountpoint)?;
-        Ok(itree)
-    }
 }
