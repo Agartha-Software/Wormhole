@@ -39,7 +39,7 @@ use crate::pods::{
     network::network_interface::NetworkInterface,
 };
 
-use super::itree::{Ino, GLOBAL_CONFIG_INO, ITREE_FILE_FNAME, ITREE_FILE_INO};
+use super::itree::{Ino, GLOBAL_CONFIG_INO};
 
 #[allow(dead_code)]
 pub struct Pod {
@@ -123,11 +123,16 @@ impl Pod {
             })
             .is_some();
 
-        let itree = generate_itree(&proto.mountpoint, &swarm.local_peer_id().clone())
+        let itree = if dialed_success {
+            ITree::default()
+        } else {
+            let itree = generate_itree(&proto.mountpoint, &swarm.local_peer_id().clone())
             .map_err(|err| PodCreationError::ITreeIndexion(err.into()))?;
 
-        initiate_itree(&itree, &proto.global_config, disk_manager.as_ref())
-            .map_err(|err| PodCreationError::ITreeIndexion(err.into()))?;
+            initiate_itree(&itree, &proto.global_config, disk_manager.as_ref())
+                    .map_err(|err| PodCreationError::ITreeIndexion(err.into()))?;
+            itree
+        };
 
         let itree = Arc::new(RwLock::new(itree));
 
@@ -264,7 +269,6 @@ impl Pod {
             .filter_map(|inode| {
                 if inode.id == GLOBAL_CONFIG_INO
                     || inode.id == LOCAL_CONFIG_INO
-                    || inode.id == ITREE_FILE_INO
                 {
                     None
                 } else {
@@ -290,14 +294,10 @@ impl Pod {
         // drop(self.fuse_handle); // FIXME - do something like block the filesystem
 
         // moving the await task outside the scope needed to workaround https://github.com/rust-lang/rust-clippy/issues/6446
-        let (itree_bin, task) = {
+        let task = {
             let itree = ITree::read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
-
             let peers: Vec<PeerId> = self.network_interface.peers.read().to_vec();
-
-            let bin = bincode::serialize(&*itree).expect("can't serialize itree to bincode");
-            let task = self.send_files_when_stopping(itree, peers);
-            (bin, task)
+            self.send_files_when_stopping(itree, peers)
         };
         task.await;
 
@@ -330,20 +330,6 @@ impl Pod {
         let _ = redundancy_worker_handle
             .await
             .inspect(|_| log::error!("await error: redundancy_worker_handle"));
-
-        let itree_path = WhPath::try_from(ITREE_FILE_FNAME).unwrap();
-
-        if !fs_interface.disk.file_exists(&itree_path) {
-            fs_interface
-                .disk
-                .new_file(&itree_path, 0o600) // REVIEW - permissions value ?
-                .map_err(|io| PodStopError::ITreeSavingFailed { source: io })?;
-        }
-
-        fs_interface
-            .disk
-            .write_file(&WhPath::try_from(ITREE_FILE_FNAME).unwrap(), &itree_bin, 0)
-            .map_err(|io| PodStopError::ITreeSavingFailed { source: io })?;
 
         let mut fs_interface = Arc::try_unwrap(fs_interface)
             .unwrap_or_else(|_| panic!("fs_interface not released from every thread"));
