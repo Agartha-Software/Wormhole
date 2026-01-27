@@ -78,7 +78,7 @@ impl FSPController {
         context: &WormholeHandle,
         file_info: &mut winfsp::filesystem::FileInfo,
     ) -> winfsp::Result<()> {
-        let itree = ITree::read_lock(&self.fs_interface.itree, "winfsp::get_file_info")?;
+        let itree = ITree::read_lock(&self.fs_interface.network_interface.itree, "winfsp::get_file_info")?;
 
         let inode = itree.get_inode(context.ino)?;
         *file_info = (&inode.meta).into();
@@ -132,7 +132,7 @@ impl FileSystemContext for FSPController {
         let path = WhPath::from_fake_absolute(file_name)?;
 
         let file_info: FileInfo =
-            (&ITree::read_lock(&self.fs_interface.itree, "get_security_by_name")?
+            (&ITree::read_lock(&self.fs_interface.network_interface.itree, "get_security_by_name")?
                 .get_inode_from_path(&path)
                 .inspect_err(|e| log::trace!("{:?}:{:?}", &path, e))?
                 .meta)
@@ -179,7 +179,7 @@ impl FileSystemContext for FSPController {
         log::trace!("open({display_name})");
 
         let path = WhPath::from_fake_absolute(file_name)?;
-        let inode = ITree::read_lock(&self.fs_interface.itree, "winfsp::open")?
+        let inode = ITree::read_lock(&self.fs_interface.network_interface.itree, "winfsp::open")?
             .get_inode_from_path(&path)
             .inspect_err(|e| log::warn!("open({display_name})::{e};"))?
             .clone();
@@ -228,7 +228,7 @@ impl FileSystemContext for FSPController {
         let path = WhPath::from_fake_absolute(file_name)?;
         let name: InodeName = (&path).into();
 
-        let itree = ITree::read_lock(&self.fs_interface.itree, "winfsp::create")?;
+        let itree = ITree::read_lock(&self.fs_interface.network_interface.itree, "winfsp::create")?;
 
         if itree.get_inode_from_path(&path).is_ok() {
             return Err(STATUS_OBJECT_NAME_EXISTS.into());
@@ -421,12 +421,12 @@ impl FileSystemContext for FSPController {
         );
 
         let path = WhPath::from_fake_absolute(file_name)?;
-        let parent = ITree::read_lock(&self.fs_interface.itree, "winfsp::rename")?
+        let parent = ITree::read_lock(&self.fs_interface.network_interface.itree, "winfsp::rename")?
             .get_inode_from_path(&path.parent().unwrap_or(WhPath::root()))?
             .id;
 
         let new_path = WhPath::from_fake_absolute(new_file_name)?;
-        let new_parent = ITree::read_lock(&self.fs_interface.itree, "winfsp::rename")?
+        let new_parent = ITree::read_lock(&self.fs_interface.network_interface.itree, "winfsp::rename")?
             .get_inode_from_path(&new_path.parent().unwrap_or(WhPath::root()))?
             .id;
 
@@ -571,7 +571,7 @@ impl FileSystemContext for FSPController {
             buffer.len(),
             offset
         );
-        let size = ITree::read_lock(&self.fs_interface.itree, "winfsp::write")?
+        let size = ITree::read_lock(&self.fs_interface.network_interface.itree, "winfsp::write")?
             .get_inode(context.ino)?
             .meta
             .size;
