@@ -43,7 +43,7 @@ impl Service {
             return send_answer(RestartAnswer::PodStopFailed(err.to_string()), stream).await;
         }
 
-        match Pod::new(proto).await {
+        match Pod::new(proto, self.nickname.clone()).await {
             Ok((pod, _)) => {
                 self.pods.insert(name.clone(), pod);
                 send_answer(RestartAnswer::Success(name), stream).await

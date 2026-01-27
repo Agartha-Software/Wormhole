@@ -27,6 +27,7 @@ pub struct Service {
     pub pods: HashMap<String, Pod>,
     pub frozen_pods: HashMap<String, PodPrototype>,
     pub socket: String,
+    pub nickname: String,
     rest_service: tokio::task::JoinHandle<Result<(), std::io::Error>>,
     web_request_rx: Receiver<(Command, Sender<String>)>,
     socket_listener: Listener,
@@ -49,10 +50,15 @@ impl Service {
             .inspect_err(|err| eprintln!("{err}"))
             .ok()?;
 
+        let nickname = args
+            .nickname
+            .unwrap_or_else(|| gethostname::gethostname().to_string_lossy().to_string());
+
         let mut service = Service {
             pods: HashMap::new(),
             frozen_pods: HashMap::new(),
             socket,
+            nickname,
             rest_service,
             web_request_rx: rx,
             socket_listener,

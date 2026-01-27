@@ -1,6 +1,7 @@
 use crate::config::local_file::LocalConfigFile;
 use crate::config::GlobalConfig;
 use crate::ipc::answers::InspectInfo;
+use crate::network;
 use crate::pods::itree::ITree;
 use libp2p::{Multiaddr, PeerId};
 use serde::{Deserialize, Serialize};
@@ -29,9 +30,15 @@ impl PodPrototype {
     }
 
     pub fn get_inspect_info(&self) -> InspectInfo {
+        let listen_addrs = self
+            .listen_addrs
+            .iter()
+            .map(|m| network::PeerInfo::display_address(m).unwrap_or_else(|m| m.to_string()))
+            .collect();
+
         InspectInfo {
             frozen: true,
-            listen_addrs: self.listen_addrs.clone(),
+            listen_addrs,
             name: self.name.clone(),
             connected_peers: vec![],
             mount: self.mountpoint.clone(),

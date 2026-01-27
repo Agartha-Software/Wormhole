@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use libp2p::Multiaddr;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -17,7 +16,8 @@ pub enum PodCreationError {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum NewAnswer {
-    Success(Multiaddr, bool),
+    /// Port, Dialed: has connected to an existing peer
+    Success(String, bool),
     AlreadyExist,
     AlreadyMounted,
     InvalidIp(String),
@@ -78,6 +78,7 @@ pub enum RemoveAnswer {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct StatusSuccess {
+    pub nickname: String,
     pub running: Vec<String>,
     pub frozen: Vec<String>,
 }
@@ -88,22 +89,29 @@ pub enum StatusAnswer {
     Success(StatusSuccess),
 }
 
+/// Not to be confused with [PeerInfo](crate::network::PeerInfo)
+/// though the two are the same data, this one is exclusively the CLI messaging
+/// the other is exclusively for Network messaging
+/// this distinction is because of typing
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PeerInfo {
-    pub name: String,
-    pub listen_addrs: Vec<Multiaddr>,
+pub struct PeerInfoIPC {
+    pub nickname: String,
+    pub listen_addrs: Vec<String>,
 }
 
-impl std::fmt::Display for PeerInfo {
+impl From<&crate::network::PeerInfo> for PeerInfoIPC {
+    fn from(value: &crate::network::PeerInfo) -> Self {
+        value.to_ipc()
+    }
+}
+
+impl std::fmt::Display for PeerInfoIPC {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Name: \"{}\", Addresses: [ {} ]",
-            self.name,
+            "Nickname: \"{}\", Addresses: [ {} ]",
+            self.nickname,
             self.listen_addrs
-                .iter()
-                .map(|address| address.to_string())
-                .collect::<Vec<String>>()
                 .join(", ")
         )
     }
@@ -112,9 +120,9 @@ impl std::fmt::Display for PeerInfo {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InspectInfo {
     pub frozen: bool,
-    pub listen_addrs: Vec<Multiaddr>,
+    pub listen_addrs: Vec<String>,
     pub name: String,
-    pub connected_peers: Vec<PeerInfo>,
+    pub connected_peers: Vec<PeerInfoIPC>,
     pub mount: PathBuf,
 }
 

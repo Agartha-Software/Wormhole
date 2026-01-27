@@ -11,6 +11,7 @@ impl Service {
         Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
     {
         let data = StatusSuccess {
+            nickname: self.nickname.clone(),
             running: self.pods.keys().cloned().collect::<Vec<String>>(),
             frozen: self.frozen_pods.keys().cloned().collect::<Vec<String>>(),
         };
