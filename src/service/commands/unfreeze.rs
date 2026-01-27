@@ -13,8 +13,8 @@ impl Service {
     where
         Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
     {
-        let name = match find_frozen_pod(&id, &self.frozen_pods) {
-            Some((name, _)) => name,
+        let (name, proto) = match find_frozen_pod(&id, &self.frozen_pods) {
+            Some(found) => found,
             None => {
                 return match find_pod(&id, &self.pods) {
                     Some(_) => send_answer(UnfreezeAnswer::AlreadyUnfrozen, stream),
@@ -24,18 +24,17 @@ impl Service {
             }
         };
 
-        let name = name.clone();
-        let proto = self
-            .frozen_pods
-            .remove(&name)
-            .expect("Already checked that the frozen_pod exist");
-
-        match Pod::new(proto, self.nickname.clone()).await {
+        match Pod::new(proto.clone(), self.nickname.clone()).await {
             Ok((pod, _)) => self.pods.insert(name.clone(), pod),
             Err(err) => {
                 return send_answer(UnfreezeAnswer::PodCreationFailed(err), stream).await;
             }
         };
+
+        let name = name.clone();
+        self.frozen_pods
+            .remove(&name)
+            .expect("Already checked that the frozen_pod exist");
 
         send_answer(UnfreezeAnswer::Success(name), stream).await
     }

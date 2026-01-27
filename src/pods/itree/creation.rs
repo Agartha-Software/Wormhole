@@ -58,14 +58,12 @@ fn apply_global_config_to_file(
 /// Required at setup to resolve issue #179
 /// (files pulling need the parent folder to be already present)
 fn create_all_shared(itree: &ITree, from: Ino, disk: &dyn DiskManager) -> io::Result<()> {
-    let from = itree.get_inode(from).map_err(|e| e.into_io())?;
+    let from = itree.get_inode(from)?;
 
     match &from.entry {
         FsEntry::File(_) => Ok(()),
         FsEntry::Symlink(symlink) => {
-            let current_path = itree
-                .get_path_from_inode_id(from.id)
-                .map_err(|e| e.into_io())?;
+            let current_path = itree.get_path_from_inode_id(from.id)?;
             disk.new_symlink(&current_path, from.meta.perm, symlink)
                 .or_else(|e| {
                     if e.kind() == io::ErrorKind::AlreadyExists {
@@ -76,9 +74,7 @@ fn create_all_shared(itree: &ITree, from: Ino, disk: &dyn DiskManager) -> io::Re
                 })
         }
         FsEntry::Directory(children) => {
-            let current_path = itree
-                .get_path_from_inode_id(from.id)
-                .map_err(|e| e.into_io())?;
+            let current_path = itree.get_path_from_inode_id(from.id)?;
 
             // skipping root folder
             if current_path != WhPath::root() {

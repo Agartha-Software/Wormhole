@@ -39,7 +39,7 @@ impl Service {
 
         let answer = match pod.stop().await {
             Ok(()) => FreezeAnswer::Success(name),
-            Err(err) => FreezeAnswer::PodStopFailed(err.to_string()),
+            Err(err) => FreezeAnswer::PodStopFailed(err.into()),
         };
 
         send_answer(answer, stream).await

@@ -8,6 +8,7 @@ use crate::data::tree_hosts::CliHostTree;
 use crate::error::WhError;
 #[cfg(target_os = "linux")]
 use crate::fuse::fuse_impl::mount_fuse;
+use crate::ipc::error::IoError;
 use crate::ipc::{
     self,
     answers::{InspectInfo, PodCreationError},
@@ -65,15 +66,48 @@ custom_error! {pub PodInfoError
     FileNotFound = "PodInfoError: file not found",
 }
 
-custom_error! {pub PodStopError
+custom_error! {
+    pub PodStopError
     WhError{source: WhError} = "{source}",
     ITreeSavingFailed{source: io::Error} = "Could not write itree to disk: {source}",
-    FileNotReadable{file: Ino, reason: String} = "Could not read file from disk: ({file}) {reason}",
+    FileNotReadable{file: Ino, source: WhError} = "Could not read file from disk: ({file}) {source}",
     FileNotSent{file: Ino} = "No pod was able to receive this file before stopping: ({file})",
     #[cfg(target_os = "linux")]
     DiskManagerStopFailed{e: io::Error} = "Unable to stop the disk manager properly. Should not be an error on your platform {e}",
     #[cfg(target_os = "windows")]
     DiskManagerStopFailed{e: io::Error} = "Unable to stop the disk manager properly. Your files are still on the system folder: ('.'mount_path). {e}",
+}
+
+impl From<PodStopError> for io::Error {
+    fn from(value: PodStopError) -> Self {
+        match value {
+            PodStopError::WhError { source } => source.clone().into(),
+            PodStopError::ITreeSavingFailed { ref source } => {
+                io::Error::new(source.kind(), value.to_string())
+            }
+            PodStopError::FileNotReadable {
+                file: _,
+                ref source,
+            } => {
+                let io: io::ErrorKind = source.clone().into();
+
+                io::Error::new(io, value.to_string())
+            }
+            PodStopError::FileNotSent { file: _ } => {
+                io::Error::new(io::ErrorKind::NetworkUnreachable, value.to_string())
+            }
+            PodStopError::DiskManagerStopFailed { ref e } => {
+                io::Error::new(e.kind(), value.to_string())
+            }
+        }
+    }
+}
+
+impl From<PodStopError> for IoError {
+    fn from(value: PodStopError) -> Self {
+        let io: io::Error = value.into();
+        io.into()
+    }
 }
 
 impl Pod {
@@ -233,7 +267,7 @@ impl Pod {
                 .read_local_file(ino)
                 .map_err(|e| PodStopError::FileNotReadable {
                     file: ino,
-                    reason: e.to_string(),
+                    source: e,
                 })?;
         let file_content = Arc::new(file_content);
 
@@ -301,6 +335,7 @@ impl Pod {
         // drop(self.fuse_handle); // FIXME - do something like block the filesystem
 
         // moving the await task outside the scope needed to workaround https://github.com/rust-lang/rust-clippy/issues/6446
+
         let (itree_bin, task) = {
             let itree = ITree::read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
 
