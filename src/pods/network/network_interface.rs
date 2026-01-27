@@ -212,7 +212,7 @@ impl NetworkInterface {
     pub fn check_integrity(&self) {
         self.to_redundancy_tx
             .send(RedundancyMessage::CheckIntegrity)
-            .expect("network_interface::apply_redundancy: tx error");
+            .expect("network_interface::check_integrity: tx error");
     }
 
     // !SECTION ^ Redundancy related
