@@ -77,7 +77,10 @@ custom_error! {pub PodStopError
 }
 
 impl Pod {
-    pub async fn new(proto: PodPrototype, host_nickname: String) -> Result<(Self, bool), PodCreationError> {
+    pub async fn new(
+        proto: PodPrototype,
+        host_nickname: String,
+    ) -> Result<(Self, bool), PodCreationError> {
         let (senders_in, senders_out) = mpsc::unbounded_channel();
 
         let (redundancy_tx, redundancy_rx) = mpsc::unbounded_channel();

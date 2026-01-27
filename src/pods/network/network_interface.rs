@@ -16,7 +16,7 @@ use crate::{
         whpath::InodeName,
     },
 };
-use libp2p::{Multiaddr, PeerId, identify::Info};
+use libp2p::{identify::Info, Multiaddr, PeerId};
 use parking_lot::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
 

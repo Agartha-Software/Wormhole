@@ -111,8 +111,7 @@ impl std::fmt::Display for PeerInfoIPC {
             f,
             "Nickname: \"{}\", Addresses: [ {} ]",
             self.nickname,
-            self.listen_addrs
-                .join(", ")
+            self.listen_addrs.join(", ")
         )
     }
 }
