@@ -31,8 +31,8 @@ pub async fn restart(args: IdentifyPodArgs, mut stream: Stream) -> io::Result<St
             "Failed to restart pod, please retry.",
         )),
         RestartAnswer::PodStopFailed(err) => Err(io::Error::new(
-            io::ErrorKind::Interrupted,
-            format!("An error occured while stopping the pod: {err}"),
+            err.kind,
+            format!("An error occured while stopping the pod:\n{}", err.error),
         )),
         RestartAnswer::CouldntBind(e) => {
             print_err("Failed to bind the restarting pod:");

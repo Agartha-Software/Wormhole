@@ -27,8 +27,11 @@ pub async fn freeze(args: IdentifyPodArgs, mut stream: Stream) -> io::Result<Str
             "Failed to freeze pod, please retry.",
         )),
         FreezeAnswer::PodStopFailed(err) => Err(io::Error::new(
-            io::ErrorKind::Interrupted,
-            format!("The pod has been frozen but couldn't be stopped cleanly: {err}"),
+            err.kind,
+            format!(
+                "The pod has been frozen but couldn't be stopped cleanly:\n{}",
+                err.error
+            ),
         )),
     }
 }

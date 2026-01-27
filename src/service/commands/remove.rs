@@ -22,9 +22,9 @@ impl Service {
             match pod.stop().await {
                 Ok(()) => match delete_saved_pod(&self.socket, &name) {
                     Ok(()) => RemoveAnswer::Success,
-                    Err(err) => RemoveAnswer::PodStopFailed(err.to_string()),
+                    Err(err) => RemoveAnswer::PodStopFailed(err.into()),
                 },
-                Err(err) => RemoveAnswer::PodStopFailed(err.to_string()),
+                Err(err) => RemoveAnswer::PodStopFailed(err.into()),
             }
         } else {
             RemoveAnswer::PodNotFound
