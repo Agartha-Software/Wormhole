@@ -4,7 +4,6 @@ use futures_util::io;
 use wormhole::pods::itree::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME};
 
 use crate::functionnal::environment_manager::{
-    manager::socket_from_id,
     types::{Service, CLI_BIN, MAX_POD_PORT},
 };
 
@@ -47,7 +46,7 @@ where
 /// Cli commands to create a pod
 pub fn cli_pod_creation_command(
     network_name: String,
-    service_id: u16,
+    socket: &String,
     dir_path: &Path,
     port_range: &mut std::ops::RangeFrom<u16>,
     connect_to: Option<&u16>,
@@ -68,7 +67,7 @@ pub fn cli_pod_creation_command(
         let (status, _, stderr) = cli_command({
             let mut args = vec![
                 "-s".to_string(),
-                socket_from_id(service_id),
+                socket.clone(),
                 "new".to_string(),
                 network_name.clone(),
                 "-m".to_string(),
