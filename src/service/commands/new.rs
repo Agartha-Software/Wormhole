@@ -87,7 +87,7 @@ impl Service {
                 }
                 send_answer(NewAnswer::Success(display_addr, dialed), stream).await
             }
-            Err(err) => send_answer(err, stream).await,
+            Err(err) => send_answer(NewAnswer::FailedToCreatePod(err), stream).await,
         }
     }
 }
