@@ -441,6 +441,7 @@ impl Pod {
             name: self.name.clone(),
             connected_peers: peers_info,
             mount: self.mountpoint.clone(),
+            disk_space: self.fs_interface.disk.size_info().ok(),
         }
     }
 }

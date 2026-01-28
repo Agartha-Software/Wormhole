@@ -1,9 +1,14 @@
 use std::path::PathBuf;
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::{cli::ConfigType, data::tree_hosts::TreeData, ipc::error::IoError, pods::itree::Hosts};
+use crate::{
+    cli::ConfigType, data::tree_hosts::TreeData,
+    ipc::error::IoError,
+    pods::{disk_managers::DiskSizeInfo, itree::Hosts, network::redundancy::RedundancyStatus},
+};
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -89,6 +94,12 @@ pub enum StatusAnswer {
     Success(StatusSuccess),
 }
 
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub enum ListPodsAnswer {
+    Pods(Vec<String>),
+}
+
 /// Not to be confused with [PeerInfo](crate::network::PeerInfo)
 /// though the two are the same data, this one is exclusively the CLI messaging
 /// the other is exclusively for Network messaging
@@ -123,6 +134,7 @@ pub struct InspectInfo {
     pub name: String,
     pub connected_peers: Vec<PeerInfoIPC>,
     pub mount: PathBuf,
+    pub disk_space: Option<DiskSizeInfo>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -131,8 +143,7 @@ pub enum InspectAnswer {
     PodNotFound,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum TreeAnswer {
     Tree(Box<TreeData>),
     PodNotFound,
@@ -170,6 +181,23 @@ pub enum ConfigFileError {
     InvalidGlobal(String),
     InvalidLocal(String),
     InvalidBoth(String, String),
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub enum RedundancyStatusAnswer {
+    // Status(<RedundancyStatus, total_of_files_for_this_status>)
+    Status(HashMap<RedundancyStatus, u64>),
+    PodNotFound,
+    InternalError,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub enum StatsPerFiletypeAnswer {
+    Stats(HashMap<String, u64>),
+    PodNotFound,
+    InternalError,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]

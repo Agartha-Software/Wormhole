@@ -85,6 +85,9 @@ impl Service {
             Command::CheckConfig(pod_id, config_type) => {
                 self.check(pod_id, config_type, stream).await
             }
+            Command::RedundancyStatus(pod_id) => self.redundancy_status(pod_id, stream).await,
+            Command::StatsPerFiletype(pod_id) => self.stats_per_filetype(pod_id, stream).await,
+            Command::ListPods => self.list_pods(stream).await,
         }?;
         Ok(stop)
     }

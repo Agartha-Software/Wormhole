@@ -37,7 +37,10 @@ pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String
             \x20  Name:\t\t{}\n\
             \x20  Mount:\t\t{:#?}\n\
             \x20  Listen Addresses:\t[ {} ]\n\
-            \x20  Connected peers:\t{}",
+            \x20  Connected peers:\t{}\n\
+            \x20  Free space:\t{}\n\
+            \x20  Used space:\t{}\n\
+            \x20  Total space:\t{}",
             if info.frozen { "Frozen" } else { "Running" },
             info.name,
             info.mount,
@@ -50,7 +53,17 @@ pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String
                 "Disconnected (Frozen)".to_string()
             } else {
                 display_peers(info.connected_peers)
-            }
+            },
+            info.disk_space
+                .as_ref()
+                .map_or("Error".to_owned(), |s| s.free_size.to_string()),
+            info.disk_space
+                .as_ref()
+                .map_or("Error".to_owned(), |s| (s.total_size - s.free_size)
+                    .to_string()),
+            info.disk_space
+                .as_ref()
+                .map_or("Error".to_owned(), |s| s.total_size.to_string()),
         )),
         InspectAnswer::PodNotFound => Err(io::Error::new(
             io::ErrorKind::NotFound,
