@@ -33,7 +33,7 @@ jobs:
       - name: Build project
         env:
           WINFSP_INCLUDE_PATH: "C:\\Program Files\\WinFsp\\inc"
-        run: cargo build --release
+        run: cargo build --tests --all-targets
       - name: Test project
         env:
           WINFSP_INCLUDE_PATH: "C:\\Program Files\\WinFsp\\inc"

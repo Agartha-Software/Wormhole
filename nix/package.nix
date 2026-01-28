@@ -28,12 +28,12 @@ let
 
     outputHashAlgo = "sha256";
     outputHashMode = "recursive";
-    outputHash = "sha256-7bSZIKmxcEoNc+jaKgGA8RtqEO0zJeq0I5fXhQJU/bk=";
+    outputHash = "sha256-NHQ65PV4N198e31QdXuU0GjIb9jlFq3xKxvA1XbR1hc=";
   };
 
 in pkgs.stdenv.mkDerivation {
   pname = "wormhole";
-  version = "0.3.0";
+  version = "0.4.0";
 
   src = self;
   cargoDeps = cargoDeps;

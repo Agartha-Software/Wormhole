@@ -40,7 +40,7 @@ impl Service {
             .expect("Already checked that the pod exist");
 
         if let Err(err) = pod.stop().await {
-            return send_answer(RestartAnswer::PodStopFailed(err.to_string()), stream).await;
+            return send_answer(RestartAnswer::PodStopFailed(err.into()), stream).await;
         }
 
         match Pod::new(proto, self.nickname.clone()).await {
