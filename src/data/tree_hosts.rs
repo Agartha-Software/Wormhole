@@ -35,9 +35,8 @@ impl FsEntryInfo {
                         infos
                             .get(s)
                             .cloned()
-                            .expect(&format!("peer {s} is missing"))
+                            .unwrap_or_else(|| panic!("peer {s} is missing"))
                     })
-                    // unwrap_or_else(|| s.to_base58()))
                     .collect(),
             ),
             FsEntry::Directory(_) => Self::Directory,
@@ -51,7 +50,6 @@ struct InodeInfo {
     name: String,
     ino: Ino,
     entry: FsEntryInfo,
-    // entry: FsEntryInfo,
 }
 
 impl InodeInfo {
