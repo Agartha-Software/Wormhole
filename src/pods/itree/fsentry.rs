@@ -217,6 +217,37 @@ mod test {
         prelude::{PathChild, PathCreateDir},
         TempDir,
     };
+    use camino::Utf8PathBuf;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn test_parse_symlink() {
+        let mountpoint = Path::new("/mountpoint");
+        let relative = Path::new("../file");
+        let absolute = mountpoint.join("folder/file");
+        let external = Path::new("/tmp/file");
+
+        let symlink_relative = EntrySymlink::parse(&relative, mountpoint).expect("parsing relative symlink");
+        let symlink_relative_expected = EntrySymlink {
+            target: SymlinkPath::SymlinkPathRelative(Utf8PathBuf::from("../file")),
+            hint: None,
+        };
+        assert_eq!(symlink_relative, symlink_relative_expected);
+
+        let symlink_absolute = EntrySymlink::parse(&absolute, mountpoint).expect("parsing absolute symlink");
+        let symlink_absolute_expected = EntrySymlink {
+            target: SymlinkPath::SymlinkPathAbsolute(WhPath::try_from("folder/file").expect("valid WhPath")),
+            hint: None,
+        };
+        assert_eq!(symlink_absolute, symlink_absolute_expected);
+
+        let symlink_external = EntrySymlink::parse(&external, mountpoint).expect_err("parsing external symlink yields Err(Self)");
+        let symlink_external_expected = EntrySymlink {
+            target: SymlinkPath::SymlinkPathExternal(PathBuf::from("/tmp/file")),
+            hint: None,
+        };
+        assert_eq!(symlink_external, symlink_external_expected);
+    }
 
     #[test]
     fn test_realize_symlink() {
