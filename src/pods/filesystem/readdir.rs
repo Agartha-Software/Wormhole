@@ -28,7 +28,7 @@ impl ReadLinkError {
 
 impl FsInterface {
     pub fn read_dir(&self, ino: Ino) -> Result<Vec<(u64, String, Metadata)>, ReadDirError> {
-        let itree = ITree::read_lock(&self.itree, "fs_interface.read_dir")?;
+        let itree = ITree::read_lock(&self.network_interface.itree, "fs_interface.read_dir")?;
         let dir = itree.get_inode(ino)?.clone();
 
         if !has_read_perm(dir.meta.perm) {
@@ -57,7 +57,7 @@ impl FsInterface {
     }
 
     pub fn readlink(&self, ino: Ino) -> Result<EntrySymlink, ReadLinkError> {
-        let itree = ITree::read_lock(&self.itree, "fs_interface.read_dir")?;
+        let itree = ITree::read_lock(&self.network_interface.itree, "fs_interface.read_dir")?;
         let inode = itree.get_inode(ino)?;
 
         match &inode.entry {

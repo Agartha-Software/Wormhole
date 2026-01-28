@@ -1,7 +1,7 @@
 use interprocess::local_socket::tokio::Stream;
 use std::io;
 
-use crate::ipc::answers::{InspectAnswer, PeerInfo};
+use crate::ipc::{self, answers::InspectAnswer};
 
 use crate::{
     cli::connection::{recieve_answer, send_command},
@@ -9,7 +9,7 @@ use crate::{
     ipc::commands::{Command, PodId},
 };
 
-fn display_peers(peers: Vec<PeerInfo>) -> String {
+fn display_peers(peers: Vec<ipc::PeerInfo>) -> String {
     if peers.is_empty() {
         "[ ]".to_string()
     } else {
@@ -36,16 +36,16 @@ pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String
             "Pod informations: {}\n\
             \x20  Name:\t\t{}\n\
             \x20  Mount:\t\t{:#?}\n\
-            \x20  Hostname:\t\t{}\n\
-            \x20  Url:\t\t\t{}\n\
-            \x20  Bound Address:\t{}\n\
+            \x20  Listen Addresses:\t[ {} ]\n\
             \x20  Connected peers:\t{}",
             if info.frozen { "Frozen" } else { "Running" },
             info.name,
             info.mount,
-            info.hostname,
-            info.public_url.unwrap_or("[ None ]".to_string()),
-            info.bound_socket,
+            info.listen_addrs
+                .iter()
+                .map(|addr| addr.to_string())
+                .collect::<Vec<String>>()
+                .join(", "),
             if info.frozen {
                 "Disconnected (Frozen)".to_string()
             } else {

@@ -1,16 +1,17 @@
-use super::network_interface::{get_all_peers_address, NetworkInterface};
+use super::network_interface::NetworkInterface;
 use crate::{
     error::{WhError, WhResult},
-    network::message::{Address, MessageContent, RedundancyMessage, ToNetworkMessage},
+    network::message::{RedundancyMessage, Request, ToNetworkMessage},
     pods::{
         filesystem::fs_interface::FsInterface,
         itree::{FsEntry, ITree, Ino},
     },
 };
 use futures_util::future::join_all;
+use libp2p::PeerId;
 use std::sync::Arc;
 use tokio::{
-    sync::mpsc::{unbounded_channel, UnboundedReceiver},
+    sync::{mpsc::UnboundedReceiver, oneshot},
     task::JoinSet,
 };
 
@@ -30,18 +31,9 @@ pub async fn redundancy_worker(
     loop {
         let message = match reception.recv().await {
             Some(message) => message,
-            None => continue,
+            None => return,
         };
-        let peers = match get_all_peers_address(&nw_interface.peers) {
-            Ok(peers) => peers,
-            Err(e) => {
-                log::error!(
-                    "Redundancy: can't get peers: (ignoring request \"{:?}\") because of: {e}",
-                    message
-                );
-                continue;
-            }
-        };
+        let peers = nw_interface.peers.read().clone();
 
         match message {
             RedundancyMessage::ApplyTo(ino) => {
@@ -70,7 +62,7 @@ fn eligible_to_apply(
     entry: &FsEntry,
     target_redundancy: u64,
     available_peers: usize,
-    self_addr: &Address,
+    self_addr: &PeerId,
 ) -> Option<Ino> {
     if ITree::is_local_only(ino) {
         return None;
@@ -95,7 +87,7 @@ fn eligible_to_apply(
 async fn check_integrity(
     nw_interface: &Arc<NetworkInterface>,
     fs_interface: &Arc<FsInterface>,
-    peers: &[Address],
+    peers: &[PeerId],
 ) -> WhResult<()> {
     let available_peers = peers.len() + 1;
 
@@ -109,7 +101,7 @@ async fn check_integrity(
                     &inode.entry,
                     nw_interface.global_config.read().redundancy.number,
                     available_peers,
-                    &nw_interface.hostname,
+                    &nw_interface.id,
                 )
             })
             .collect();
@@ -137,7 +129,7 @@ async fn check_integrity(
 async fn apply_to(
     nw_interface: &Arc<NetworkInterface>,
     fs_interface: &Arc<FsInterface>,
-    peers: &[Address],
+    peers: &[PeerId],
     ino: u64,
 ) -> WhResult<usize> {
     if ITree::is_local_only(ino) {
@@ -170,13 +162,13 @@ async fn apply_to(
 /// start download to others concurrently
 async fn push_redundancy(
     nw_interface: &Arc<NetworkInterface>,
-    all_peers: &[Address],
+    all_peers: &[PeerId],
     ino: Ino,
     file_binary: Arc<Vec<u8>>,
     target_redundancy: usize,
-) -> Vec<Address> {
-    let mut success_hosts: Vec<Address> = vec![nw_interface.hostname.clone()];
-    let mut set: JoinSet<WhResult<Address>> = JoinSet::new();
+) -> Vec<PeerId> {
+    let mut success_hosts: Vec<PeerId> = vec![nw_interface.id];
+    let mut set: JoinSet<Option<PeerId>> = JoinSet::new();
 
     for addr in all_peers.iter().take(target_redundancy).cloned() {
         let nwi_clone = Arc::clone(nw_interface);
@@ -194,8 +186,8 @@ async fn push_redundancy(
                 log::error!("redundancy_worker: error in thread pool: {e}");
                 break;
             }
-            Some(Ok(Ok(host))) => success_hosts.push(host),
-            Some(Ok(Err(crate::error::WhError::NetworkDied { called_from: _ }))) => {
+            Some(Ok(Some(host))) => success_hosts.push(host),
+            Some(Ok(None)) => {
                 log::warn!("Redundancy: NetworkDied on some host. Trying next...");
                 if current_try >= all_peers.len() {
                     log::error!("Redundancy: Not enough answering hosts to apply redundancy.");
@@ -203,16 +195,12 @@ async fn push_redundancy(
                 }
                 let nwi_clone = Arc::clone(nw_interface);
                 let bin_clone = file_binary.clone();
-                let addr = all_peers[current_try].clone();
+                let addr = all_peers[current_try];
 
                 set.spawn(
                     async move { nwi_clone.send_file_redundancy(ino, bin_clone, addr).await },
                 );
                 current_try += 1;
-            }
-            Some(Ok(Err(e))) => {
-                log::error!("Redundancy: unknown error when applying redundancy: {e}");
-                break;
             }
         }
     }
@@ -224,23 +212,18 @@ impl NetworkInterface {
         &self,
         inode: Ino,
         data: Arc<Vec<u8>>,
-        to: Address,
-    ) -> WhResult<Address> {
-        let (status_tx, mut status_rx) = unbounded_channel();
+        to: PeerId,
+    ) -> Option<PeerId> {
+        let (status_tx, status_rx) = oneshot::channel();
 
         self.to_network_message_tx
-            .send(ToNetworkMessage::SpecificMessage(
-                (MessageContent::RedundancyFile(inode, data), Some(status_tx)),
-                vec![to.clone()],
+            .send(ToNetworkMessage::AnswerMessage(
+                Request::RedundancyFile(inode, data),
+                status_tx,
+                to,
             ))
             .expect("send_file: unable to update modification on the network thread");
 
-        status_rx
-            .recv()
-            .await
-            .unwrap_or(Err(WhError::NetworkDied {
-                called_from: "network_interface::send_file_redundancy".to_owned(),
-            }))
-            .map(|()| to)
+        status_rx.await.ok().flatten().map(|_| to)
     }
 }

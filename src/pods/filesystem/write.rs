@@ -69,7 +69,7 @@ impl FsInterface {
 
         file_handle.dirty = true;
 
-        let itree = ITree::read_lock(&self.itree, "fs_interface.write")?;
+        let itree = ITree::read_lock(&self.network_interface.itree, "fs_interface.write")?;
         let path = itree.get_path_from_inode_id(id)?;
         drop(itree);
 
@@ -81,7 +81,10 @@ impl FsInterface {
     }
 
     fn affect_write_locally(&self, id: Ino, new_size: usize) -> WhResult<Metadata> {
-        let mut itree = ITree::write_lock(&self.itree, "network_interface.affect_write_locally")?;
+        let mut itree = ITree::write_lock(
+            &self.network_interface.itree,
+            "network_interface.affect_write_locally",
+        )?;
         let inode = itree.get_inode_mut(id)?;
         let new_size = (new_size as u64).max(inode.meta.size);
         inode.meta.size = new_size;

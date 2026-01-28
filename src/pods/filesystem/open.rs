@@ -84,7 +84,7 @@ pub fn check_permissions(
 
 impl FsInterface {
     pub fn open(&self, ino: Ino, flags: OpenFlags, access: AccessMode) -> Result<UUID, OpenError> {
-        let meta = ITree::read_lock(&self.itree, "open")?
+        let meta = ITree::read_lock(&self.network_interface.itree, "open")?
             .get_inode(ino)?
             .meta
             .clone();

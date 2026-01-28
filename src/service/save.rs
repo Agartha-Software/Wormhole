@@ -6,11 +6,9 @@ use std::{
     fs,
     io::{self, Write},
     path::PathBuf,
-    sync::Arc,
 };
 
 use crate::{
-    network::server::Server,
     pods::{pod::Pod, prototype::PodPrototype},
     service::Service,
 };
@@ -118,19 +116,11 @@ impl Service {
             if frozen {
                 self.frozen_pods.insert(prototype.name.clone(), prototype);
             } else {
-                let server = match Server::from_specific_address(prototype.bound_socket) {
-                    Ok(server) => Arc::new(server),
-                    Err(err) => {
-                        log::trace!("Could'nt bind address {:?}: {err}", prototype.bound_socket);
-                        continue;
-                    }
-                };
-
                 let name = prototype.name.clone();
-                match Pod::new(prototype, server).await {
-                    Ok(pod) => self.pods.insert(name, pod),
+                match Pod::new(prototype, self.nickname.clone()).await {
+                    Ok((pod, _)) => self.pods.insert(name, pod),
                     Err(err) => {
-                        log::trace!("Failed to create the pod '{name}': {err}");
+                        log::trace!("Failed to create the pod '{name}': {err:?}");
                         // Delete failing save?
                         continue;
                     }

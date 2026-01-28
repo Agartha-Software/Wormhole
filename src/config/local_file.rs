@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct LocalConfigFile {
     pub name: Option<String>,
-    pub hostname: Option<String>,
-    pub public_url: Option<String>,
+    pub listen_addrs: Vec<String>,
     pub restart: Option<bool>,
 }

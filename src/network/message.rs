@@ -1,13 +1,15 @@
 use std::{
+    collections::HashMap,
     fmt::{self, Debug},
     sync::Arc,
 };
 
+use libp2p::{Multiaddr, PeerId};
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::oneshot;
 
 use crate::{
-    error::WhResult,
+    config::GlobalConfig,
     pods::{
         filesystem::diffs::{Delta, Signature},
         itree::{ITree, Ino, Inode, Metadata},
@@ -19,29 +21,26 @@ use crate::{
 /// Represent the content of the intern message but is also the struct sent
 /// through the network
 #[derive(Serialize, Deserialize, Clone)]
-pub enum MessageContent {
+pub enum Request {
     Inode(Inode),
 
     RedundancyFile(Ino, Arc<Vec<u8>>),
     /// Parent, New Parent, Name, New Name, overwrite
     Rename(Ino, Ino, InodeName, InodeName, bool),
-    EditHosts(Ino, Vec<Address>),
-    RevokeFile(Ino, Address, Metadata),
-    AddHosts(Ino, Vec<Address>),
-    RemoveHosts(Ino, Vec<Address>),
+    EditHosts(Ino, Vec<PeerId>),
+    RevokeFile(Ino, PeerId, Metadata),
+    AddHosts(Ino, Vec<PeerId>),
+    RemoveHosts(Ino, Vec<PeerId>),
 
     /// A delta on file write with given base signature
     FileDelta(Ino, Metadata, Signature, Delta),
     /// File contents were changed.
-    /// Peers also tracking this file should follow up with a [MessageContent::DeltaRequest]
+    /// Peers also tracking this file should follow up with a [Request::DeltaRequest]
     FileChanged(Ino, Metadata),
-    /// Request a file delta from this base signature
-    DeltaRequest(Ino, Signature),
 
     // RequestFileSignature(Ino),
     // FileSignature(Ino, Vec<u8>),
     RequestFile(Ino),
-    PullAnswer(Ino, Vec<u8>),
 
     Remove(Ino),
     EditMetadata(Ino, Metadata),
@@ -49,45 +48,37 @@ pub enum MessageContent {
     RemoveXAttr(Ino, String),
 
     RequestFs,
-    // (ITree, peers, global_config)
-    FsAnswer(ITree, Vec<Address>, Vec<u8>),
-
-    Disconnect,
 }
 
-impl fmt::Display for MessageContent {
+impl fmt::Display for Request {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let name = match self {
-            MessageContent::Remove(_) => "Remove",
-            MessageContent::Inode(_) => "Inode",
-            MessageContent::RequestFile(_) => "RequestFile",
-            MessageContent::PullAnswer(_, _) => "PullAnswer",
-            MessageContent::Rename(_, _, _, _, _) => "Rename",
-            MessageContent::EditHosts(_, _) => "EditHosts",
-            MessageContent::RevokeFile(_, _, _) => "RevokeFile",
-            MessageContent::AddHosts(_, _) => "AddHosts",
-            MessageContent::RemoveHosts(_, _) => "RemoveHosts",
-            MessageContent::EditMetadata(_, _) => "EditMetadata",
-            MessageContent::SetXAttr(_, _, _) => "SetXAttr",
-            MessageContent::RemoveXAttr(_, _) => "RemoveXAttr",
-            MessageContent::RequestFs => "RequestFs",
-            MessageContent::FsAnswer(_, _, _) => "FsAnswer",
-            MessageContent::RedundancyFile(_, _) => "RedundancyFile",
-            MessageContent::Disconnect => "Disconnect",
-            MessageContent::FileDelta(_, _, _, _) => "FileDelta",
-            MessageContent::FileChanged(_, _) => "FileChanged",
-            MessageContent::DeltaRequest(_, _) => "DeltaRequest",
-            // MessageContent::RequestFileSignature(_) => "RequestFileSignature",
-            // MessageContent::FileSignature(_, _) => "FileSignature",
+            Request::Remove(_) => "Remove",
+            Request::Inode(_) => "Inode",
+            Request::RequestFile(_) => "RequestFile",
+            Request::Rename(_, _, _, _, _) => "Rename",
+            Request::EditHosts(_, _) => "EditHosts",
+            Request::RevokeFile(_, _, _) => "RevokeFile",
+            Request::AddHosts(_, _) => "AddHosts",
+            Request::RemoveHosts(_, _) => "RemoveHosts",
+            Request::EditMetadata(_, _) => "EditMetadata",
+            Request::SetXAttr(_, _, _) => "SetXAttr",
+            Request::RemoveXAttr(_, _) => "RemoveXAttr",
+            Request::RequestFs => "RequestFs",
+            Request::RedundancyFile(_, _) => "RedundancyFile",
+            Request::FileDelta(_, _, _, _) => "FileDelta",
+            Request::FileChanged(_, _) => "FileChanged",
+            // Request::RequestFileSignature(_) => "RequestFileSignature",
+            // Request::FileSignature(_, _) => "FileSignature",
         };
         write!(f, "{}", name)
     }
 }
 
-impl fmt::Debug for MessageContent {
+impl fmt::Debug for Request {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            MessageContent::Inode(inode) => write!(
+            Request::Inode(inode) => write!(
                 f,
                 "Inode({{{}, name: {}, parent:{}, {}}})",
                 inode.id,
@@ -99,12 +90,10 @@ impl fmt::Debug for MessageContent {
                     crate::pods::itree::FsEntry::Symlink(_) => 'l',
                 }
             ),
-            MessageContent::RedundancyFile(id, _) => write!(f, "RedundancyFile({id}, <bin>)"),
-            MessageContent::FsAnswer(_, peers, _) => write!(f, "FsAnswer(<bin>, {peers:?}, <bin>"),
-            MessageContent::PullAnswer(id, _) => write!(f, "PullAnswer({id}, <bin>)"),
-            MessageContent::Remove(id) => write!(f, "Remove({id})"),
-            MessageContent::RequestFile(id) => write!(f, "RequestFile({id})"),
-            MessageContent::Rename(parent, new_parent, name, new_name, overwrite) => write!(
+            Request::RedundancyFile(id, _) => write!(f, "RedundancyFile({id}, <bin>)"),
+            Request::Remove(id) => write!(f, "Remove({id})"),
+            Request::RequestFile(id) => write!(f, "RequestFile({id})"),
+            Request::Rename(parent, new_parent, name, new_name, overwrite) => write!(
                 f,
                 "Rename(parent: {}, new_parent: {}, name: {}, new_name: {}, overwrite: {})",
                 parent,
@@ -113,46 +102,136 @@ impl fmt::Debug for MessageContent {
                 new_name.as_str(),
                 overwrite
             ),
-            MessageContent::EditHosts(id, hosts) => write!(f, "EditHosts({id}, {hosts:?})"),
-            MessageContent::RevokeFile(id, address, _) => {
+            Request::EditHosts(id, hosts) => write!(f, "EditHosts({id}, {hosts:?})"),
+            Request::RevokeFile(id, address, _) => {
                 write!(f, "RevokeFile({id}, {address}, <metadata>)")
             }
-            MessageContent::AddHosts(id, hosts) => write!(f, "AddHosts({id}, {hosts:?})"),
-            MessageContent::RemoveHosts(id, hosts) => write!(f, "RemoveHosts({id}, {hosts:?})"),
-            MessageContent::EditMetadata(id, metadata) => {
+            Request::AddHosts(id, hosts) => write!(f, "AddHosts({id}, {hosts:?})"),
+            Request::RemoveHosts(id, hosts) => write!(f, "RemoveHosts({id}, {hosts:?})"),
+            Request::EditMetadata(id, metadata) => {
                 write!(f, "EditMetadata({id}, {{ perm: {}}})", metadata.perm)
             }
-            MessageContent::SetXAttr(id, name, data) => write!(
+            Request::SetXAttr(id, name, data) => write!(
                 f,
                 "SetXAttr({id}, {name}, {}",
                 String::from_utf8(data.clone()).unwrap_or("<bin>".to_string())
             ),
-            MessageContent::RemoveXAttr(id, name) => write!(f, "RemoveXAttr({id}, {name})"),
-            MessageContent::RequestFs => write!(f, "RequestFs"),
-            MessageContent::Disconnect => write!(f, "Disconnect"),
-            MessageContent::FileDelta(ino, meta, _, _) => {
+            Request::RemoveXAttr(id, name) => write!(f, "RemoveXAttr({id}, {name})"),
+            Request::RequestFs => write!(f, "RequestFs"),
+            Request::FileDelta(ino, meta, _, _) => {
                 write!(f, "FileDelta({ino}, {:?})", meta.mtime)
             }
-            MessageContent::FileChanged(ino, meta) => {
+            Request::FileChanged(ino, meta) => {
                 write!(f, "FileChanged({ino}, {:?})", meta.mtime)
-            }
-            MessageContent::DeltaRequest(ino, _) => write!(f, "DeltaRequest({ino})"),
-            // MessageContent::RequestFileSignature(ino) => write!(f, "RequestFileSignature({ino}, <bin>)"),
-            // MessageContent::FileSignature(ino, _) => write!(f, "FileSignature({ino}, <bin>)"),
+            } // Request::RequestFileSignature(ino) => write!(f, "RequestFileSignature({ino}, <bin>)"),
+              // Request::FileSignature(ino, _) => write!(f, "FileSignature({ino}, <bin>)"),
         }
     }
 }
 
-pub type MessageAndStatus = (MessageContent, Option<UnboundedSender<WhResult<()>>>);
+/// Not to be confused with [PeerInfo](crate::ipc::answers::PeerInfo)
+/// though the two are the same data, this one is exclusively for Network messaging
+/// the other is exclusively for the CLI messaging
+/// this distinction is because of typing
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeerInfoNet {
+    pub nickname: String,
+    pub listen_addrs: Vec<Multiaddr>,
+}
 
-pub type Address = String;
+impl PeerInfoNet {
+    /// convert a MultiAddr to a simple {hostname}:{port} or {ip}:{port} address
+    /// error handling here is simple because we don't expect to run into any errors
+    /// it's there to ensure we fail safe and to document behavior for future debugging
+    pub fn display_address(multi: &Multiaddr) -> Result<String, &'static str> {
+        use libp2p::multiaddr::Protocol as P;
+        let mut host = None;
+        let mut port = None;
+        for protocol in multi.iter() {
+            match protocol {
+                P::Dns(cow) | P::Dns4(cow) | P::Dns6(cow) | P::Dnsaddr(cow) => {
+                    host.is_none()
+                        .then_some(())
+                        .ok_or("multiple domain names set")?;
+                    host = Some(cow)
+                }
+                P::Ip4(addr) => {
+                    host.is_none()
+                        .then_some(())
+                        .ok_or("multiple addresses set")?;
+                    host = Some(addr.to_string().into())
+                }
+                P::Ip6(addr) => {
+                    host.is_none()
+                        .then_some(())
+                        .ok_or("multiple addresses set")?;
+                    host = Some(addr.to_string().into())
+                }
+                P::Tcp(tcp) => {
+                    port.is_none()
+                        .then_some(())
+                        .ok_or("multiple port names set")?;
+                    port = Some(tcp)
+                }
+                P::Udp(_) => Err("transport set to udp")?,
+                _ => {}
+            }
+        }
+        if let Some((host, port)) = host.zip(port) {
+            Ok(format!("{host}:{port}"))
+        } else {
+            Err("missing port or hostname/ip")
+        }
+    }
 
-/// Message Coming from Network
-/// Messages recived by peers, forwared to [crate::network::watchdogs::network_file_actions]
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct FromNetworkMessage {
-    pub origin: Address,
-    pub content: MessageContent,
+    pub fn to_ipc(&self) -> crate::ipc::PeerInfo {
+        crate::ipc::PeerInfo {
+            nickname: self.nickname.clone(),
+            listen_addrs: self
+                .listen_addrs
+                .iter()
+                .map(|m| Self::display_address(m).unwrap_or_else(ToString::to_string))
+                .collect(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub enum Response {
+    /// Request a file delta from this base signature
+    DeltaRequest(Ino, Signature),
+    // (ITree, peers, global_config)
+    FsAnswer(ITree, HashMap<PeerId, PeerInfoNet>, GlobalConfig),
+    RequestedFile(Vec<u8>),
+    Success,
+    Failed,
+}
+
+impl fmt::Display for Response {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let name = match self {
+            Response::DeltaRequest(_, _) => "DeltaRequest",
+            Response::FsAnswer(_, _, _) => "FsAnswer",
+            Response::RequestedFile(_) => "RequestedFile",
+            Response::Success => "Success!",
+            Response::Failed => "Failed...",
+        };
+        write!(f, "{}", name)
+    }
+}
+
+impl fmt::Debug for Response {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Response::DeltaRequest(ino, _) => write!(f, "DeltaRequest({ino})"),
+            Response::FsAnswer(_, peers, global) => {
+                write!(f, "FsAnswer(<bin>, {peers:?}, {global:?})")
+            }
+            Response::RequestedFile(_) => write!(f, "RequestedFile(<bin>)"),
+            Response::Success => write!(f, "Succes!"),
+            Response::Failed => write!(f, "Failed..."),
+        }
+    }
 }
 
 /// Message going to the redundancy worker
@@ -168,8 +247,10 @@ pub enum RedundancyMessage {
 /// Messages sent from fuser to process communicating to the peers
 #[derive(Debug)]
 pub enum ToNetworkMessage {
-    BroadcastMessage(MessageContent),
-    SpecificMessage(MessageAndStatus, Vec<Address>),
+    BroadcastMessage(Request),
+    SpecificMessage(Request, Vec<PeerId>),
+    AnswerMessage(Request, oneshot::Sender<Option<Response>>, PeerId),
+    CloseNetwork,
 }
 
 impl fmt::Display for ToNetworkMessage {
@@ -178,15 +259,21 @@ impl fmt::Display for ToNetworkMessage {
             ToNetworkMessage::BroadcastMessage(content) => {
                 write!(f, "ToNetworkMessage::BroadcastMessage({})", content)
             }
-            ToNetworkMessage::SpecificMessage((content, callback), adress) => {
+            ToNetworkMessage::SpecificMessage(content, peer) => {
                 write!(
                     f,
-                    "ToNetworkMessage::SpecificMessage({}, callback: {}, to: {:?})",
-                    content,
-                    callback.is_some(),
-                    adress
+                    "ToNetworkMessage::SpecificMessage({}, to: {:?})",
+                    content, peer
                 )
             }
+            ToNetworkMessage::AnswerMessage(content, _, peer) => {
+                write!(
+                    f,
+                    "ToNetworkMessage::AnswerMessage({}, to: {:?}) with callback",
+                    content, peer
+                )
+            }
+            ToNetworkMessage::CloseNetwork => write!(f, "ToNetworkMessage::CloseNetwork"),
         }
     }
 }
