@@ -4,7 +4,7 @@ use crate::pods::disk_managers::DiskManager;
 use crate::pods::filesystem::attrs::AcknoledgeSetAttrError;
 use crate::pods::filesystem::permissions::has_execute_perm;
 use crate::pods::itree::{
-    FsEntry, ITree, Inode, InodeId, Metadata, GLOBAL_CONFIG_FNAME, GLOBAL_CONFIG_INO,
+    FsEntry, ITree, Ino, Inode, Metadata, GLOBAL_CONFIG_FNAME, GLOBAL_CONFIG_INO,
 };
 use crate::pods::network::callbacks::Request;
 use crate::pods::network::network_interface::NetworkInterface;
@@ -14,6 +14,7 @@ use crate::pods::whpath::WhPath;
 use futures::io;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::file_handle::FileHandleManager;
@@ -25,12 +26,14 @@ pub struct FsInterface {
     pub disk: Box<dyn DiskManager>,
     pub file_handles: Arc<RwLock<FileHandleManager>>,
     pub itree: Arc<RwLock<ITree>>, // here only to read, as most write are made by network_interface
+    pub mountpoint: PathBuf,
 }
 
 #[derive(PartialEq, Debug, Serialize, Deserialize, Clone)]
 pub enum SimpleFileType {
     File,
     Directory,
+    Symlink,
 }
 
 impl From<&FsEntry> for SimpleFileType {
@@ -38,6 +41,19 @@ impl From<&FsEntry> for SimpleFileType {
         match entry {
             FsEntry::File(_) => SimpleFileType::File,
             FsEntry::Directory(_) => SimpleFileType::Directory,
+            FsEntry::Symlink(_) => SimpleFileType::Symlink,
+        }
+    }
+}
+
+impl TryFrom<std::fs::FileType> for SimpleFileType {
+    type Error = std::io::Error;
+    fn try_from(entry: std::fs::FileType) -> Result<Self, Self::Error> {
+        match (entry.is_file(), entry.is_dir(), entry.is_symlink()) {
+            (true, false, false) => Ok(SimpleFileType::File),
+            (false, true, false) => Ok(SimpleFileType::Directory),
+            (false, false, true) => Ok(SimpleFileType::Symlink),
+            _ => Err(io::ErrorKind::PermissionDenied.into()),
         }
     }
 }
@@ -49,12 +65,14 @@ impl FsInterface {
         network_interface: Arc<NetworkInterface>,
         disk_manager: Box<dyn DiskManager>,
         itree: Arc<RwLock<ITree>>,
+        mountpoint: PathBuf,
     ) -> Self {
         Self {
             network_interface,
             disk: disk_manager,
             file_handles: Arc::new(RwLock::new(FileHandleManager::new())),
             itree,
+            mountpoint,
         }
     }
 
@@ -62,7 +80,7 @@ impl FsInterface {
 
     /// get an entry
     /// return Ok(None) if no permissions to access entries
-    pub fn get_entry_from_name(&self, parent: InodeId, name: &str) -> WhResult<Option<Inode>> {
+    pub fn get_entry_from_name(&self, parent: Ino, name: &str) -> WhResult<Option<Inode>> {
         let itree = ITree::read_lock(&self.itree, "fs_interface.get_entry_from_name")?;
         let p_inode = itree.get_inode(parent)?;
         if !has_execute_perm(p_inode.meta.perm) {
@@ -71,7 +89,7 @@ impl FsInterface {
         Ok(Some(itree.get_inode_child_by_name(p_inode, name)?.clone()))
     }
 
-    pub fn get_inode_attributes(&self, ino: InodeId) -> WhResult<Metadata> {
+    pub fn get_inode_attributes(&self, ino: Ino) -> WhResult<Metadata> {
         let itree = ITree::read_lock(&self.itree, "fs_interface::get_inode_attributes")?;
 
         Ok(itree.get_inode(ino)?.meta.clone())
@@ -81,16 +99,14 @@ impl FsInterface {
 
     // SECTION - remote -> write
     pub fn recept_inode(&self, inode: Inode) -> Result<(), MakeInodeError> {
-        self.network_interface
-            .acknowledge_new_file(inode.clone(), inode.id)?;
-        self.network_interface.promote_next_inode(inode.id + 1)?;
+        self.network_interface.acknowledge_new_file(inode.clone())?;
 
         let new_path = {
             let itree = ITree::read_lock(&self.itree, "recept_inode")?;
             itree.get_path_from_inode_id(inode.id)?
         };
 
-        match inode.entry {
+        match &inode.entry {
             // REVIEW - is it still useful to create an empty file in this case ?
             FsEntry::File(hosts) if hosts.contains(&self.network_interface.hostname) => self
                 .disk
@@ -102,12 +118,16 @@ impl FsInterface {
                 .disk
                 .new_dir(&new_path, inode.meta.perm)
                 .map_err(|io| MakeInodeError::LocalCreationFailed { io }),
+            FsEntry::Symlink(symlink) => self
+                .disk
+                .new_symlink(&new_path, inode.meta.perm, symlink)
+                .map_err(|io| MakeInodeError::LocalCreationFailed { io }),
             // TODO - remove when merge is handled because new file should create folder
             // FsEntry::Directory(_) => {}
         }
     }
 
-    pub fn recept_redundancy(&self, id: InodeId, binary: Arc<Vec<u8>>) -> WhResult<()> {
+    pub fn recept_redundancy(&self, id: Ino, binary: Arc<Vec<u8>>) -> WhResult<()> {
         let itree = ITree::write_lock(&self.itree, "recept_binary")
             .expect("recept_binary: can't read lock itree");
         let (path, perms) = itree
@@ -129,7 +149,7 @@ impl FsInterface {
             })
     }
 
-    pub fn recept_binary(&self, id: InodeId, binary: Vec<u8>) -> io::Result<()> {
+    pub fn recept_binary(&self, id: Ino, binary: Vec<u8>) -> io::Result<()> {
         let itree = ITree::read_lock(&self.itree, "recept_binary")
             .expect("recept_binary: can't read lock itree");
         let (path, perms) = match itree
@@ -165,7 +185,7 @@ impl FsInterface {
         Ok(())
     }
 
-    pub fn recept_edit_hosts(&self, id: InodeId, hosts: Vec<Address>) -> WhResult<()> {
+    pub fn recept_edit_hosts(&self, id: Ino, hosts: Vec<Address>) -> WhResult<()> {
         if !hosts.contains(&self.network_interface.hostname) {
             let path =
                 ITree::read_lock(&self.itree, "recept_edit_hosts")?.get_path_from_inode_id(id)?;
@@ -178,7 +198,7 @@ impl FsInterface {
 
     pub fn recept_revoke_hosts(
         &self,
-        id: InodeId,
+        id: Ino,
         host: String,
         meta: Metadata,
     ) -> Result<(), AcknoledgeSetAttrError> {
@@ -199,11 +219,11 @@ impl FsInterface {
         Ok(())
     }
 
-    pub fn recept_add_hosts(&self, id: InodeId, hosts: Vec<Address>) -> WhResult<()> {
+    pub fn recept_add_hosts(&self, id: Ino, hosts: Vec<Address>) -> WhResult<()> {
         self.network_interface.aknowledge_new_hosts(id, hosts)
     }
 
-    pub fn recept_remove_hosts(&self, id: InodeId, hosts: Vec<Address>) -> WhResult<()> {
+    pub fn recept_remove_hosts(&self, id: Ino, hosts: Vec<Address>) -> WhResult<()> {
         if hosts.contains(&self.network_interface.hostname) {
             if let Err(e) = self.disk.remove_file(
                 &ITree::read_lock(&self.itree, "recept_remove_hosts")?
@@ -246,7 +266,7 @@ impl FsInterface {
         self.network_interface.send_itree(to, global_config_bytes)
     }
 
-    pub fn send_file(&self, inode: InodeId, to: Address) -> io::Result<()> {
+    pub fn send_file(&self, inode: Ino, to: Address) -> io::Result<()> {
         let itree = ITree::read_lock(&self.itree, "send_itree").map_err(io::Error::other)?;
         let path = itree
             .get_path_from_inode_id(inode)
@@ -260,7 +280,7 @@ impl FsInterface {
             .map_err(io::Error::other)
     }
 
-    pub fn read_local_file(&self, inode: InodeId) -> WhResult<Vec<u8>> {
+    pub fn read_local_file(&self, inode: Ino) -> WhResult<Vec<u8>> {
         let itree = ITree::read_lock(&self.itree, "send_itree")?;
         let path = itree
             .get_path_from_inode_id(inode)

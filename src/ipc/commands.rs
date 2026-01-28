@@ -68,8 +68,9 @@ pub struct RemoveRequest {
 #[ts(export)]
 pub enum Command {
     Unfreeze(PodId),
-    Remove(RemoveRequest),
     Freeze(PodId),
+    Remove(RemoveRequest),
+    Restart(PodId),
     New(NewRequest),
     GetHosts(GetHostsRequest),
     Inspect(PodId),

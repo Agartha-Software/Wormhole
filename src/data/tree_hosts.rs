@@ -3,12 +3,17 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::{network::message::Address, pods::itree::InodeId};
+use crate::{network::message::Address, pods::itree::{FsEntry, Ino}};
 
-pub type TreeLine = (u8, InodeId, String, Vec<Address>); // (indentation_level, ino, path, hosts)
+pub type TreeLine = (u8, Ino, String, FsEntry);
+pub type SimpleTreeLine = (u8, Ino, String, Vec<Address>); // (indentation_level, ino, path, hosts)
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
+pub struct SimpleCliHostTree {
+    pub lines: Vec<SimpleTreeLine>,
+}
+
 pub struct CliHostTree {
     pub lines: Vec<TreeLine>,
 }
@@ -16,20 +21,27 @@ pub struct CliHostTree {
 impl fmt::Display for CliHostTree {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut output = String::new();
-        for (indent, ino, path, hosts) in &self.lines {
-            output.push_str(&format!(
-                "{}[{ino}] {:?}    ->    ({}) {:?}\n",
-                generate_indentation(*indent),
-                path,
-                hosts.len(),
-                hosts
-            ));
+        for (indent, ino, path, entry) in &self.lines {
+            let ident = generate_indentation(*indent);
+            match entry {
+                FsEntry::File(hosts) => {
+                    let len = hosts.len();
+                    output.push_str(&format!(
+                        "{ident}[{ino}] {path:?}    ->    ({len}) {hosts:?}\n",
+                    ));
+                }
+                FsEntry::Directory(_) => {}
+                FsEntry::Symlink(symlink) => {
+                    let target = &symlink.target;
+                    output.push_str(&format!("{ident}[{ino}] {path:?}    ->    {target}\n",));
+                }
+            }
         }
         write!(f, "{output}")
     }
 }
 
 fn generate_indentation(n: u8) -> String {
-    let result = " |  ".to_string();
+    let result = " |  ";
     result.repeat(n.into())
 }

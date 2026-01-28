@@ -5,9 +5,8 @@ use custom_error::custom_error;
 use crate::{
     error::{WhError, WhResult},
     pods::{
-        filesystem::flush::FlushError,
-        filesystem::permissions::has_write_perm,
-        itree::{ITree, InodeId, Metadata},
+        filesystem::{flush::FlushError, permissions::has_write_perm},
+        itree::{FsEntry, ITree, Ino, Metadata},
         whpath::{InodeName, WhPath},
     },
 };
@@ -37,18 +36,18 @@ custom_error! {
 }
 
 impl FsInterface {
-    fn construct_file_path(&self, parent: InodeId, name: &InodeName) -> WhResult<WhPath> {
+    fn construct_file_path(&self, parent: Ino, name: &InodeName) -> WhResult<WhPath> {
         let itree = ITree::read_lock(&self.itree, "fs_interface.rename.construct_file_path")?;
         let mut parent_path = itree.get_path_from_inode_id(parent)?;
 
         parent_path.push(name.into());
-        return Ok(parent_path);
+        Ok(parent_path)
     }
 
     fn rename_locally(
         &self,
-        parent: InodeId,
-        new_parent: InodeId,
+        parent: Ino,
+        new_parent: Ino,
         name: &InodeName,
         new_name: &InodeName,
     ) -> Result<(), RenameError> {
@@ -64,7 +63,7 @@ impl FsInterface {
         }
     }
 
-    pub fn set_meta_size(&self, ino: InodeId, meta: Metadata) -> Result<(), RenameError> {
+    pub fn set_meta_size(&self, ino: Ino, meta: Metadata) -> Result<(), RenameError> {
         let path = ITree::read_lock(&self.itree, "rename")?.get_path_from_inode_id(ino)?;
 
         self.disk
@@ -82,7 +81,7 @@ impl FsInterface {
     ////
     fn rename_special(
         &self,
-        new_parent: InodeId,
+        new_parent: Ino,
         new_name: InodeName,
         source_ino: u64,
         dest_ino: Option<u64>,
@@ -107,7 +106,8 @@ impl FsInterface {
             self.set_meta_size(source_ino, meta)?;
             dest_ino
         } else {
-            self.make_inode(new_parent, new_name, meta.perm, meta.kind)
+            let entry = FsEntry::new_file(); // 'special' files can only be regular files
+            self.make_inode(new_parent, new_name, meta.perm, entry)
                 .map_err(|err| match err {
                     MakeInodeError::WhError { source } => RenameError::WhError { source },
                     MakeInodeError::AlreadyExist => RenameError::DestinationExists,
@@ -159,8 +159,8 @@ impl FsInterface {
     /// Immediately replicated to other peers
     pub fn rename(
         &self,
-        parent: InodeId,
-        new_parent: InodeId,
+        parent: Ino,
+        new_parent: Ino,
         name: InodeName,
         new_name: InodeName,
         overwrite: bool,
@@ -224,8 +224,8 @@ impl FsInterface {
 
     pub fn recept_rename(
         &self,
-        parent: InodeId,
-        new_parent: InodeId,
+        parent: Ino,
+        new_parent: Ino,
         name: InodeName,
         new_name: InodeName,
         overwrite: bool,

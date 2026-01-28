@@ -54,26 +54,21 @@ impl From<FromPathBufError> for WhPathError {
 impl WhPathError {
     pub fn to_io(&self) -> io::Error {
         match self {
-            WhPathError::NotRelative => io::Error::new(io::ErrorKind::Other, self.to_string()),
+            WhPathError::NotRelative => io::Error::other(self.to_string()),
             WhPathError::ConversionError { source } => {
                 io::Error::new(io::ErrorKind::InvalidData, source.to_string())
             }
             WhPathError::NotNormalized => {
                 io::Error::new(io::ErrorKind::InvalidFilename, self.to_string())
             }
-            WhPathError::InvalidOperation => io::Error::new(io::ErrorKind::Other, self.to_string()),
+            WhPathError::InvalidOperation => io::Error::other(self.to_string()),
         }
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct WhPath {
     inner: Utf8PathBuf,
-}
-
-impl PartialEq for WhPath {
-    fn eq(&self, other: &Self) -> bool {
-        self.inner == other.inner
-    }
 }
 
 impl TryFrom<PathBuf> for WhPath {
@@ -128,17 +123,23 @@ impl TryFrom<&str> for WhPath {
     }
 }
 
-impl From<Utf8PathBuf> for WhPath {
-    fn from(value: Utf8PathBuf) -> Self {
-        Self { inner: value }
+impl TryFrom<Utf8PathBuf> for WhPath {
+    type Error = WhPathError;
+
+    fn try_from(p: Utf8PathBuf) -> Result<Self, Self::Error> {
+        is_valid_for_whpath(&p)?;
+
+        Ok(Self { inner: p })
     }
 }
 
-impl From<&Utf8Path> for WhPath {
-    fn from(value: &Utf8Path) -> Self {
-        Self {
-            inner: value.into(),
-        }
+impl TryFrom<&Utf8Path> for WhPath {
+    type Error = WhPathError;
+
+    fn try_from(p: &Utf8Path) -> Result<Self, Self::Error> {
+        is_valid_for_whpath(p)?;
+
+        Ok(Self { inner: p.into() })
     }
 }
 
@@ -160,9 +161,9 @@ impl TryFrom<&winfsp::U16CStr> for WhPath {
     }
 }
 
-impl Into<String> for WhPath {
-    fn into(self) -> String {
-        self.inner.into_string()
+impl From<WhPath> for String {
+    fn from(val: WhPath) -> String {
+        val.inner.into_string()
     }
 }
 
@@ -185,24 +186,16 @@ impl Deref for WhPath {
 }
 
 #[cfg(target_os = "linux")]
-impl<'a> AsPath for &'a WhPath {
+impl AsPath for &WhPath {
     type Buffer = CString;
     fn to_path(self) -> Option<CString> {
         CString::new(self.inner.as_str().as_bytes()).ok()
     }
 }
 
-impl Debug for WhPath {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("WhPath")
-            .field("inner", &self.inner)
-            .finish()
-    }
-}
-
 impl Display for WhPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(&*self.inner, f)
+        std::fmt::Display::fmt(self.inner.as_str(), f)
     }
 }
 
@@ -340,9 +333,9 @@ impl TryFrom<OsString> for InodeName {
     }
 }
 
-impl Into<String> for InodeName {
-    fn into(self) -> String {
-        self.0
+impl From<InodeName> for String {
+    fn from(val: InodeName) -> String {
+        val.0
     }
 }
 

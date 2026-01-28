@@ -11,7 +11,7 @@ use std::{
 use openat::Dir;
 use tokio::io;
 
-use crate::pods::whpath::WhPath;
+use crate::pods::{itree::EntrySymlink, whpath::WhPath};
 
 use super::DiskManager;
 
@@ -19,6 +19,7 @@ use super::DiskManager;
 pub struct UnixDiskManager {
     mountpoint: PathBuf,
     handle: Dir,
+    path: PathBuf,
 }
 
 impl UnixDiskManager {
@@ -40,6 +41,7 @@ impl UnixDiskManager {
         Ok(Self {
             mountpoint: mount_point.to_owned(),
             handle: Dir::open(mount_point)?,
+            path: mount_point.into(),
         })
     }
 }
@@ -138,6 +140,21 @@ impl DiskManager for UnixDiskManager {
     fn file_exists(&self, path: &WhPath) -> bool {
         self.handle.open_file(path).is_ok()
     }
+
+    fn new_symlink(
+        &self,
+        path: &WhPath,
+        _permissions: u16,
+        link: &EntrySymlink,
+    ) -> std::io::Result<()> {
+        let target = link.target.resolve(&self.path, path);
+        self.handle.symlink(path, &target)
+        // self.set_permisions(path, permissions)
+    }
+
+    fn remove_symlink(&self, path: &WhPath) -> std::io::Result<()> {
+        self.handle.remove_file(path)
+    }
 }
 
 mod test {
@@ -147,7 +164,7 @@ mod test {
     #[test]
     pub fn test_priv_unix_disk() {
         let temp_dir = assert_fs::TempDir::new().expect("can't create temp dir");
-        let disk = UnixDiskManager::new(&temp_dir.path()).expect("creating disk manager");
+        let disk = UnixDiskManager::new(temp_dir.path()).expect("creating disk manager");
 
         assert!(disk.exist(&"".try_into().unwrap()));
     }

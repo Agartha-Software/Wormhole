@@ -3,7 +3,7 @@ use crate::pods::{filesystem::permissions::has_write_perm, whpath::InodeName};
 
 use crate::{
     error::WhError,
-    pods::itree::{FsEntry, ITree, InodeId},
+    pods::itree::{FsEntry, ITree, Ino},
 };
 use custom_error::custom_error;
 
@@ -37,11 +37,7 @@ impl From<RemoveInodeError> for RemoveFileError {
 impl FsInterface {
     // NOTE - system specific (fuse/winfsp) code that need access to itree or other classes
     #[cfg(target_os = "linux")]
-    pub fn fuse_remove_inode(
-        &self,
-        parent: InodeId,
-        name: InodeName,
-    ) -> Result<(), RemoveFileError> {
+    pub fn fuse_remove_inode(&self, parent: Ino, name: InodeName) -> Result<(), RemoveFileError> {
         let target = {
             let itree = ITree::read_lock(&self.itree, "fs_interface::fuse_remove_inode")?;
             let parent = itree.get_inode(parent)?;
@@ -54,7 +50,7 @@ impl FsInterface {
         self.remove_inode(target)
     }
 
-    pub fn remove_inode_locally(&self, id: InodeId) -> Result<(), RemoveFileError> {
+    pub fn remove_inode_locally(&self, id: Ino) -> Result<(), RemoveFileError> {
         let itree = ITree::read_lock(&self.itree, "fs_interface::remove_inode")?;
         let to_remove_path = itree.get_path_from_inode_id(id)?;
         let entry = itree.get_inode(id)?.entry.to_owned();
@@ -80,19 +76,23 @@ impl FsInterface {
             FsEntry::Directory(children) => {
                 children.iter().try_for_each(|c| self.remove_inode(*c))?
             }
+            FsEntry::Symlink(_) => self
+                .disk
+                .remove_symlink(&to_remove_path)
+                .map_err(|io| RemoveFileError::LocalDeletionFailed { io })?,
         };
         Ok(())
     }
 
     /// Remove an [Inode] from the ITree
     /// Immediately replicated to other peers
-    pub fn remove_inode(&self, id: InodeId) -> Result<(), RemoveFileError> {
+    pub fn remove_inode(&self, id: Ino) -> Result<(), RemoveFileError> {
         self.remove_inode_locally(id)?;
         self.network_interface.unregister_inode(id)?;
         Ok(())
     }
 
-    pub fn recept_remove_inode(&self, id: InodeId) -> Result<(), RemoveFileError> {
+    pub fn recept_remove_inode(&self, id: Ino) -> Result<(), RemoveFileError> {
         self.remove_inode_locally(id)?;
         self.network_interface.acknowledge_unregister_inode(id)?;
         Ok(())

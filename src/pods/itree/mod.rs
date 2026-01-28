@@ -1,9 +1,18 @@
+mod fsentry;
+mod inode;
+
+pub use fsentry::*;
+pub use inode::*;
+
+#[cfg(target_os = "windows")]
+pub use crate::pods::itree::WINDOWS_DEFAULT_PERMS_MODE;
 use crate::{
     data::tree_hosts::TreeLine,
     error::WhResult,
     network::message::Address,
     pods::whpath::{InodeName, InodeNameError, WhPath},
 };
+
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -16,19 +25,15 @@ use std::{
 };
 
 #[cfg(target_os = "linux")]
-use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::os::unix::fs::PermissionsExt;
 
 use crate::error::WhError;
 use crate::pods::filesystem::fs_interface::SimpleFileType;
 
-use super::filesystem::{make_inode::MakeInodeError, remove_inode::RemoveInodeError};
+use crate::pods::filesystem::{make_inode::MakeInodeError, remove_inode::RemoveInodeError};
 
 // SECTION consts
 
-/*  NOTE - fuse root folder inode is 1.
-    other inodes can start wherever we want
-*/
-pub const ROOT: InodeId = 1;
 pub const LOCK_TIMEOUT: Duration = Duration::new(5, 0);
 
 // !SECTION
@@ -39,36 +44,10 @@ pub const LOCAL_CONFIG_INO: u64 = 3;
 pub const LOCAL_CONFIG_FNAME: &str = ".local_config.toml";
 pub const ITREE_FILE_INO: u64 = 4;
 pub const ITREE_FILE_FNAME: &str = ".itree";
+pub const FIRST_INO: u64 = 11;
 
 // SECTION types
-
-pub type Hosts = Vec<Address>;
-
-/// todo: replace usage of InodeId with Ino when no parallel merges are likely to be conflicting
-/// InodeId is represented by an u64
-pub type InodeId = u64;
-pub type Ino = u64;
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-/// Should be extended until meeting [fuser::FileType]
-pub enum FsEntry {
-    File(Hosts),
-    Directory(Vec<InodeId>),
-}
-
-pub type XAttrs = HashMap<String, Vec<u8>>;
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct Inode {
-    pub parent: InodeId,
-    pub id: InodeId,
-    pub name: InodeName,
-    pub entry: FsEntry,
-    pub meta: Metadata,
-    pub xattrs: XAttrs,
-}
-
-pub type ITreeIndex = HashMap<InodeId, Inode>;
+pub type ITreeIndex = HashMap<Ino, Inode>;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ITree {
@@ -80,75 +59,11 @@ pub const BLOCK_SIZE: u64 = 512;
 
 // !SECTION
 
-// SECTION implementations
-
-impl FsEntry {
-    pub fn get_filetype(&self) -> SimpleFileType {
-        match self {
-            FsEntry::File(_) => SimpleFileType::File,
-            FsEntry::Directory(_) => SimpleFileType::Directory,
-        }
-    }
-
-    pub fn get_children(&self) -> io::Result<&Vec<InodeId>> {
-        match self {
-            FsEntry::File(_) => Err(io::Error::new(
-                io::ErrorKind::Other,
-                "entry is not a directory",
-            )),
-            FsEntry::Directory(children) => Ok(children),
-        }
-    }
-}
-
-impl Inode {
-    pub fn new(
-        name: InodeName,
-        parent_ino: InodeId,
-        id: InodeId,
-        entry: FsEntry,
-        perm: u16,
-    ) -> Self {
-        let meta = Metadata {
-            ino: id,
-            size: 0,
-            blocks: 0,
-            atime: SystemTime::now(),
-            mtime: SystemTime::now(),
-            ctime: SystemTime::now(),
-            crtime: SystemTime::now(),
-            kind: entry.get_filetype(),
-            perm,
-            nlink: 1 + matches!(entry, FsEntry::Directory(_)) as u32,
-            uid: 0,
-            gid: 0,
-            rdev: 0,
-            blksize: BLOCK_SIZE as u32,
-            flags: 0,
-        };
-
-        let xattrs = HashMap::new();
-
-        Self {
-            parent: parent_ino,
-            id: id,
-            name: name,
-            entry: entry,
-            meta,
-            xattrs,
-        }
-    }
-}
-
 impl ITree {
-    pub fn first_ino() -> Ino {
-        return 11;
-    }
-
     pub fn new() -> Self {
         let mut itree: Self = Self {
             entries: HashMap::new(),
-            next_ino: Self::first_ino()..,
+            next_ino: FIRST_INO..,
         };
 
         itree.entries.insert(
@@ -181,20 +96,59 @@ impl ITree {
         itree
     }
 
+    /// Reserve an Ino
+    /// when this function returns, the Ino is permanently reserved
+    pub fn reserve_ino(&mut self) -> WhResult<Ino> {
+        self.next_ino
+            .next()
+            .ok_or(WhError::WouldBlock {
+                called_from: "reserve_ino".to_owned(),
+            })
+            .inspect_err(|_| log::error!("Ran out of Ino, returning Wh::WouldBlock"))
+    }
+
+    /// Mark Ino-s already reserved
+    /// This is for example if a peer reserves an Ino and we need to catch up
+    /// to not give this ino out again
+    pub fn mark_reserved_ino(&mut self, new: Ino) -> WhResult<()> {
+        let next = &mut self.next_ino;
+
+        if next.start > new {
+            return Err(WhError::WouldBlock {
+                called_from: "mark_reserved_ino: new is less than current".to_owned(),
+            });
+        }
+        *next = new + 1..;
+        Ok(())
+    }
+
     pub fn overwrite_self(&mut self, entries: ITreeIndex) {
         self.entries = entries;
+    }
+
+    /// Removed 'local only' files from the tree
+    /// This takes and mutates self, so that it can't accidentally be used in place
+    /// only meant to create a 'clean' network copy of an itree for sharing
+    pub fn clean_local(mut self) -> Self {
+        self.entries.retain(|ino, _| !ITree::is_local_only(*ino));
+        self.entries.entry(1u64).and_modify(|inode| {
+            if let FsEntry::Directory(childrens) = &mut inode.entry {
+                childrens.retain(|x| !ITree::is_local_only(*x));
+            }
+        });
+        self
     }
 
     pub fn get_raw_entries(&self) -> ITreeIndex {
         self.entries.clone()
     }
 
-    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, InodeId, Inode> {
+    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, Ino, Inode> {
         self.entries.iter()
     }
 
     // Use only if you know what you're doing, as those modifications won't be propagated to the network
-    pub fn inodes_mut(&mut self) -> std::collections::hash_map::ValuesMut<'_, InodeId, Inode> {
+    pub fn inodes_mut(&mut self) -> std::collections::hash_map::ValuesMut<'_, Ino, Inode> {
         self.entries.values_mut()
     }
 
@@ -240,18 +194,17 @@ impl ITree {
     ) -> impl Iterator<Item = &'a Inode> + use<'a> {
         self.iter()
             .filter_map(move |(_, inode)| match &inode.entry {
-                FsEntry::Directory(_) => None,
                 FsEntry::File(hosts) => {
-                    if hosts.len() == 1 && hosts.contains(&host) {
+                    if hosts.len() == 1 && hosts.contains(host) {
                         Some(inode)
                     } else {
                         None
                     }
                 }
+                _ => None,
             })
     }
 
-    #[must_use]
     /// Insert a given [Inode] inside the local itree
     pub fn add_inode(&mut self, inode: Inode) -> Result<(), MakeInodeError> {
         if self.entries.contains_key(&inode.id) {
@@ -276,13 +229,12 @@ impl ITree {
         }
     }
 
-    #[must_use]
     /// Create a new [Inode] from the given parameters and insert it inside the local itree
     pub fn add_inode_from_parameters(
         &mut self,
         name: InodeName,
-        id: InodeId,
-        parent_ino: InodeId,
+        id: Ino,
+        parent_ino: Ino,
         entry: FsEntry,
         perm: u16,
     ) -> Result<(), MakeInodeError> {
@@ -291,24 +243,24 @@ impl ITree {
         self.add_inode(inode)
     }
 
-    pub fn remove_child(&mut self, parent: InodeId, child: InodeId) -> WhResult<()> {
+    pub fn remove_child(&mut self, parent: Ino, child: Ino) -> WhResult<()> {
         let parent = self.get_inode_mut(parent)?;
 
         let children = match &mut parent.entry {
-            FsEntry::File(_) => return Err(WhError::InodeIsNotADirectory),
             FsEntry::Directory(children) => children,
+            _ => return Err(WhError::InodeIsNotADirectory),
         };
 
         children.retain(|parent_child| *parent_child != child);
         Ok(())
     }
 
-    pub fn add_child(&mut self, parent: InodeId, child: InodeId) -> WhResult<()> {
+    pub fn add_child(&mut self, parent: Ino, child: Ino) -> WhResult<()> {
         let parent = self.get_inode_mut(parent)?;
 
         let children = match &mut parent.entry {
-            FsEntry::File(_) => Err(WhError::InodeIsNotADirectory),
             FsEntry::Directory(children) => Ok(children),
+            _ => Err(WhError::InodeIsNotADirectory),
         }?;
 
         children.push(child);
@@ -316,12 +268,13 @@ impl ITree {
     }
 
     /// Remove inode from the [ITree]
-    pub fn remove_inode(&mut self, id: InodeId) -> Result<Inode, RemoveInodeError> {
+    pub fn remove_inode(&mut self, id: Ino) -> Result<Inode, RemoveInodeError> {
         let inode = self.get_inode(id)?;
         match &inode.entry {
-            FsEntry::File(_) => {}
-            FsEntry::Directory(children) if children.len() == 0 => {}
-            FsEntry::Directory(_) => return Err(RemoveInodeError::NonEmpty),
+            FsEntry::Directory(children) if !children.is_empty() => {
+                return Err(RemoveInodeError::NonEmpty)
+            }
+            _ => {}
         }
 
         self.remove_child(inode.parent, inode.id)?;
@@ -331,14 +284,14 @@ impl ITree {
         })
     }
 
-    pub fn get_inode(&self, ino: InodeId) -> WhResult<&Inode> {
+    pub fn get_inode(&self, ino: Ino) -> WhResult<&Inode> {
         self.entries.get(&ino).ok_or(WhError::InodeNotFound)
     }
 
     pub fn mv_inode(
         &mut self,
-        parent: InodeId,
-        new_parent: InodeId,
+        parent: Ino,
+        new_parent: Ino,
         name: &str,
         new_name: InodeName,
     ) -> WhResult<()> {
@@ -358,7 +311,7 @@ impl ITree {
     //obligate us to create too many one liners while keeping the same "problem" of not propagating the change to the other inode
     //Performance is very important with this project so we should not force ourself to take a ass-backward way each time we interact with the itree
     ////REMOVED: not public as the modifications are not automaticly propagated on other related inodes
-    pub fn get_inode_mut(&mut self, ino: InodeId) -> WhResult<&mut Inode> {
+    pub fn get_inode_mut(&mut self, ino: Ino) -> WhResult<&mut Inode> {
         self.entries.get_mut(&ino).ok_or(WhError::InodeNotFound)
     }
 
@@ -366,7 +319,7 @@ impl ITree {
     ///
     /// Possible Errors:
     ///   InodeNotFound: if the inode isn't inside the tree
-    pub fn get_path_from_inode_id(&self, inode_index: InodeId) -> WhResult<WhPath> {
+    pub fn get_path_from_inode_id(&self, inode_index: Ino) -> WhResult<WhPath> {
         if inode_index == ROOT {
             return Ok(WhPath::root());
         }
@@ -380,7 +333,6 @@ impl ITree {
         Ok(parent_path)
     }
 
-    #[must_use]
     pub fn get_inode_child_by_name(&self, parent: &Inode, name: &str) -> WhResult<&Inode> {
         if let Ok(children) = parent.entry.get_children() {
             for child in children.iter() {
@@ -396,18 +348,17 @@ impl ITree {
         }
     }
 
-    #[must_use]
     pub fn get_inode_from_path(&self, path: &WhPath) -> WhResult<&Inode> {
         let mut actual_inode = self.entries.get(&ROOT).expect("inode_from_path: NO ROOT");
 
         for name in path.iter() {
-            actual_inode = self.get_inode_child_by_name(&actual_inode, name)?;
+            actual_inode = self.get_inode_child_by_name(actual_inode, name)?;
         }
 
         Ok(actual_inode)
     }
 
-    pub fn set_inode_hosts(&mut self, ino: InodeId, hosts: Vec<Address>) -> WhResult<()> {
+    pub fn set_inode_hosts(&mut self, ino: Ino, hosts: Vec<Address>) -> WhResult<()> {
         let inode = self.get_inode_mut(ino)?;
 
         inode.entry = match &inode.entry {
@@ -421,7 +372,7 @@ impl ITree {
     ///
     /// Only works on inodes pointing files (no folders)
     /// Ignore already existing hosts to avoid duplicates
-    pub fn add_inode_hosts(&mut self, ino: InodeId, mut new_hosts: Vec<Address>) -> WhResult<()> {
+    pub fn add_inode_hosts(&mut self, ino: Ino, mut new_hosts: Vec<Address>) -> WhResult<()> {
         let inode = self.get_inode_mut(ino)?;
 
         if let FsEntry::File(hosts) = &mut inode.entry {
@@ -437,7 +388,7 @@ impl ITree {
     /// Remove hosts from an inode
     ///
     /// Only works on inodes pointing files (no folders)
-    pub fn remove_inode_hosts(&mut self, ino: InodeId, remove_hosts: Vec<Address>) -> WhResult<()> {
+    pub fn remove_inode_hosts(&mut self, ino: Ino, remove_hosts: Vec<Address>) -> WhResult<()> {
         let inode = self.get_inode_mut(ino)?;
 
         match &mut inode.entry {
@@ -447,26 +398,26 @@ impl ITree {
         Ok(())
     }
 
-    pub fn set_inode_meta(&mut self, ino: InodeId, meta: Metadata) -> WhResult<()> {
+    pub fn set_inode_meta(&mut self, ino: Ino, meta: Metadata) -> WhResult<()> {
         let inode = self.get_inode_mut(ino)?;
 
         inode.meta = meta;
         Ok(())
     }
 
-    pub fn set_inode_size(&mut self, ino: InodeId, size: u64) -> WhResult<()> {
+    pub fn set_inode_size(&mut self, ino: Ino, size: u64) -> WhResult<()> {
         self.get_inode_mut(ino)?.meta.size = size;
         Ok(())
     }
 
-    pub fn set_inode_xattr(&mut self, ino: InodeId, key: &str, data: Vec<u8>) -> WhResult<()> {
+    pub fn set_inode_xattr(&mut self, ino: Ino, key: &str, data: Vec<u8>) -> WhResult<()> {
         let inode = self.get_inode_mut(ino)?;
 
         inode.xattrs.insert(key.into(), data);
         Ok(())
     }
 
-    pub fn remove_inode_xattr(&mut self, ino: InodeId, key: &str) -> WhResult<()> {
+    pub fn remove_inode_xattr(&mut self, ino: Ino, key: &str) -> WhResult<()> {
         let inode = self.get_inode_mut(ino)?;
 
         inode.xattrs.remove(key);
@@ -486,11 +437,11 @@ impl ITree {
     }
 
     /// given ino is not checked -> must exist in itree
-    fn recurse_tree(&self, ino: InodeId, indentation: u8) -> WhResult<Vec<TreeLine>> {
+    fn recurse_tree(&self, ino: Ino, indentation: u8) -> WhResult<Vec<TreeLine>> {
         let entry = &self.get_inode(ino)?.entry;
         let path = self.get_path_from_inode_id(ino)?;
         match entry {
-            FsEntry::File(hosts) => Ok(vec![(indentation, ino, path.to_string(), hosts.clone())]),
+            //FsEntry::File(hosts) => Ok(vec![(indentation, ino, path.to_string(), hosts.clone())]),
             FsEntry::Directory(children) => Ok(children
                 .iter()
                 .map(|c| self.recurse_tree(*c, indentation + 1))
@@ -498,7 +449,14 @@ impl ITree {
                 .into_iter()
                 .flatten()
                 .collect::<Vec<TreeLine>>()),
+            entry => Ok(vec![(indentation, ino, path.to_string(), entry.clone())]),
         }
+    }
+}
+
+impl Default for ITree {
+    fn default() -> ITree {
+        ITree::new()
     }
 }
 
@@ -517,15 +475,17 @@ fn index_folder_recursive(
     parent: Ino,
     path: &Path,
     host: &String,
+    mountpoint: &Path,
 ) -> io::Result<()> {
     for entry in fs::read_dir(path)? {
         let entry = entry.expect("error in filesystem indexion (1)");
-        let ftype = entry.file_type().expect("error in filesystem indexion (2)");
         let fname: InodeName = entry
             .file_name()
             .try_into()
             .map_err(|e: InodeNameError| e.to_io())?;
         let meta = entry.metadata()?;
+
+        let ftype = meta.file_type();
 
         let special_ino = ITree::get_special(fname.as_ref(), parent);
 
@@ -548,16 +508,22 @@ fn index_folder_recursive(
         #[cfg(target_os = "windows")]
         let perm_mode = WINDOWS_DEFAULT_PERMS_MODE;
 
+        let fs_entry = match ftype.try_into()? {
+            SimpleFileType::Directory => FsEntry::new_directory(),
+            SimpleFileType::File => FsEntry::File(vec![host.clone()]),
+            SimpleFileType::Symlink => {
+                let target = std::fs::read_link(entry.path());
+                let link = EntrySymlink::parse(&target?, mountpoint);
+                FsEntry::Symlink(link.unwrap_or_else(|e| e))
+            }
+        };
+
         itree
             .add_inode(Inode::new(
                 fname.clone(),
                 parent,
                 used_ino,
-                if ftype.is_file() {
-                    FsEntry::File(vec![host.clone()])
-                } else {
-                    FsEntry::Directory(Vec::new())
-                },
+                fs_entry,
                 perm_mode,
             ))
             .map_err(io::Error::other)?;
@@ -568,121 +534,20 @@ fn index_folder_recursive(
             .map_err(io::Error::other)?;
 
         if ftype.is_dir() {
-            index_folder_recursive(itree, used_ino, &path.join(&fname), host)
+            index_folder_recursive(itree, used_ino, &path.join(&fname), host, mountpoint)
                 .expect("error in filesystem indexion (3)");
         };
     }
     Ok(())
 }
 
-pub fn generate_itree(path: &Path, host: &String) -> io::Result<ITree> {
-    if let Some(itree) = recover_serialized_itree(path) {
+pub fn generate_itree(mountpoint: &Path, host: &String) -> io::Result<ITree> {
+    if let Some(itree) = recover_serialized_itree(mountpoint) {
         Ok(itree)
     } else {
         let mut itree = ITree::new();
 
-        index_folder_recursive(&mut itree, ROOT, path, host)?;
+        index_folder_recursive(&mut itree, ROOT, mountpoint, host, mountpoint)?;
         Ok(itree)
-    }
-}
-
-#[cfg(target_os = "windows")]
-pub const WINDOWS_DEFAULT_PERMS_MODE: u16 = 0o660;
-
-/* NOTE
- * is currently made with fuse in sight. Will probably need to be edited to be windows compatible
- */
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct Metadata {
-    /// Inode number
-    pub ino: u64,
-    /// Size in bytes
-    pub size: u64,
-    /// Size in blocks
-    pub blocks: u64,
-    /// Time of last access
-    pub atime: SystemTime,
-    /// Time of last modification
-    pub mtime: SystemTime,
-    /// Time of last change
-    pub ctime: SystemTime,
-    /// Time of creation (macOS only)
-    pub crtime: SystemTime,
-    /// Kind of file (directory, file, pipe, etc)
-    pub kind: SimpleFileType,
-    /// Permissions
-    pub perm: u16,
-    /// Number of hard links
-    pub nlink: u32,
-    /// User id
-    pub uid: u32,
-    /// Group id
-    pub gid: u32,
-    /// Rdev
-    pub rdev: u32,
-    /// Block size
-    pub blksize: u32,
-    /// Flags (macOS only, see chflags(2))
-    pub flags: u32,
-}
-
-#[cfg(target_os = "linux")]
-impl TryInto<Metadata> for fs::Metadata {
-    type Error = std::io::Error;
-    fn try_into(self) -> Result<Metadata, std::io::Error> {
-        Ok(Metadata {
-            ino: 0, // TODO: unsafe default
-            size: self.len(),
-            blocks: 0,
-            atime: self.accessed()?,
-            mtime: self.modified()?,
-            ctime: self.modified()?,
-            crtime: self.created()?,
-            kind: if self.is_file() {
-                SimpleFileType::File
-            } else {
-                SimpleFileType::Directory
-            },
-            perm: self.permissions().mode() as u16,
-            nlink: self.nlink() as u32,
-            uid: self.uid(),
-            gid: self.gid(),
-            rdev: self.rdev() as u32,
-            blksize: self.blksize() as u32,
-            flags: 0,
-        })
-    }
-}
-
-#[cfg(target_os = "windows")]
-impl TryInto<Metadata> for fs::Metadata {
-    type Error = std::io::Error;
-    fn try_into(self) -> Result<Metadata, std::io::Error> {
-        let perm = if self.is_file() {
-            WINDOWS_DEFAULT_PERMS_MODE
-        } else {
-            WINDOWS_DEFAULT_PERMS_MODE | 0o110
-        };
-        Ok(Metadata {
-            ino: 0, // TODO: unsafe default
-            size: self.len(),
-            blocks: 0,
-            atime: self.accessed()?,
-            mtime: self.modified()?,
-            ctime: self.modified()?,
-            crtime: self.created()?,
-            kind: if self.is_file() {
-                SimpleFileType::File
-            } else {
-                SimpleFileType::Directory
-            },
-            perm,
-            nlink: 0 as u32,
-            uid: 0,
-            gid: 0,
-            rdev: 0 as u32,
-            blksize: 0 as u32,
-            flags: 0,
-        })
     }
 }

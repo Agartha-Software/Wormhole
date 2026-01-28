@@ -1,11 +1,11 @@
 use interprocess::local_socket::tokio::Stream;
 
-use crate::{
-    cli::commands::{
-        check, generate, gethosts, inspect, list_pods, new, redundancy_status, remove, show,
-        status, tree,
+use crate::cli::{
+    commands::{
+        check, freeze, generate, gethosts, inspect, new, remove, restart, show, status, tree,
+        unfreeze, list_pods, redundancy_status,
     },
-    cli::{CliCommand, ConfigCommand},
+    CliCommand, ConfigCommand,
 };
 
 type Answer = String;
@@ -16,6 +16,9 @@ pub async fn command_network(cmd: CliCommand, stream: Stream) -> Result<Answer, 
         CliCommand::Inspect(args) => inspect(args, stream).await,
         CliCommand::GetHosts(args) => gethosts(args, stream).await,
         CliCommand::Tree(args) => tree(args, stream).await,
+        CliCommand::Freeze(args) => freeze(args, stream).await,
+        CliCommand::Unfreeze(args) => unfreeze(args, stream).await,
+        CliCommand::Restart(args) => restart(args, stream).await,
         CliCommand::Remove(args) => remove(args, stream).await,
         CliCommand::Config(ConfigCommand::Generate(args)) => generate(args, stream).await,
         CliCommand::Config(ConfigCommand::Show(args)) => show(args, stream).await,

@@ -14,7 +14,7 @@ impl OpenFlags {
 }
 
 pub fn filetype_from_mode(mode: u32) -> Option<SimpleFileType> {
-    let file_type = mode & libc::S_IFMT as u32;
+    let file_type = mode & libc::S_IFMT;
 
     if file_type == libc::S_IFREG {
         return Some(SimpleFileType::File);
@@ -22,5 +22,5 @@ pub fn filetype_from_mode(mode: u32) -> Option<SimpleFileType> {
     if file_type == libc::S_IFDIR {
         return Some(SimpleFileType::Directory);
     }
-    return None;
+    None
 }

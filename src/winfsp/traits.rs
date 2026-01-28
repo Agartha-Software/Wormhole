@@ -11,6 +11,7 @@ use crate::{
             open::OpenError,
             read::ReadError,
             readdir::ReadDirError,
+            remove_inode::{RemoveFileError, RemoveInodeError},
             rename::RenameError,
             write::WriteError,
         },
@@ -57,13 +58,14 @@ impl From<&Metadata> for FileInfo {
         let attributes = match value.kind {
             SimpleFileType::File => FILE_ATTRIBUTE_ARCHIVE,
             SimpleFileType::Directory => FILE_ATTRIBUTE_DIRECTORY,
+            SimpleFileType::Symlink => FILE_ATTRIBUTE_ARCHIVE, // pretend it's a .lnk link,
         };
         let now = FileTime::now();
         FileInfo {
             file_attributes: attributes.0,
             reparse_tag: 0,
-            allocation_size: value.size as u64,
-            file_size: value.size as u64,
+            allocation_size: value.size,
+            file_size: value.size,
             creation_time: FileTime::try_from(value.crtime).unwrap_or(now).to_raw(),
             last_access_time: FileTime::try_from(value.atime).unwrap_or(now).to_raw(),
             last_write_time: FileTime::try_from(value.mtime).unwrap_or(now).to_raw(),
@@ -222,6 +224,26 @@ impl From<CreateError> for FspError {
     }
 }
 
+impl From<RemoveInodeError> for FspError {
+    fn from(value: RemoveInodeError) -> Self {
+        match value {
+            RemoveInodeError::WhError { source } => source.into(),
+            RemoveInodeError::NonEmpty => STATUS_DIRECTORY_NOT_EMPTY.into(),
+        }
+    }
+}
+
+impl From<RemoveFileError> for FspError {
+    fn from(value: RemoveFileError) -> Self {
+        match value {
+            RemoveFileError::WhError { source } => source.into(),
+            RemoveFileError::NonEmpty => STATUS_DIRECTORY_NOT_EMPTY.into(),
+            RemoveFileError::LocalDeletionFailed { io } => io.into(),
+            RemoveFileError::PermissionDenied => STATUS_ACCESS_DENIED.into(),
+        }
+    }
+}
+
 impl From<SetAttrError> for FspError {
     fn from(value: SetAttrError) -> Self {
         match value {
@@ -259,7 +281,7 @@ impl AccessMode {
         if access & (GENERIC_READ.0 & !SYNCHRONIZE.0) != 0 {
             return AccessMode::Read;
         }
-        return AccessMode::Void;
+        AccessMode::Void
     }
 }
 

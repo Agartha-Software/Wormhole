@@ -6,6 +6,7 @@ use crate::pods::filesystem::flush::FlushError;
 use crate::pods::filesystem::fs_interface::{FsInterface, SimpleFileType};
 use crate::pods::filesystem::make_inode::MakeInodeError;
 use crate::pods::filesystem::open::{check_permissions, OpenError};
+use crate::pods::filesystem::permissions::SYMLINK_DEFAULT_PERMISSION;
 use crate::pods::filesystem::read::ReadError;
 
 use crate::pods::filesystem::readdir::ReadDirError;
@@ -13,6 +14,8 @@ use crate::pods::filesystem::remove_inode::RemoveFileError;
 use crate::pods::filesystem::rename::RenameError;
 use crate::pods::filesystem::write::WriteError;
 use crate::pods::filesystem::xattrs::GetXAttrError;
+use crate::pods::itree::EntrySymlink;
+use crate::pods::itree::FsEntry;
 use crate::pods::network::pull_file::PullError;
 use crate::pods::whpath::{osstr_to_str, InodeName};
 use fuser::{
@@ -22,6 +25,7 @@ use fuser::{
 use libc::{XATTR_CREATE, XATTR_REPLACE};
 use std::ffi::OsStr;
 use std::io;
+use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -82,54 +86,23 @@ impl Filesystem for FuseController {
         };
     }
 
-    fn setattr(
+    fn release(
         &mut self,
-        req: &Request<'_>,
-        ino: u64,
-        mode: Option<u32>,
-        uid: Option<u32>,
-        gid: Option<u32>,
-        size: Option<u64>,
-        atime: Option<fuser::TimeOrNow>,
-        mtime: Option<fuser::TimeOrNow>,
-        ctime: Option<SystemTime>,
-        file_handle: Option<u64>,
-        _crtime: Option<SystemTime>,
-        _chgtime: Option<SystemTime>,
-        _bkuptime: Option<SystemTime>,
-        flags: Option<u32>,
-        reply: ReplyAttr,
+        _req: &Request<'_>,
+        _ino: u64,
+        file_handle: u64,
+        _flags: i32,
+        _lock_owner: Option<u64>,
+        _flush: bool,
+        reply: fuser::ReplyEmpty,
     ) {
-        match self
-            .fs_interface
-            .setattr(
-                ino,
-                mode,
-                uid,
-                gid,
-                size,
-                atime.map(time_or_now_to_system_time),
-                mtime.map(time_or_now_to_system_time),
-                ctime,
-                file_handle,
-                flags,
-            )
-            .inspect_err(|e| log::error!("setattr({ino}): {e}"))
-        {
-            Ok(meta) => reply.attr(&TTL, &meta.with_ids(req.uid(), req.gid())),
-            Err(SetAttrError::WhError { source }) => reply.error(source.to_libc()),
-            Err(SetAttrError::SizeNoPerm) => reply.error(libc::EACCES),
-            Err(SetAttrError::InvalidFileHandle) => reply.error(libc::EBADFD),
-            Err(SetAttrError::SetFileSizeIoError { io }) => {
-                reply.error(io.raw_os_error().expect(
-                    "Local setattr error should always be the underling libc::open os error",
-                ))
-            }
-            Err(SetAttrError::SetPermIoError { io }) => {
-                reply.error(io.raw_os_error().expect(
-                    "Local setattr error should always be the underling libc::open os error",
-                ))
-            }
+        match self.fs_interface.release(file_handle) {
+            Ok(()) => reply.ok(),
+            Err(FlushError::DiffError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::PullError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::ReadError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::WriteError { source: _ }) => reply.error(libc::EWOULDBLOCK),
+            Err(FlushError::WhError { source }) => reply.error(source.to_libc()),
         }
     }
 
@@ -236,6 +209,18 @@ impl Filesystem for FuseController {
         reply.ok();
     }
 
+    fn readlink(&mut self, _req: &Request<'_>, ino: u64, reply: ReplyData) {
+        match self.fs_interface.readlink(ino) {
+            Ok(symlink) => reply.data(
+                symlink
+                    .read(&self.fs_interface.mountpoint)
+                    .as_os_str()
+                    .as_bytes(),
+            ),
+            Err(e) => reply.error(e.to_libc()),
+        }
+    }
+
     fn getxattr(
         &mut self,
         _req: &Request<'_>,
@@ -301,9 +286,15 @@ impl Filesystem for FuseController {
             }
         };
 
+        let entry = match kind {
+            SimpleFileType::File => FsEntry::new_file(),
+            SimpleFileType::Directory => FsEntry::new_directory(),
+            SimpleFileType::Symlink => return reply.error(libc::EINVAL),
+        };
+
         match self
             .fs_interface
-            .make_inode(parent, name, permissions, kind)
+            .make_inode(parent, name, permissions, entry)
         {
             Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
             Err(MakeInodeError::LocalCreationFailed { io }) => {
@@ -336,7 +327,7 @@ impl Filesystem for FuseController {
 
         match self
             .fs_interface
-            .make_inode(parent, name, mode as u16, SimpleFileType::Directory)
+            .make_inode(parent, name, mode as u16, FsEntry::new_directory())
             .inspect_err(|e| log::error!("mkdir: {e}"))
         {
             Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
@@ -449,6 +440,57 @@ impl Filesystem for FuseController {
         }
     }
 
+    fn setattr(
+        &mut self,
+        req: &Request<'_>,
+        ino: u64,
+        mode: Option<u32>,
+        uid: Option<u32>,
+        gid: Option<u32>,
+        size: Option<u64>,
+        atime: Option<fuser::TimeOrNow>,
+        mtime: Option<fuser::TimeOrNow>,
+        ctime: Option<SystemTime>,
+        file_handle: Option<u64>,
+        _crtime: Option<SystemTime>,
+        _chgtime: Option<SystemTime>,
+        _bkuptime: Option<SystemTime>,
+        flags: Option<u32>,
+        reply: ReplyAttr,
+    ) {
+        match self
+            .fs_interface
+            .setattr(
+                ino,
+                mode,
+                uid,
+                gid,
+                size,
+                atime.map(time_or_now_to_system_time),
+                mtime.map(time_or_now_to_system_time),
+                ctime,
+                file_handle,
+                flags,
+            )
+            .inspect_err(|e| log::error!("setattr({ino}): {e}"))
+        {
+            Ok(meta) => reply.attr(&TTL, &meta.with_ids(req.uid(), req.gid())),
+            Err(SetAttrError::WhError { source }) => reply.error(source.to_libc()),
+            Err(SetAttrError::SizeNoPerm) => reply.error(libc::EACCES),
+            Err(SetAttrError::InvalidFileHandle) => reply.error(libc::EBADFD),
+            Err(SetAttrError::SetFileSizeIoError { io }) => {
+                reply.error(io.raw_os_error().expect(
+                    "Local setattr error should always be the underling libc::open os error",
+                ))
+            }
+            Err(SetAttrError::SetPermIoError { io }) => {
+                reply.error(io.raw_os_error().expect(
+                    "Local setattr error should always be the underling libc::open os error",
+                ))
+            }
+        }
+    }
+
     fn write(
         &mut self,
         _req: &Request<'_>,
@@ -553,26 +595,6 @@ impl Filesystem for FuseController {
         }
     }
 
-    fn release(
-        &mut self,
-        _req: &Request<'_>,
-        _ino: u64,
-        file_handle: u64,
-        _flags: i32,
-        _lock_owner: Option<u64>,
-        _flush: bool,
-        reply: fuser::ReplyEmpty,
-    ) {
-        match self.fs_interface.release(file_handle) {
-            Ok(()) => reply.ok(),
-            Err(FlushError::DiffError { source: _ }) => reply.error(libc::EWOULDBLOCK),
-            Err(FlushError::PullError { source: _ }) => reply.error(libc::EWOULDBLOCK),
-            Err(FlushError::ReadError { source: _ }) => reply.error(libc::EWOULDBLOCK),
-            Err(FlushError::WriteError { source: _ }) => reply.error(libc::EWOULDBLOCK),
-            Err(FlushError::WhError { source }) => reply.error(source.to_libc()),
-        }
-    }
-
     fn fsync(&mut self, _req: &Request<'_>, ino: u64, fh: u64, _datasync: bool, reply: ReplyEmpty) {
         let mut file_handles =
             match FileHandleManager::write_lock(&self.fs_interface.file_handles, "release") {
@@ -603,8 +625,10 @@ impl Filesystem for FuseController {
             }
         };
 
-        let mut flags = OpenFlags::default();
-        flags.exec = (mask & libc::X_OK) != 0;
+        let flags = OpenFlags {
+            exec: (mask & libc::X_OK) != 0,
+            ..Default::default()
+        };
         let mode = match mask & (libc::R_OK | libc::W_OK) {
             libc::F_OK => Ok(AccessMode::Void),
             libc::R_OK => Ok(AccessMode::Read),
@@ -646,6 +670,59 @@ impl Filesystem for FuseController {
             }
         }
     }
+
+    fn symlink(
+        &mut self,
+        req: &Request<'_>,
+        parent_ino: u64,
+        link_name: &OsStr,
+        // target path is identicall to given to command,
+        // and is already relative to the link, not to CWD
+        target: &Path,
+        reply: ReplyEntry,
+    ) {
+        let name: InodeName = match link_name.to_owned().try_into() {
+            Ok(name) => name,
+            Err(e) => return reply.error(e.to_libc()),
+        };
+
+        let entry = match EntrySymlink::parse(target, &self.fs_interface.mountpoint) {
+            Ok(symlink) => FsEntry::Symlink(symlink),
+            Err(symlink) => FsEntry::Symlink(symlink),
+        };
+
+        match self
+            .fs_interface
+            .make_inode(parent_ino, name, SYMLINK_DEFAULT_PERMISSION, entry)
+        {
+            Ok(node) => reply.entry(&TTL, &node.meta.with_ids(req.uid(), req.gid()), 0),
+            Err(MakeInodeError::LocalCreationFailed { io }) => {
+                reply.error(io.raw_os_error().expect(
+                    "Local creation error should always be the underling libc::open os error",
+                ))
+            }
+            Err(MakeInodeError::WhError { source }) => reply.error(source.to_libc()),
+            Err(MakeInodeError::AlreadyExist) => reply.error(libc::EEXIST),
+            Err(MakeInodeError::ParentNotFound) => reply.error(libc::ENOENT),
+            Err(MakeInodeError::ParentNotFolder) => reply.error(libc::ENOTDIR),
+            Err(MakeInodeError::ProtectedNameIsFolder) => reply.error(libc::EISDIR),
+            Err(MakeInodeError::PermissionDenied) => reply.error(libc::EACCES),
+        }
+    }
+
+    // fn link(
+    //     &mut self,
+    //     _req: &Request<'_>,
+    //     ino: u64,
+    //     newparent: u64,
+    //     newname: &OsStr,
+    //     reply: ReplyEntry,
+    // ) {
+    //     log::warn!(
+    //         "[Not Implemented] link(ino: {ino:#x?}, newparent: {newparent:#x?}, newname: {newname:?})"
+    //     );
+    //     reply.error(libc::EPERM);
+    // }
 }
 
 pub fn mount_fuse(

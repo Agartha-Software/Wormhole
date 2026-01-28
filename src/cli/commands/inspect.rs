@@ -10,8 +10,8 @@ use crate::{
 };
 
 fn display_peers(peers: Vec<PeerInfo>) -> String {
-    if peers.len() == 0 {
-        format!("[ ]")
+    if peers.is_empty() {
+        "[ ]".to_string()
     } else {
         let mut string = String::from("[");
         for (idx, peer) in peers.iter().enumerate() {
@@ -33,7 +33,7 @@ pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String
     send_command(Command::Inspect(id), &mut stream).await?;
     match recieve_answer::<InspectAnswer>(&mut stream).await? {
         InspectAnswer::Information(info) => Ok(format!(
-            "Pod informations:\n\
+            "Pod informations: {}\n\
             \x20  Name:\t\t{}\n\
             \x20  Mount:\t\t{:#?}\n\
             \x20  Hostname:\t\t{}\n\
@@ -43,12 +43,17 @@ pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String
             \x20  Free space:\t{}\n\
             \x20  Used space:\t{}\n\
             \x20  Total space:\t{}",
+            if info.frozen { "Frozen" } else { "Running" },
             info.name,
             info.mount,
             info.hostname,
             info.public_url.unwrap_or("[ None ]".to_string()),
             info.bound_socket,
-            display_peers(info.connected_peers),
+            if info.frozen {
+                "Disconnected (Frozen)".to_string()
+            } else {
+                display_peers(info.connected_peers)
+            }
             info.disk_space
                 .as_ref()
                 .map_or("Error".to_owned(), |s| s.free_size.to_string()),

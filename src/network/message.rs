@@ -10,7 +10,7 @@ use crate::{
     error::WhResult,
     pods::{
         filesystem::diffs::{Delta, Signature},
-        itree::{ITreeIndex, Ino, Inode, InodeId, Metadata},
+        itree::{ITree, Ino, Inode, Metadata},
         whpath::InodeName,
     },
 };
@@ -22,13 +22,13 @@ use crate::{
 pub enum MessageContent {
     Inode(Inode),
 
-    RedundancyFile(InodeId, Arc<Vec<u8>>),
+    RedundancyFile(Ino, Arc<Vec<u8>>),
     /// Parent, New Parent, Name, New Name, overwrite
-    Rename(InodeId, InodeId, InodeName, InodeName, bool),
-    EditHosts(InodeId, Vec<Address>),
-    RevokeFile(InodeId, Address, Metadata),
-    AddHosts(InodeId, Vec<Address>),
-    RemoveHosts(InodeId, Vec<Address>),
+    Rename(Ino, Ino, InodeName, InodeName, bool),
+    EditHosts(Ino, Vec<Address>),
+    RevokeFile(Ino, Address, Metadata),
+    AddHosts(Ino, Vec<Address>),
+    RemoveHosts(Ino, Vec<Address>),
 
     /// A delta on file write with given base signature
     FileDelta(Ino, Metadata, Signature, Delta),
@@ -40,17 +40,17 @@ pub enum MessageContent {
 
     // RequestFileSignature(Ino),
     // FileSignature(Ino, Vec<u8>),
-    RequestFile(InodeId),
-    PullAnswer(InodeId, Vec<u8>),
+    RequestFile(Ino),
+    PullAnswer(Ino, Vec<u8>),
 
-    Remove(InodeId),
-    EditMetadata(InodeId, Metadata),
-    SetXAttr(InodeId, String, Vec<u8>),
-    RemoveXAttr(InodeId, String),
+    Remove(Ino),
+    EditMetadata(Ino, Metadata),
+    SetXAttr(Ino, String, Vec<u8>),
+    RemoveXAttr(Ino, String),
 
     RequestFs,
     // (ITree, peers, global_config)
-    FsAnswer(FileSystemSerialized, Vec<Address>, Vec<u8>),
+    FsAnswer(ITree, Vec<Address>, Vec<u8>),
 
     Disconnect,
 }
@@ -96,6 +96,7 @@ impl fmt::Debug for MessageContent {
                 match inode.entry {
                     crate::pods::itree::FsEntry::File(_) => 'f',
                     crate::pods::itree::FsEntry::Directory(_) => 'd',
+                    crate::pods::itree::FsEntry::Symlink(_) => 'l',
                 }
             ),
             MessageContent::RedundancyFile(id, _) => write!(f, "RedundancyFile({id}, <bin>)"),
@@ -159,7 +160,7 @@ pub struct FromNetworkMessage {
 pub enum RedundancyMessage {
     // PeerSignature(Ino, String, Vec<u8>),
     // WriteDeltas(Ino),
-    ApplyTo(InodeId),
+    ApplyTo(Ino),
     CheckIntegrity,
 }
 
@@ -188,10 +189,4 @@ impl fmt::Display for ToNetworkMessage {
             }
         }
     }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct FileSystemSerialized {
-    pub fs_index: ITreeIndex,
-    pub next_inode: InodeId,
 }

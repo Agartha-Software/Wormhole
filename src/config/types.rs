@@ -14,7 +14,6 @@ use crate::{
  * Minors fields are named in the structure you added to Metadata
  * the section name is the same as the name of the value of your new struct in Metadata
  */
-
 pub trait Config: Serialize + DeserializeOwned {
     fn write<S: AsRef<Path>>(&self, path: S) -> Result<(), Box<dyn std::error::Error>> {
         let serialized = toml::to_string(self)?;
@@ -30,7 +29,6 @@ pub trait Config: Serialize + DeserializeOwned {
         Ok(toml::from_str(&contents)?)
     }
 
-    #[must_use]
     fn read_lock<'a, T: Config>(
         conf: &'a Arc<RwLock<T>>,
         called_from: &'a str,
@@ -40,7 +38,6 @@ pub trait Config: Serialize + DeserializeOwned {
         })
     }
 
-    #[must_use]
     fn write_lock<'a, T: Config>(
         conf: &'a Arc<RwLock<T>>,
         called_from: &'a str,
