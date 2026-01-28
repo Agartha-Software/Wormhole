@@ -126,8 +126,15 @@ impl EntrySymlink {
     ) -> Result<Self, Self> {
         let target = target.as_ref();
         let mountpoint = mountpoint.as_ref();
+        let try_fwd_slashes = |path: &Path| {
+            path.as_os_str()
+                .to_str()
+                .map(|s| s.replace("\\", "/").into())
+                .unwrap_or_else(|| target.to_path_buf())
+        };
+
         let external = || Self {
-            target: SymlinkPath::SymlinkPathExternal(target.to_path_buf()),
+            target: SymlinkPath::SymlinkPathExternal(try_fwd_slashes(target)),
             hint: None,
         };
 
@@ -137,7 +144,11 @@ impl EntrySymlink {
         } else {
             Ok(Self {
                 target: SymlinkPath::SymlinkPathRelative(
-                    Utf8PathBuf::from_os_string(target.into()).map_err(|_| external())?,
+                    target
+                        .as_os_str()
+                        .to_str()
+                        .map(|s| s.replace("\\", "/").into())
+                        .ok_or_else(external)?,
                 ),
                 hint: None,
             })

@@ -77,11 +77,7 @@ impl TryFrom<PathBuf> for WhPath {
     type Error = WhPathError;
 
     fn try_from(p: PathBuf) -> Result<Self, Self::Error> {
-        is_valid_for_whpath(&p)?;
-
-        Ok(Self {
-            inner: Utf8PathBuf::try_from(p)?,
-        })
+        Self::try_from(p.as_path())
     }
 }
 
@@ -89,7 +85,14 @@ impl TryFrom<&Path> for WhPath {
     type Error = WhPathError;
 
     fn try_from(p: &Path) -> Result<Self, Self::Error> {
-        Self::try_from(p.to_path_buf())
+        let str = p.to_str().ok_or(WhPathError::ConversionError {
+            source: ConversionError {},
+        })?;
+        let replaced = str.replace("\\", "/");
+        is_valid_for_whpath(&replaced)?;
+        Ok(Self {
+            inner: Utf8PathBuf::from(replaced),
+        })
     }
 }
 
@@ -97,7 +100,7 @@ impl TryFrom<OsString> for WhPath {
     type Error = WhPathError;
 
     fn try_from(p: OsString) -> Result<Self, Self::Error> {
-        Self::try_from(PathBuf::from(p))
+        Self::try_from(Path::new(&p))
     }
 }
 
@@ -105,7 +108,7 @@ impl TryFrom<&OsStr> for WhPath {
     type Error = WhPathError;
 
     fn try_from(p: &OsStr) -> Result<Self, Self::Error> {
-        Self::try_from(PathBuf::from(p))
+        Self::try_from(Path::new(p))
     }
 }
 
@@ -113,7 +116,7 @@ impl TryFrom<String> for WhPath {
     type Error = WhPathError;
 
     fn try_from(p: String) -> Result<Self, Self::Error> {
-        Self::try_from(PathBuf::from(p))
+        Self::try_from(Path::new(&p))
     }
 }
 
@@ -121,7 +124,7 @@ impl TryFrom<&str> for WhPath {
     type Error = WhPathError;
 
     fn try_from(p: &str) -> Result<Self, Self::Error> {
-        Self::try_from(PathBuf::from(p))
+        Self::try_from(Path::new(p))
     }
 }
 
@@ -129,9 +132,7 @@ impl TryFrom<Utf8PathBuf> for WhPath {
     type Error = WhPathError;
 
     fn try_from(p: Utf8PathBuf) -> Result<Self, Self::Error> {
-        is_valid_for_whpath(&p)?;
-
-        Ok(Self { inner: p })
+        Self::try_from(p.as_path())
     }
 }
 
@@ -140,8 +141,11 @@ impl TryFrom<&Utf8Path> for WhPath {
 
     fn try_from(p: &Utf8Path) -> Result<Self, Self::Error> {
         is_valid_for_whpath(p)?;
+        let str = p.as_str();
+        let replaced = str.replace("\\", "/");
+        is_valid_for_whpath(&replaced)?;
 
-        Ok(Self { inner: p.into() })
+        Ok(Self { inner: replaced.into() })
     }
 }
 
