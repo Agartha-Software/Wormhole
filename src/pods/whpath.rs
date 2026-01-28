@@ -145,7 +145,9 @@ impl TryFrom<&Utf8Path> for WhPath {
         let replaced = str.replace("\\", "/");
         is_valid_for_whpath(&replaced)?;
 
-        Ok(Self { inner: replaced.into() })
+        Ok(Self {
+            inner: replaced.into(),
+        })
     }
 }
 
