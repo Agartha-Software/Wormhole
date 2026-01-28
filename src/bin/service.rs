@@ -18,7 +18,7 @@ use clap::Parser;
  *  reads a message (supposely emitted by a peer) related to files actions
  *  and execute instructions on the disk
  */
-use std::io::{IsTerminal, Read};
+use std::io::IsTerminal;
 use std::process::ExitCode;
 use tokio::sync::mpsc::{self, UnboundedSender};
 use wormhole::service::clap::ServiceArgs;
@@ -45,8 +45,8 @@ async fn main() -> ExitCode {
         }
     }
 
-    let terminal_handle = if std::io::stdin().is_terminal() || args.nodeamon {
-        Some(std::thread::spawn(|| terminal_watchdog(interrupt_tx)))
+    let terminal_handle = if std::io::stdout().is_terminal() || args.nodeamon {
+        Some(tokio::spawn(terminal_watchdog(interrupt_tx)))
     } else {
         println!("Starting in deamon mode");
         None
@@ -62,7 +62,7 @@ async fn main() -> ExitCode {
     }
 
     if let Some(terminal_handle) = terminal_handle {
-        drop(terminal_handle)
+        terminal_handle.abort();
     }
 
     signals_task
@@ -74,11 +74,10 @@ async fn main() -> ExitCode {
 }
 
 pub async fn terminal_watchdog(tx: UnboundedSender<()>) {
-    // let mut stdin = tokio::io::stdin();
-    let mut stdin = std::io::stdin();
+    let mut stdin = tokio::io::stdin();
     let mut buf = vec![0; 1024];
 
-    while let Ok(read) = stdin.read(&mut buf) {
+    while let Ok(read) = tokio::io::AsyncReadExt::read(&mut stdin, &mut buf).await {
         // Quit on ctrl-D
         if read == 0 {
             let _ = tx.send(());
