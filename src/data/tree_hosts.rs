@@ -214,8 +214,6 @@ pub fn get_tree(pod: &Pod, path: Option<&WhPath>) -> TreeAnswer {
             .map(|(k, v)| (*k, v.nickname.clone()))
             .chain([(pod.network_interface.id, pod.nickname.clone())]),
     );
-    log::info!("INFOS: {infos:#?}");
-
     let itree = pod.fs_interface.network_interface.itree.read();
     let start = path
         .map(|p| itree.get_inode_from_path(p).map(|inode| inode.id))
