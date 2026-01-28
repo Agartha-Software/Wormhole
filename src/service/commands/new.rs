@@ -46,7 +46,7 @@ impl Service {
         let (ip_type, ip) = match args.ip_address {
             Some(IpAddr::V4(v4)) => ("ip4", v4.to_string()),
             Some(IpAddr::V6(v6)) => ("ip6", v6.to_string()),
-            None => ("ip4", "127.0.0.1".to_string()),
+            None => ("ip4", "0.0.0.0".to_string()),
         };
 
         let port = match args.port {
