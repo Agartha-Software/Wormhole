@@ -150,7 +150,7 @@ impl Pod {
             ITree::default()
         } else {
             generate_itree(&proto.mountpoint, &swarm.local_peer_id().clone())
-            .map_err(|err| PodCreationError::ITreeIndexion(err.into()))?
+                .map_err(|err| PodCreationError::ITreeIndexion(err.into()))?
         };
 
         #[cfg(target_os = "linux")]
@@ -300,9 +300,7 @@ impl Pod {
         let ids_to_send = itree
             .files_hosted_only_by(&self.network_interface.id)
             .filter_map(|inode| {
-                if inode.id == GLOBAL_CONFIG_INO
-                    || inode.id == LOCAL_CONFIG_INO
-                {
+                if inode.id == GLOBAL_CONFIG_INO || inode.id == LOCAL_CONFIG_INO {
                     None
                 } else {
                     Some(inode.id)

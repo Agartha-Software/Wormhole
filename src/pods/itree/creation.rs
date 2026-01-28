@@ -7,8 +7,8 @@ use crate::{
     pods::{
         disk_managers::DiskManager,
         itree::{
-            index_folder_recursive, FsEntry, ITree, Ino,
-            GLOBAL_CONFIG_FNAME, GLOBAL_CONFIG_INO, ROOT,
+            index_folder_recursive, FsEntry, ITree, Ino, GLOBAL_CONFIG_FNAME, GLOBAL_CONFIG_INO,
+            ROOT,
         },
         whpath::WhPath,
     },

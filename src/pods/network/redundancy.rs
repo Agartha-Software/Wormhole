@@ -80,7 +80,9 @@ impl RedundancyTracker {
             .read()
             .iter()
             .filter_map(|(ino, inode)| match &inode.entry {
-                FsEntry::File(hosts) => (hosts.len() < r_count && !ITree::is_local_only(*ino)).then_some(*ino),
+                FsEntry::File(hosts) => {
+                    (hosts.len() < r_count && !ITree::is_local_only(*ino)).then_some(*ino)
+                }
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -134,7 +136,7 @@ impl RedundancyTracker {
             .to_vec();
 
         if !hosts.contains(&self.fs_interface.network_interface.id) {
-            return Ok(())
+            return Ok(());
         }
 
         let mut to = peers.to_vec();
