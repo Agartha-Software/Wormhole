@@ -113,7 +113,7 @@ impl FsInterface {
             .map_err(|e| PullError::WriteError { io: Arc::new(e) })?;
 
         self.network_interface
-            .add_inode_hosts(ino, vec![self.network_interface.id])
+            .add_inode_hosts(ino, &[self.network_interface.id])
             .expect("can't update inode hosts");
         Ok(Some(data))
     }

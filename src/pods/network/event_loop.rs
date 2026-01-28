@@ -68,13 +68,13 @@ impl EventLoop {
     pub async fn run(mut self) {
         loop {
             tokio::select! {
-                event = self.swarm.select_next_some() => if self.handle_event(event).await {
+                event = self.swarm.select_next_some() => if self.handle_event(event) {
                     return
                 },
                 to_network = self.to_network.recv() => match to_network {
                     Some(ToNetworkMessage::AnswerMessage(message, status, peer)) => self.send_with_answer(message, status, peer),
-                    Some(ToNetworkMessage::SpecificMessage(message, to)) => self.send_to_multiple(message, to),
-                    Some(ToNetworkMessage::BroadcastMessage(message)) => self.send_to_multiple(message, self.swarm.connected_peers().cloned().collect()),
+                    Some(ToNetworkMessage::SpecificMessage(message, to)) => self.send_to_multiple(message, &to),
+                    Some(ToNetworkMessage::BroadcastMessage(message)) => self.send_to_multiple(message, &self.swarm.connected_peers().copied().collect::<Vec<_>>()),
                     Some(ToNetworkMessage::CloseNetwork) => {
                         self.close();
                         return;
@@ -102,20 +102,20 @@ impl EventLoop {
         self.answers.insert(answer, status);
     }
 
-    fn send_to_multiple(&mut self, message: Request, mut to: Vec<PeerId>) {
-        if let Some(last) = to.pop() {
+    fn send_to_multiple(&mut self, message: Request, to: &[PeerId]) {
+        if let Some(last) = to.last() {
             // Just to don't clone the message on first peer, lot's of message have only one peer and messages can be very heavy quickly
-            for peer in to {
+            for peer in &to[1..] {
                 self.swarm
                     .behaviour_mut()
                     .request_response
-                    .send_request(&peer, message.clone());
+                    .send_request(peer, message.clone());
             }
 
             self.swarm
                 .behaviour_mut()
                 .request_response
-                .send_request(&last, message);
+                .send_request(last, message);
         }
     }
 
@@ -135,7 +135,7 @@ impl EventLoop {
         self.need_initialisation = Some(Some(request_id));
     }
 
-    async fn handle_response_message(&mut self, response: Response, peer: PeerId) {
+    fn handle_response_message(&mut self, response: Response, peer: PeerId) {
         log::trace!("Network Response: {:?}", response);
 
         let result = match response {
@@ -176,7 +176,7 @@ impl EventLoop {
         }
     }
 
-    async fn handle_request_message(
+    fn handle_request_message(
         &mut self,
         request: Request,
         channel: ResponseChannel<Response>,
@@ -189,21 +189,13 @@ impl EventLoop {
                 .recept_redundancy(id, binary)
                 .map_err(into_boxed_io),
             Request::Inode(inode) => self.fs_interface.recept_inode(inode).map_err(into_boxed_io),
-            Request::EditHosts(id, hosts) => self
-                .fs_interface
-                .recept_edit_hosts(id, hosts)
-                .map_err(into_boxed_io),
-            Request::RevokeFile(id, host, meta) => self
-                .fs_interface
-                .recept_revoke_hosts(id, host, meta)
-                .map_err(into_boxed_io),
             Request::AddHosts(id, hosts) => self
                 .fs_interface
-                .recept_add_hosts(id, hosts)
+                .recept_add_hosts(id, &hosts)
                 .map_err(into_boxed_io),
             Request::RemoveHosts(id, hosts) => self
                 .fs_interface
-                .recept_remove_hosts(id, hosts)
+                .recept_remove_hosts(id, &hosts)
                 .map_err(into_boxed_io),
             Request::EditMetadata(id, meta) => self
                 .fs_interface
@@ -264,12 +256,12 @@ impl EventLoop {
         };
     }
 
-    async fn handle_rr_event(&mut self, event: request_response::Event<Request, Response>) {
+    fn handle_rr_event(&mut self, event: request_response::Event<Request, Response>) {
         match event {
             request_response::Event::Message { peer, message, .. } => match message {
                 request_response::Message::Request {
                     request, channel, ..
-                } => self.handle_request_message(request, channel, peer).await,
+                } => self.handle_request_message(request, channel, peer),
                 request_response::Message::Response {
                     response,
                     request_id,
@@ -277,7 +269,7 @@ impl EventLoop {
                     if let Some(answer) = self.answers.remove(&request_id) {
                         let _ = answer.send(Some(response.clone()));
                     };
-                    self.handle_response_message(response, peer).await;
+                    self.handle_response_message(response, peer);
                 }
             },
             request_response::Event::OutboundFailure {
@@ -315,16 +307,16 @@ impl EventLoop {
                 };
                 self.fs_interface
                     .network_interface
-                    .connect_peer(peer_id, info)
+                    .connect_peer(peer_id, info);
             }
             e => log::trace!("identify: {e:?}"),
         }
     }
 
-    pub async fn handle_event(&mut self, event: SwarmEvent<BehaviourEvent>) -> bool {
+    pub fn handle_event(&mut self, event: SwarmEvent<BehaviourEvent>) -> bool {
         match event {
             SwarmEvent::Behaviour(BehaviourEvent::RequestResponse(event)) => {
-                self.handle_rr_event(event).await
+                self.handle_rr_event(event)
             }
             SwarmEvent::Behaviour(BehaviourEvent::Identify(event)) => {
                 self.handle_identify_event(event)

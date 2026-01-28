@@ -259,7 +259,7 @@ impl Pod {
     /// for a given file, will try to send it to one host, trying each until succes
     async fn send_file_to_possible_hosts(
         &self,
-        possible_hosts: &Vec<PeerId>,
+        possible_hosts: &[PeerId],
         ino: Ino,
     ) -> Result<(), PodStopError> {
         let file_content =
@@ -287,9 +287,9 @@ impl Pod {
             if let Some(Response::Success) = status_rx.await.expect("network died") {
                 self.network_interface
                     .to_network_message_tx
-                    .send(ToNetworkMessage::BroadcastMessage(Request::EditHosts(
+                    .send(ToNetworkMessage::BroadcastMessage(Request::RemoveHosts(
                         ino,
-                        vec![*host],
+                        vec![self.network_interface.id],
                     )))
                     .expect("to_network_message_tx closed.");
                 return Ok(());

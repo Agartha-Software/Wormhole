@@ -123,10 +123,6 @@ impl ITree {
         Ok(())
     }
 
-    pub fn overwrite_self(&mut self, entries: ITreeIndex) {
-        self.entries = entries;
-    }
-
     /// Removed 'local only' files from the tree
     /// This takes and mutates self, so that it can't accidentally be used in place
     /// only meant to create a 'clean' network copy of an itree for sharing
@@ -359,25 +355,26 @@ impl ITree {
         Ok(actual_inode)
     }
 
-    pub fn set_inode_hosts(&mut self, ino: Ino, hosts: Vec<PeerId>) -> WhResult<()> {
-        let inode = self.get_inode_mut(ino)?;
+    /// Get the hosts of a file
+    pub fn get_inode_hosts(&self, ino: Ino) -> WhResult<&[PeerId]> {
+        let inode = self.get_inode(ino)?;
 
-        inode.entry = match &inode.entry {
-            FsEntry::File(_) => FsEntry::File(hosts),
-            _ => return Err(WhError::InodeIsADirectory),
-        };
-        Ok(())
+        if let FsEntry::File(hosts) = &inode.entry {
+            Ok(hosts)
+        } else {
+            Err(WhError::InodeIsADirectory)
+        }
     }
 
     /// Add hosts to an inode
     ///
     /// Only works on inodes pointing files (no folders)
     /// Ignore already existing hosts to avoid duplicates
-    pub fn add_inode_hosts(&mut self, ino: Ino, mut new_hosts: Vec<PeerId>) -> WhResult<()> {
+    pub fn add_inode_hosts(&mut self, ino: Ino, new_hosts: &[PeerId]) -> WhResult<()> {
         let inode = self.get_inode_mut(ino)?;
 
         if let FsEntry::File(hosts) = &mut inode.entry {
-            hosts.append(&mut new_hosts);
+            hosts.extend_from_slice(new_hosts);
             hosts.sort();
             hosts.dedup();
             Ok(())
@@ -389,7 +386,7 @@ impl ITree {
     /// Remove hosts from an inode
     ///
     /// Only works on inodes pointing files (no folders)
-    pub fn remove_inode_hosts(&mut self, ino: Ino, remove_hosts: Vec<PeerId>) -> WhResult<()> {
+    pub fn remove_inode_hosts(&mut self, ino: Ino, remove_hosts: &[PeerId]) -> WhResult<()> {
         let inode = self.get_inode_mut(ino)?;
 
         match &mut inode.entry {

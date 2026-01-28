@@ -9,9 +9,12 @@ use crate::{
     error::{WhError, WhResult},
     network::{
         self,
-        message::{RedundancyMessage, Request, Response, ToNetworkMessage},
+        message::{Request, Response, ToNetworkMessage},
     },
-    pods::{filesystem::make_inode::MakeInodeError, whpath::InodeName},
+    pods::{
+        filesystem::make_inode::MakeInodeError, network::redundancy::RedundancyMessage,
+        whpath::InodeName,
+    },
 };
 use libp2p::{identify::Info, Multiaddr, PeerId};
 use parking_lot::RwLock;
@@ -131,57 +134,26 @@ impl NetworkInterface {
         ITree::write_lock(&self.itree, "acknowledge_unregister_inode")?.remove_inode(id)
     }
 
-    pub fn acknowledge_hosts_edition(&self, id: Ino, hosts: Vec<PeerId>) -> WhResult<()> {
-        let mut itree = ITree::write_lock(&self.itree, "acknowledge_hosts_edition")?;
+    pub fn add_inode_hosts(&self, ino: Ino, hosts: &[PeerId]) -> WhResult<()> {
+        ITree::write_lock(&self.itree, "network_interface::update_hosts")?
+            .add_inode_hosts(ino, hosts)?;
 
-        itree.set_inode_hosts(id, hosts) // TODO - if unable to update for some reason, should be passed to the background worker
-    }
-
-    pub fn revoke_remote_hosts(&self, id: Ino) -> WhResult<()> {
-        self.update_hosts(id, vec![self.id])?;
-        // self.apply_redundancy(id);
+        if !ITree::is_local_only(ino) {
+            self.to_network_message_tx
+                .send(ToNetworkMessage::BroadcastMessage(Request::AddHosts(
+                    ino,
+                    hosts.to_vec(),
+                )))
+                .expect("update_remote_hosts: unable to update modification on the network thread");
+        }
         Ok(())
     }
 
-    pub fn add_inode_hosts(&self, ino: Ino, hosts: Vec<PeerId>) -> WhResult<()> {
-        ITree::write_lock(&self.itree, "network_interface::update_hosts")?
-            .add_inode_hosts(ino, hosts)?;
-        self.update_remote_hosts(ino)
-    }
-
-    pub fn update_hosts(&self, ino: Ino, hosts: Vec<PeerId>) -> WhResult<()> {
-        ITree::write_lock(&self.itree, "network_interface::update_hosts")?
-            .set_inode_hosts(ino, hosts)?;
-        self.update_remote_hosts(ino)
-    }
-
-    fn update_remote_hosts(&self, ino: Ino) -> WhResult<()> {
-        let inode = ITree::read_lock(&self.itree, "update_remote_hosts")?
-            .get_inode(ino)?
-            .clone();
-
-        if let FsEntry::File(hosts) = &inode.entry {
-            if !ITree::is_local_only(inode.id) {
-                self.to_network_message_tx
-                    .send(ToNetworkMessage::BroadcastMessage(Request::EditHosts(
-                        inode.id,
-                        hosts.clone(),
-                    )))
-                    .expect(
-                        "update_remote_hosts: unable to update modification on the network thread",
-                    );
-            }
-            Ok(())
-        } else {
-            Err(WhError::InodeIsADirectory)
-        }
-    }
-
-    pub fn aknowledge_new_hosts(&self, id: Ino, new_hosts: Vec<PeerId>) -> WhResult<()> {
+    pub fn aknowledge_new_hosts(&self, id: Ino, new_hosts: &[PeerId]) -> WhResult<()> {
         ITree::write_lock(&self.itree, "aknowledge_new_hosts")?.add_inode_hosts(id, new_hosts)
     }
 
-    pub fn aknowledge_hosts_removal(&self, id: Ino, new_hosts: Vec<PeerId>) -> WhResult<()> {
+    pub fn aknowledge_hosts_removal(&self, id: Ino, new_hosts: &[PeerId]) -> WhResult<()> {
         ITree::write_lock(&self.itree, "aknowledge_hosts_removal")?
             .remove_inode_hosts(id, new_hosts)
     }
@@ -234,6 +206,12 @@ impl NetworkInterface {
     pub fn apply_redundancy(&self, file_id: Ino) {
         self.to_redundancy_tx
             .send(RedundancyMessage::ApplyTo(file_id))
+            .expect("network_interface::apply_redundancy: tx error");
+    }
+
+    pub fn check_integrity(&self) {
+        self.to_redundancy_tx
+            .send(RedundancyMessage::CheckIntegrity)
             .expect("network_interface::apply_redundancy: tx error");
     }
 
@@ -296,6 +274,7 @@ impl NetworkInterface {
             },
         );
         self.peers.write().push(peer_id);
+        self.check_integrity();
     }
 
     pub fn disconnect_peer(&self, addr: PeerId) -> WhResult<Response> {
@@ -312,9 +291,7 @@ impl NetworkInterface {
                 hosts.retain(|h| *h != addr);
             }
         }
-        self.to_redundancy_tx
-            .send(RedundancyMessage::CheckIntegrity)
-            .unwrap();
+        self.check_integrity();
         Ok(Response::Success)
     }
 }

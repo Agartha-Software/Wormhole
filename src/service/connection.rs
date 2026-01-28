@@ -19,9 +19,9 @@ impl Service {
             .read_u32()
             .await
             .expect("Failed to read recieved command, shouldn't be possible!");
-        let mut buffer: Vec<u8> = Vec::with_capacity(size as usize);
+        let mut buffer: Vec<u8> = vec![0; size as usize];
         let _size = stream
-            .read_buf(&mut buffer)
+            .read_exact(&mut buffer)
             .await
             .expect("Failed to read recieved command, shouldn't be possible!");
 
@@ -104,7 +104,8 @@ where
                 .expect("Can't serialize cli answer, shouldn't be possible!");
 
             stream.write_u32(serialized.len() as u32).await?;
-            stream.write_all(&serialized).await
+            stream.write_all(&serialized).await?;
+            stream.flush().await
         }
         Either::Right(stream) => {
             let serialized = serde_json::to_value(answer)?;
