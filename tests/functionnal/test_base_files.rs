@@ -19,7 +19,7 @@ use serial_test::serial;
 fn base_files_before_mount() {
     start_log();
     log::info!("vvvvvv base_files_before_mount vvvvvv");
-    let mut env = EnvironmentManager::new();
+    let mut env = EnvironmentManager::new("base_files_before_mount");
     env.add_service().unwrap();
     env.add_service().unwrap();
     env.add_service().unwrap();

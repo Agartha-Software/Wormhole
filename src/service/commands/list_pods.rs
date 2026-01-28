@@ -11,7 +11,7 @@ impl Service {
     where
         Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
     {
-        let list: Vec<String> = self.pods.iter().map(|(name, _)| name).cloned().collect();
+        let list: Vec<String> = self.pods.keys().cloned().collect();
 
         send_answer(ListPodsAnswer::Pods(list), stream).await?;
         Ok(())

@@ -1,25 +1,264 @@
-use super::network_interface::{get_all_peers_address, NetworkInterface};
+use super::network_interface::NetworkInterface;
 use crate::{
     error::{WhError, WhResult},
-    network::message::{Address, MessageContent, RedundancyMessage, ToNetworkMessage},
+    network::message::{Request, ToNetworkMessage},
     pods::{
-        filesystem::fs_interface::FsInterface,
+        filesystem::{fs_interface::FsInterface, File},
         itree::{FsEntry, ITree, Ino},
+        network::swarm::MAX_CONCURRENT_STREAMS,
         pod::Pod,
     },
 };
-use futures_util::future::join_all;
+use either::Either;
+use libp2p::PeerId;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use tokio::{
-    sync::mpsc::{unbounded_channel, UnboundedReceiver},
-    task::JoinSet,
+    sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
+    task::{AbortHandle, JoinSet},
 };
 use ts_rs::TS;
 
 custom_error::custom_error! {pub RedundancyError
     WhError{source: WhError} = "{source}",
     InsufficientHosts = "Redundancy: Not enough nodes to satisfies the target redundancies number.", // warning only
+    IsLocalOnly = "Redundancy: this inode is set to not replicate.", // warning only
+}
+
+/// File structs may be kept in ram if
+/// smaller than 512KB
+const MAX_SIZE_KEEP_RAM: usize = 512 * 1024;
+
+/// Message going to the redundancy worker
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum RedundancyMessage {
+    ApplyTo(Ino),
+    CheckIntegrity,
+}
+
+type Tombstone = ();
+
+/// Left<Tombstone> if the send failed, Right<AbortHandle> if it's still pending
+type PendingStatus = Either<Tombstone, AbortHandle>;
+// #[derive(Clone)]
+struct PendingRedundancy {
+    pub ino: Ino,
+    pub file: Option<File>,
+    // pub sends: Vec<PeerId>,
+    pub sends: Vec<(PeerId, PendingStatus)>,
+    // pub hosts: Vec<PeerId>,
+}
+
+/// Tracks files that are being sent
+/// enables sending files again if a peer fails to receive
+struct RedundancyTracker {
+    /// asychronous sending tasks, waiting on the reply from the peer
+    pub tasks: JoinSet<Result<(Ino, PeerId), Ino>>,
+    /// metadata about each file's pending status
+    pub pending: Vec<PendingRedundancy>,
+    /// FsInterface for convenience
+    pub fs_interface: Arc<FsInterface>,
+    /// max number of streams accessible at one time for this system
+    pub concurrent_streams: Arc<Semaphore>,
+}
+
+impl RedundancyTracker {
+    pub fn new(fs_interface: Arc<FsInterface>) -> Self {
+        Self {
+            fs_interface,
+            tasks: Default::default(),
+            pending: Default::default(),
+            concurrent_streams: Arc::new(Semaphore::new(MAX_CONCURRENT_STREAMS)),
+        }
+    }
+
+    /// check every file in the arbo if it has enough redundancies
+    /// then try sending any that are below the quota
+    pub async fn full_check(
+        &mut self,
+        fs_interface: &Arc<FsInterface>,
+        all_peers: &[PeerId],
+        r_count: usize,
+    ) {
+        let needy = fs_interface
+            .network_interface
+            .itree
+            .read()
+            .iter()
+            .filter_map(|(ino, inode)| match &inode.entry {
+                FsEntry::File(hosts) => {
+                    (hosts.len() < r_count && !ITree::is_local_only(*ino)).then_some(*ino)
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        for ino in needy {
+            let _ = self.apply(ino, all_peers, r_count).await;
+        }
+    }
+
+    /// try to send redundancies for a file and track the pending sends
+    /// does nothing if the file is already trying to sync
+    pub async fn apply(
+        &mut self,
+        ino: Ino,
+        all_peers: &[PeerId],
+        r_count: usize,
+    ) -> Result<(), RedundancyError> {
+        if self.pending.iter_mut().any(|p| p.ino == ino) {
+            return Ok(());
+        }
+        self.try_once(ino, all_peers, r_count)
+            .await
+            // .map(|p| {
+            //     self.pending.push(p);
+            // })
+            .or_else(|e| {
+                matches!(e, RedundancyError::IsLocalOnly)
+                    .then_some(())
+                    .ok_or(e)
+            })
+            .inspect_err(|e| log::error!("Failed to apply redundancy to {ino}: {e}"))
+    }
+
+    /// try to send redundancies for a file and track the pending sends
+    /// fails if the file is local only
+    pub async fn try_once(
+        &mut self,
+        ino: Ino,
+        peers: &[PeerId],
+        r_count: usize,
+    ) -> Result<(), RedundancyError> {
+        if ITree::is_local_only(ino) {
+            return Err(RedundancyError::IsLocalOnly);
+        }
+        let hosts = self
+            .fs_interface
+            .network_interface
+            .itree
+            .read_recursive()
+            .get_inode_hosts(ino)?
+            .to_vec();
+
+        if !hosts.contains(&self.fs_interface.network_interface.id) {
+            return Ok(());
+        }
+
+        let mut to = peers.to_vec();
+        to.retain(|s| !hosts.contains(s));
+
+        let needed = r_count.saturating_sub(hosts.len());
+        let file = self
+            .fs_interface
+            .get_local_file(ino)
+            .map_err(|e| WhError::WouldBlock {
+                called_from: format!("get_local_file: {e}"),
+            })
+            .and_then(|f| f.ok_or(WhError::InodeNotFound))?;
+        let sends = Self::push_redundancy(
+            &self.fs_interface,
+            &self.concurrent_streams,
+            &mut self.tasks,
+            &to,
+            ino,
+            &file.0.clone(),
+            needed,
+        )
+        .await;
+        self.pending.push(PendingRedundancy {
+            ino,
+            file: (file.0.len() < MAX_SIZE_KEEP_RAM).then_some(file),
+            sends,
+            // hosts,
+        });
+        Ok(())
+    }
+
+    /// resolve a pending stored send
+    /// removes the file from the tracker if all pending send are resolved
+    pub fn resolve(&mut self, ino: Ino, peer: PeerId) {
+        let remove = if let Some(p_index) = self.pending.iter().position(|p| p.ino == ino) {
+            let pending = &mut self.pending[p_index];
+            if let Some(s_index) = pending.sends.iter().position(|s| s.0 == peer) {
+                pending.sends.swap_remove(s_index);
+            }
+            if pending.sends.iter().all(|(_, status)| status.is_left()) {
+                Some(p_index)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        if let Some(p_index) = remove {
+            self.pending.swap_remove(p_index);
+        }
+    }
+
+    /// retry sending the file to the next available peer.
+    /// skips peers that have the file and peers that previously have failed
+    pub async fn retry(
+        &mut self,
+        ino: Ino,
+        all_peers: &[PeerId],
+        r_count: usize,
+    ) -> Result<(), RedundancyError> {
+        if let Some(pending) = self.pending.iter_mut().find(|p| p.ino == ino) {
+            let hosts = self
+                .fs_interface
+                .network_interface
+                .itree
+                .read()
+                .get_inode_hosts(ino)?
+                .to_vec();
+            let mut remanining_hosts = all_peers.to_vec();
+            remanining_hosts.retain(|host| {
+                !hosts.contains(host) && !pending.sends.iter().any(|s| s.0 == *host)
+            });
+            let needed = r_count.saturating_sub(hosts.len());
+
+            if needed == 0 {
+                return Ok(());
+            }
+            if remanining_hosts.is_empty() {
+                return Err(RedundancyError::InsufficientHosts);
+            }
+
+            let file = match &pending.file {
+                Some(file) => file.clone(),
+                None => self
+                    .fs_interface
+                    .get_local_file(ino)
+                    .map_err(|e| WhError::WouldBlock {
+                        called_from: format!("get_local_file: {e}"),
+                    })
+                    .and_then(|f| f.ok_or(WhError::InodeIsADirectory))?,
+            };
+            let mut sent = Self::push_redundancy(
+                &self.fs_interface,
+                &self.concurrent_streams,
+                &mut self.tasks,
+                &remanining_hosts,
+                ino,
+                &file.0,
+                needed,
+            )
+            .await;
+
+            pending.sends.append(&mut sent);
+        }
+        Ok(())
+    }
+
+    /// remove a file from the tracker, regardless of if it's done processing
+    /// meant to be used when there are no remaining hosts to send to, so no point tracking
+    pub fn forget(&mut self, ino: Ino) {
+        if let Some(index) = self.pending.iter().position(|p| p.ino == ino) {
+            self.pending.swap_remove(index);
+        }
+    }
 }
 
 /// Redundancy Worker
@@ -28,70 +267,83 @@ pub async fn redundancy_worker(
     mut reception: UnboundedReceiver<RedundancyMessage>,
     nw_interface: Arc<NetworkInterface>,
     fs_interface: Arc<FsInterface>,
-    // redundancy: u64, // TODO - when updated in conf, send a message to this worker for update
 ) {
+    let mut tracker = RedundancyTracker::new(fs_interface.clone());
     loop {
-        let message = match reception.recv().await {
-            Some(message) => message,
-            None => continue,
-        };
-        let peers = match get_all_peers_address(&nw_interface.peers) {
-            Ok(peers) => peers,
-            Err(e) => {
-                log::error!(
-                    "Redundancy: can't get peers: (ignoring request \"{:?}\") because of: {e}",
-                    message
-                );
-                continue;
-            }
-        };
+        tokio::select! {
+            resolve = tracker.tasks.join_next(), if !tracker.tasks.is_empty()  => {
+                match resolve {
+                    Some(Ok(Ok((ino, peer)))) => tracker.resolve(ino, peer),
+                    Some(Ok(Err(ino))) => {
+                        let r_count = nw_interface.global_config.read().redundancy.number as usize;
+                        let peers = nw_interface.peers.read().clone();
+                        if let Err(RedundancyError::InsufficientHosts) = tracker.retry(ino, &peers, r_count).await {
+                            tracker.forget(ino)
+                        }
+                    }
+                    Some(Err(_)) => {},
+                    None => {},
+                }
+            },
+            message = reception.recv() => {
+                let r_count = nw_interface.global_config.read().redundancy.number as usize;
+                let peers = nw_interface.peers.read().clone();
 
-        match message {
-            RedundancyMessage::ApplyTo(ino) => {
-                let _ = apply_to(&nw_interface, &fs_interface, &peers, ino)
-                    .await
-                    .inspect_err(|e| log::error!("Redundancy error: {e}"));
-            }
-            RedundancyMessage::CheckIntegrity => {
-                let _ = fix_integrity(&nw_interface, &fs_interface, &peers)
-                    .await
-                    .inspect_err(|e| log::error!("Redundancy error: {e}"));
+                match message {
+                    Some(RedundancyMessage::ApplyTo(ino)) => {
+                        let _ = tracker.apply(ino, &peers, r_count).await;
+                    }
+                    Some(RedundancyMessage::CheckIntegrity) => {
+                        tracker.full_check(&fs_interface, &peers, r_count).await;
+                    }
+                    None => { return }
+                }
             }
         };
     }
 }
 
-/// Checks if an inode can have it's redundancy applied :
-/// - needs more hosts
-/// - the network contains more hosts
-/// - this node possesses the file
-/// - this node is first on the sorted hosts list (naive approach to avoid many hosts applying the same file)
-///
-/// Intended for use in the fix_integrity function
-fn eligible_to_apply(
-    ino: Ino,
-    entry: &FsEntry,
-    target_redundancy: u64,
-    available_peers: usize,
-    self_addr: &Address,
-) -> Option<Ino> {
-    if ITree::is_local_only(ino) {
-        return None;
-    }
-    let hosts = if let FsEntry::File(hosts) = entry {
-        let mut hosts = hosts.clone();
-        hosts.sort();
-        hosts
-    } else {
-        return None;
-    };
-    if hosts.len() < target_redundancy as usize
-        && available_peers > hosts.len()
-        && hosts.first() == Some(self_addr)
-    {
-        Some(ino)
-    } else {
-        None
+impl RedundancyTracker {
+    /// start download to others concurrently
+    async fn push_redundancy(
+        fs_interface: &FsInterface,
+        semaphore: &Arc<Semaphore>,
+        tasks: &mut JoinSet<Result<(Ino, PeerId), Ino>>,
+        to: &[PeerId],
+        ino: Ino,
+        file_binary: &Arc<Vec<u8>>,
+        target_redundancy: usize,
+    ) -> Vec<(PeerId, PendingStatus)> {
+        let mut workers = Vec::new();
+
+        for to in to.iter().copied().take(target_redundancy) {
+            let permit = if let Ok(permit) = Semaphore::try_acquire_owned(semaphore.clone()) {
+                permit
+            } else {
+                break;
+            };
+            let nwi_clone = fs_interface.network_interface.clone();
+            let bin_clone = file_binary.clone();
+            let handle = tasks.spawn(async move {
+                let res = nwi_clone.send_file_redundancy(ino, bin_clone, to).await;
+                drop(permit);
+                res
+            });
+            workers.push((to, Either::Right(handle)));
+        }
+
+        // If no workers were created, none will finish to wake this PendingRedundancy.
+        // it would get lost and never retried.
+        // can only happen if the streams semaphore is full
+        // artificially create a task that will wake when the semaphore opens again
+        if workers.is_empty() {
+            let semaphore = semaphore.clone();
+            tasks.spawn(async move {
+                let _ = semaphore.acquire().await;
+                Err(ino)
+            });
+        }
+        workers
     }
 }
 
@@ -139,7 +391,7 @@ pub fn check_integrity(pod: &Pod) -> WhResult<HashMap<RedundancyStatus, u64>> {
         .into_iter()
         .fold(HashMap::new(), |mut acc, f| {
             if let Some(entry) = acc.get_mut(&f.1) {
-                *entry = *entry + 1;
+                *entry += 1;
             } else {
                 acc.insert(f.1, 1);
             }
@@ -147,156 +399,24 @@ pub fn check_integrity(pod: &Pod) -> WhResult<HashMap<RedundancyStatus, u64>> {
         }))
 }
 
-async fn fix_integrity(
-    nw_interface: &Arc<NetworkInterface>,
-    fs_interface: &Arc<FsInterface>,
-    peers: &[Address],
-) -> WhResult<()> {
-    let available_peers = peers.len() + 1;
-
-    // Applies redundancy to needed files
-    let selected_files: Vec<Ino> =
-        ITree::read_lock(&nw_interface.itree, "redundancy: fix_integrity")?
-            .iter()
-            .filter_map(|(ino, inode)| {
-                eligible_to_apply(
-                    *ino,
-                    &inode.entry,
-                    nw_interface.global_config.read().redundancy.number,
-                    available_peers,
-                    &nw_interface.hostname,
-                )
-            })
-            .collect();
-
-    let futures = selected_files
-        .iter()
-        .map(|ino| apply_to(nw_interface, fs_interface, peers, *ino))
-        .collect::<Vec<_>>();
-
-    let errors: Vec<WhError> = join_all(futures)
-        .await
-        .into_iter()
-        .filter_map(Result::err)
-        .collect();
-
-    if !errors.is_empty() {
-        log::error!(
-            "Redundancy::fix_integrity: {} errors reported ! See below:",
-            errors.len()
-        );
-        errors.iter().for_each(|e| log::error!("{e}"));
-    }
-    Ok(())
-}
-
-async fn apply_to(
-    nw_interface: &Arc<NetworkInterface>,
-    fs_interface: &Arc<FsInterface>,
-    peers: &[Address],
-    ino: u64,
-) -> WhResult<usize> {
-    if ITree::is_local_only(ino) {
-        return Ok(0);
-    }
-    let redundancy = nw_interface.global_config.read().redundancy.number;
-
-    if redundancy == 0 {
-        return Ok(0);
-    }
-
-    let file_binary = Arc::new(fs_interface.read_local_file(ino)?);
-
-    let missing_hosts_count: usize;
-    let available_hosts = peers.len() + 1; // + myself
-    let target_redundancy = if redundancy as usize > available_hosts {
-        missing_hosts_count = redundancy as usize - peers.len();
-        peers.len()
-    } else {
-        missing_hosts_count = 0;
-        (redundancy - 1) as usize
-    };
-
-    let new_hosts = push_redundancy(nw_interface, peers, ino, file_binary, target_redundancy).await;
-
-    nw_interface.update_hosts(ino, new_hosts)?;
-    Ok(missing_hosts_count)
-}
-
-/// start download to others concurrently
-async fn push_redundancy(
-    nw_interface: &Arc<NetworkInterface>,
-    all_peers: &[Address],
-    ino: Ino,
-    file_binary: Arc<Vec<u8>>,
-    target_redundancy: usize,
-) -> Vec<Address> {
-    let mut success_hosts: Vec<Address> = vec![nw_interface.hostname.clone()];
-    let mut set: JoinSet<WhResult<Address>> = JoinSet::new();
-
-    for addr in all_peers.iter().take(target_redundancy).cloned() {
-        let nwi_clone = Arc::clone(nw_interface);
-        let bin_clone = file_binary.clone();
-
-        set.spawn(async move { nwi_clone.send_file_redundancy(ino, bin_clone, addr).await });
-    }
-
-    // check for success and try next hosts if failure
-    let mut current_try = target_redundancy;
-    loop {
-        match set.join_next().await {
-            None => break,
-            Some(Err(e)) => {
-                log::error!("redundancy_worker: error in thread pool: {e}");
-                break;
-            }
-            Some(Ok(Ok(host))) => success_hosts.push(host),
-            Some(Ok(Err(crate::error::WhError::NetworkDied { called_from: _ }))) => {
-                log::warn!("Redundancy: NetworkDied on some host. Trying next...");
-                if current_try >= all_peers.len() {
-                    log::error!("Redundancy: Not enough answering hosts to apply redundancy.");
-                    break;
-                }
-                let nwi_clone = Arc::clone(nw_interface);
-                let bin_clone = file_binary.clone();
-                let addr = all_peers[current_try].clone();
-
-                set.spawn(
-                    async move { nwi_clone.send_file_redundancy(ino, bin_clone, addr).await },
-                );
-                current_try += 1;
-            }
-            Some(Ok(Err(e))) => {
-                log::error!("Redundancy: unknown error when applying redundancy: {e}");
-                break;
-            }
-        }
-    }
-    success_hosts
-}
-
 impl NetworkInterface {
+    /// send a file redundancy to a peer
     pub async fn send_file_redundancy(
         &self,
-        inode: Ino,
+        ino: Ino,
         data: Arc<Vec<u8>>,
-        to: Address,
-    ) -> WhResult<Address> {
-        let (status_tx, mut status_rx) = unbounded_channel();
+        to: PeerId,
+    ) -> Result<(Ino, PeerId), Ino> {
+        let (status_tx, status_rx) = oneshot::channel();
 
         self.to_network_message_tx
-            .send(ToNetworkMessage::SpecificMessage(
-                (MessageContent::RedundancyFile(inode, data), Some(status_tx)),
-                vec![to.clone()],
+            .send(ToNetworkMessage::AnswerMessage(
+                Request::RedundancyFile(ino, data),
+                status_tx,
+                to,
             ))
             .expect("send_file: unable to update modification on the network thread");
 
-        status_rx
-            .recv()
-            .await
-            .unwrap_or(Err(WhError::NetworkDied {
-                called_from: "network_interface::send_file_redundancy".to_owned(),
-            }))
-            .map(|()| to)
+        status_rx.await.ok().flatten().map(|_| (ino, to)).ok_or(ino)
     }
 }

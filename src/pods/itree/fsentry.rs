@@ -5,11 +5,12 @@ use std::{
 };
 
 use camino::Utf8PathBuf;
+use libp2p::PeerId;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::{
     error::{WhError, WhResult},
-    network::message::Address,
     pods::{
         filesystem::fs_interface::SimpleFileType,
         itree::Ino,
@@ -17,12 +18,12 @@ use crate::{
     },
 };
 
-pub type Hosts = Vec<Address>;
+pub type Hosts = Vec<PeerId>;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, TS)]
 pub enum SymlinkPath {
     /// Path relative to the symlink file itself
-    SymlinkPathRelative(Utf8PathBuf),
+    SymlinkPathRelative(#[ts(as = "String")] Utf8PathBuf),
     /// Path relative to the WH drive. Not really absolute but emulates absolute symlinks within the WH drive
     SymlinkPathAbsolute(WhPath),
     /// absolute Path pointing outside the WH drive
@@ -67,7 +68,7 @@ impl Display for SymlinkPath {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, TS)]
 pub struct EntrySymlink {
     pub target: SymlinkPath,
     pub hint: Option<SimpleFileType>,
@@ -85,8 +86,13 @@ impl Default for EntrySymlink {
 impl EntrySymlink {
     /// Err(None) means the 'absolute' test failed
     /// Err(Some(e)) is a parsing error of the target
-    pub fn from_absolute(target: &Path, mountpoint: &Path) -> Result<Self, Option<WhPathError>> {
-        target.is_absolute().then_some(()).ok_or(None)?;
+    pub fn from_absolute<P: AsRef<Path> + ?Sized, Q: AsRef<Path> + ?Sized>(
+        target: &P,
+        mountpoint: &Q,
+    ) -> Result<Self, Option<WhPathError>> {
+        let target = target.as_ref();
+        let mountpoint = mountpoint.as_ref();
+        target.has_root().then_some(()).ok_or(None)?;
         let mut components = normalize(target);
 
         // gradually matches each component of the mountpoint, untill only the internal portion remains
@@ -114,19 +120,35 @@ impl EntrySymlink {
     /// If wormhole failed to parse, we can't handle it,
     /// but the os will always treat it as an arbitrary OsString
     ///
-    pub fn parse(target: &Path, mountpoint: &Path) -> Result<Self, Self> {
+    pub fn parse<P: AsRef<Path> + ?Sized, Q: AsRef<Path> + ?Sized>(
+        target: &P,
+        mountpoint: &Q,
+    ) -> Result<Self, Self> {
+        let target = target.as_ref();
+        let mountpoint = mountpoint.as_ref();
+        let try_fwd_slashes = |path: &Path| {
+            path.as_os_str()
+                .to_str()
+                .map(|s| s.replace("\\", "/").into())
+                .unwrap_or_else(|| target.to_path_buf())
+        };
+
         let external = || Self {
-            target: SymlinkPath::SymlinkPathExternal(target.to_owned()),
+            target: SymlinkPath::SymlinkPathExternal(try_fwd_slashes(target)),
             hint: None,
         };
 
-        if target.is_absolute() {
+        if target.has_root() {
             Self::from_absolute(target, mountpoint)
                 .or_else(|e| e.map(|_| external()).ok_or_else(external))
         } else {
             Ok(Self {
                 target: SymlinkPath::SymlinkPathRelative(
-                    Utf8PathBuf::from_os_string(target.into()).map_err(|_| external())?,
+                    target
+                        .as_os_str()
+                        .to_str()
+                        .map(|s| s.replace("\\", "/").into())
+                        .ok_or_else(external)?,
                 ),
                 hint: None,
             })
@@ -206,6 +228,42 @@ mod test {
         prelude::{PathChild, PathCreateDir},
         TempDir,
     };
+    use camino::Utf8PathBuf;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn test_parse_symlink() {
+        let mountpoint = Path::new("/mountpoint");
+        let relative = Path::new("../file");
+        let absolute = mountpoint.join("folder/file");
+        let external = Path::new("/tmp/file");
+
+        let symlink_relative =
+            EntrySymlink::parse(&relative, mountpoint).expect("parsing relative symlink");
+        let symlink_relative_expected = EntrySymlink {
+            target: SymlinkPath::SymlinkPathRelative(Utf8PathBuf::from("../file")),
+            hint: None,
+        };
+        assert_eq!(symlink_relative, symlink_relative_expected);
+
+        let symlink_absolute =
+            EntrySymlink::parse(&absolute, mountpoint).expect("parsing absolute symlink");
+        let symlink_absolute_expected = EntrySymlink {
+            target: SymlinkPath::SymlinkPathAbsolute(
+                WhPath::try_from("folder/file").expect("valid WhPath"),
+            ),
+            hint: None,
+        };
+        assert_eq!(symlink_absolute, symlink_absolute_expected);
+
+        let symlink_external = EntrySymlink::parse(&external, mountpoint)
+            .expect_err("parsing external symlink yields Err(Self)");
+        let symlink_external_expected = EntrySymlink {
+            target: SymlinkPath::SymlinkPathExternal(PathBuf::from("/tmp/file")),
+            hint: None,
+        };
+        assert_eq!(symlink_external, symlink_external_expected);
+    }
 
     #[test]
     fn test_realize_symlink() {
