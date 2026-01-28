@@ -4,7 +4,7 @@ use futures::StreamExt;
 use libp2p::{
     identify,
     request_response::{self, OutboundRequestId, ResponseChannel},
-    swarm::SwarmEvent,
+    swarm::{ConnectionError, SwarmEvent},
     PeerId, Swarm,
 };
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
@@ -54,6 +54,7 @@ impl EventLoop {
     }
 
     fn close(mut self) {
+        log::debug!("Closing Eventloop, ejecting all peers");
         self.closing = true;
         for peer in self
             .swarm
@@ -342,10 +343,15 @@ impl EventLoop {
             }
             SwarmEvent::IncomingConnection { connection_id, .. } => {
                 if self.closing {
+                    log::debug!("Incoming Connection while closing: re-closed {connection_id}");
                     self.swarm.close_connection(connection_id);
                 }
             }
-            SwarmEvent::ConnectionClosed { peer_id, .. } => {
+            SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
+                log::debug!(
+                    "Connection closed with {peer_id}: {}",
+                    cause.unwrap_or(ConnectionError::IO(io::Error::other("no cause given")))
+                );
                 if self.closing && self.swarm.connected_peers().count() == 0 {
                     return true;
                 }

@@ -12,7 +12,7 @@ use libp2p::PeerId;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::{
-    sync::{Semaphore, mpsc::UnboundedReceiver, oneshot},
+    sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
     task::{AbortHandle, JoinSet},
 };
 
@@ -56,7 +56,7 @@ struct RedundancyTracker {
     /// FsInterface for convenience
     pub fs_interface: Arc<FsInterface>,
     /// max number of streams accessible at one time for this system
-    pub concurrent_streams: Arc<Semaphore>, 
+    pub concurrent_streams: Arc<Semaphore>,
 }
 
 impl RedundancyTracker {
@@ -321,8 +321,11 @@ impl RedundancyTracker {
             };
             let nwi_clone = fs_interface.network_interface.clone();
             let bin_clone = file_binary.clone();
-            let handle = tasks
-                .spawn(async move { let res = nwi_clone.send_file_redundancy(ino, bin_clone, to).await; drop(permit); res });
+            let handle = tasks.spawn(async move {
+                let res = nwi_clone.send_file_redundancy(ino, bin_clone, to).await;
+                drop(permit);
+                res
+            });
             workers.push((to, Either::Right(handle)));
         }
 
@@ -332,8 +335,10 @@ impl RedundancyTracker {
         // artificially create a task that will wake when the semaphore opens again
         if workers.is_empty() {
             let semaphore = semaphore.clone();
-            tasks
-                .spawn(async move { let _ = semaphore.acquire().await; Err(ino) });
+            tasks.spawn(async move {
+                let _ = semaphore.acquire().await;
+                Err(ino)
+            });
         }
         workers
     }
