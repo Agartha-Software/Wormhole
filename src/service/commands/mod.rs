@@ -12,27 +12,11 @@ mod status;
 mod tree;
 mod unfreeze;
 
-pub use config::check::check;
-pub use config::generate::generate;
-pub use config::show::show;
-pub use freeze::freeze;
-pub use gethosts::gethosts;
-pub use inspect::inspect;
-pub use list_pods::list_pods;
-pub use new::new;
-pub use redundancy_status::redundancy_status;
-pub use remove::remove;
-pub use stats_per_filetype::stats_per_filetype;
-pub use status::status;
-pub use tree::tree;
-pub use unfreeze::unfreeze;
-
 use crate::ipc::commands::PodId;
 use crate::pods::pod::Pod;
 use std::collections::HashMap;
 
-use crate::ipc::commands::PodId;
-use crate::pods::{pod::Pod, prototype::PodPrototype};
+use crate::pods::{prototype::PodPrototype};
 
 fn find_pod<'a>(id: &'a PodId, pods: &'a HashMap<String, Pod>) -> Option<(&'a String, &'a Pod)> {
     match id {
