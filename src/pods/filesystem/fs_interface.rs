@@ -137,7 +137,7 @@ impl FsInterface {
         let _created = self.disk.new_file(&path, perms);
         self.disk
             .write_file(&path, &binary, 0)
-            .inspect_err(|e| log::error!("{e}"))
+            .inspect_err(|e| log::error!("{e}: writing to {path}"))
             .expect("disk error");
 
         self.network_interface

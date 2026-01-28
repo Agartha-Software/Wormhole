@@ -7,7 +7,7 @@ use crate::{
     pods::{
         disk_managers::DiskManager,
         itree::{
-            index_folder_recursive, recover_serialized_itree, FsEntry, ITree, Ino,
+            index_folder_recursive, FsEntry, ITree, Ino,
             GLOBAL_CONFIG_FNAME, GLOBAL_CONFIG_INO, ROOT,
         },
         whpath::WhPath,
@@ -15,14 +15,10 @@ use crate::{
 };
 
 pub fn generate_itree(mountpoint: &Path, host: &PeerId) -> io::Result<ITree> {
-    if let Some(itree) = recover_serialized_itree(mountpoint) {
-        Ok(itree)
-    } else {
-        let mut itree = ITree::new();
+    let mut itree = ITree::new();
 
-        index_folder_recursive(&mut itree, ROOT, mountpoint, host, mountpoint)?;
-        Ok(itree)
-    }
+    index_folder_recursive(&mut itree, ROOT, mountpoint, host, mountpoint)?;
+    Ok(itree)
 }
 
 pub fn initiate_itree(
