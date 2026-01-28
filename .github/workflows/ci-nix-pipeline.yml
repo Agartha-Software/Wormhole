@@ -43,7 +43,7 @@ jobs:
 
       - name: Build & cache with Cachix
         run: |
-          cachix watch-exec agartha-software -- nix develop --command cargo build
+          cachix watch-exec agartha-software -- nix develop --command cargo build --all-targets --tests
 
       - name: Test & cache with Cachix
         run: |
