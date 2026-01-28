@@ -119,17 +119,6 @@ impl Pod {
 
         let (redundancy_tx, redundancy_rx) = mpsc::unbounded_channel();
 
-        #[cfg(target_os = "linux")]
-        let disk_manager = Box::new(
-            UnixDiskManager::new(&proto.mountpoint)
-                .map_err(|err| PodCreationError::DiskAccessError(err.into()))?,
-        );
-        #[cfg(target_os = "windows")]
-        let disk_manager = Box::new(
-            WindowsDiskManager::new(&proto.mountpoint)
-                .map_err(|err| PodCreationError::DiskAccessError(err.into()))?,
-        );
-
         let mut nickname = host_nickname;
         nickname.push(':');
         nickname.push_str(&proto.name);
@@ -159,6 +148,17 @@ impl Pod {
 
         let itree = generate_itree(&proto.mountpoint, &swarm.local_peer_id().clone())
             .map_err(|err| PodCreationError::ITreeIndexion(err.into()))?;
+
+        #[cfg(target_os = "linux")]
+        let disk_manager = Box::new(
+            UnixDiskManager::new(&proto.mountpoint)
+                .map_err(|err| PodCreationError::DiskAccessError(err.into()))?,
+        );
+        #[cfg(target_os = "windows")]
+        let disk_manager = Box::new(
+            WindowsDiskManager::new(&proto.mountpoint)
+                .map_err(|err| PodCreationError::DiskAccessError(err.into()))?,
+        );
 
         initiate_itree(&itree, &proto.global_config, disk_manager.as_ref())
             .map_err(|err| PodCreationError::ITreeIndexion(err.into()))?;

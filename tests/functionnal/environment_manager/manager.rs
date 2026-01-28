@@ -9,24 +9,26 @@ use crate::functionnal::{
 use std::process::Stdio;
 
 pub struct EnvironmentManager {
+    pub test: String,
     pub socket_id: std::ops::RangeFrom<u16>,
     pub pods_port: std::ops::RangeFrom<u16>,
     pub services: Vec<Service>,
 }
 
-pub fn socket_from_id(id: u16) -> String {
-    format!("whtest{id}.sock")
-}
-
 impl EnvironmentManager {
-    pub fn new() -> Self {
+    pub fn new(test: &str) -> Self {
         start_log();
         log::trace!("SLEEP_TIME for this test is {:?}", *SLEEP_TIME);
         EnvironmentManager {
             socket_id: MIN_SOCKET_ID..,
             pods_port: MIN_POD_PORT..,
             services: Vec::new(),
+            test: test.to_owned(),
         }
+    }
+
+    pub fn socket_from_id(&self, id: u16) -> String {
+        format!("{}{id}.sock", self.test)
     }
 
     pub fn reserve_socket_id(&mut self) -> u16 {
@@ -35,23 +37,30 @@ impl EnvironmentManager {
 
     /// Create a service on the next available socket. No pods are created.
     pub fn add_service(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut socket = self.reserve_socket_id();
-        log::info!("trying service on {socket}");
+        let mut socket_id = self.reserve_socket_id();
+        log::info!("trying service on {socket_id}");
 
         // checks that no service is running on this socket
-        let (mut status, _, _) = cli_command(["-s", &socket_from_id(socket), "status"]);
+        let (mut status, _, _) = cli_command(["-s", &self.socket_from_id(socket_id), "status"]);
         while status.success() {
-            log::warn!("\nA service is already running on socket {socket}. Trying next socket...");
-            socket = self.reserve_socket_id();
-            (status, _, _) = cli_command(["-s", &socket_from_id(socket), "status"]);
+            log::warn!(
+                "\nA service is already running on socket {socket_id}. Trying next socket..."
+            );
+            socket_id = self.reserve_socket_id();
+            (status, _, _) = cli_command(["-s", &self.socket_from_id(socket_id), "status"]);
         }
         assert!(
-            socket < MAX_SOCKET_ID,
+            socket_id < MAX_SOCKET_ID,
             "service socket upper limit ({MAX_SOCKET_ID}) exceeded"
         );
 
         let mut instance = std::process::Command::new(SERVICE_BIN)
-            .args(["-s", &socket_from_id(socket), "--nodeamon", "--clean"])
+            .args([
+                "-s",
+                &self.socket_from_id(socket_id),
+                "--nodeamon",
+                "--clean",
+            ])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .stdin(Stdio::piped())
@@ -59,11 +68,12 @@ impl EnvironmentManager {
             .unwrap();
 
         std::thread::sleep(*SLEEP_TIME);
+        let socket = self.socket_from_id(socket_id);
 
         // checks the service viability
-        let (status, _, _) = cli_command(["-s", &socket_from_id(socket), "status"]);
+        let (status, _, _) = cli_command(["-s", &socket, "status"]);
         if !status.success() {
-            log::error!("\nCan't reach service on {}", socket_from_id(socket),);
+            log::error!("\nCan't reach service on {}", &socket);
 
             instance.kill().unwrap();
             let _ = instance.wait(); // necessary on some os
@@ -82,7 +92,8 @@ impl EnvironmentManager {
         log::info!("Service started on {}", socket);
         self.services.push(Service {
             instance,
-            id: socket,
+            id: socket_id,
+            socket,
             pods: Vec::new(),
         });
 
@@ -153,7 +164,7 @@ impl EnvironmentManager {
                 };
                 let pod_port = cli_pod_creation_command(
                     network_name.clone(),
-                    service.id,
+                    &service.socket,
                     temp_dir.path(),
                     &mut self.pods_port,
                     conn_to.as_ref(),
@@ -165,11 +176,5 @@ impl EnvironmentManager {
             }
         });
         Ok(())
-    }
-}
-
-impl Default for EnvironmentManager {
-    fn default() -> Self {
-        Self::new()
     }
 }
