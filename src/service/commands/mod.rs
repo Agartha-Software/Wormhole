@@ -6,8 +6,8 @@ mod list_pods;
 mod new;
 mod redundancy_status;
 mod remove;
-mod stats_per_filetype;
 mod restart;
+mod stats_per_filetype;
 mod status;
 mod tree;
 mod unfreeze;
@@ -16,7 +16,7 @@ use crate::ipc::commands::PodId;
 use crate::pods::pod::Pod;
 use std::collections::HashMap;
 
-use crate::pods::{prototype::PodPrototype};
+use crate::pods::prototype::PodPrototype;
 
 fn find_pod<'a>(id: &'a PodId, pods: &'a HashMap<String, Pod>) -> Option<(&'a String, &'a Pod)> {
     match id {

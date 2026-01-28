@@ -81,5 +81,5 @@ pub enum Command {
     Status,
     ListPods,
     RedundancyStatus(PodId),
-    StatsPerFiletype(PodId)
+    StatsPerFiletype(PodId),
 }

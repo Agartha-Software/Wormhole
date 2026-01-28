@@ -1,7 +1,7 @@
 use crate::{
     ipc::{answers::RedundancyStatusAnswer, commands::PodId},
-    pods::{network::redundancy::check_integrity},
-    service::{Service, commands::find_pod, connection::send_answer},
+    pods::network::redundancy::check_integrity,
+    service::{commands::find_pod, connection::send_answer, Service},
 };
 
 impl Service {
@@ -11,12 +11,12 @@ impl Service {
         stream: &mut either::Either<&mut Stream, &mut String>,
     ) -> std::io::Result<()>
     where
-    Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
+        Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
     {
         match find_pod(&pod, &self.pods) {
             Some((_, pod)) => {
                 let integrity = check_integrity(pod);
-                
+
                 send_answer(
                     match integrity {
                         Ok(i) => RedundancyStatusAnswer::Status(i),
@@ -28,7 +28,7 @@ impl Service {
             }
             None => send_answer(RedundancyStatusAnswer::PodNotFound, stream).await?,
         };
-        
+
         Ok(())
-    }    
+    }
 }

@@ -2,8 +2,8 @@ use interprocess::local_socket::tokio::Stream;
 
 use crate::cli::{
     commands::{
-        check, freeze, generate, gethosts, inspect, new, remove, restart, show, status, tree,
-        unfreeze, list_pods, redundancy_status,
+        check, freeze, generate, gethosts, inspect, list_pods, new, redundancy_status, remove,
+        restart, show, status, tree, unfreeze,
     },
     CliCommand, ConfigCommand,
 };

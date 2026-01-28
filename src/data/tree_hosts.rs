@@ -2,7 +2,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{pods::itree::{FsEntry, Ino}};
+use crate::pods::itree::{FsEntry, Ino};
 
 pub type TreeLine = (u8, Ino, String, FsEntry);
 

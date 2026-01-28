@@ -1,6 +1,6 @@
 use crate::{
     ipc::{answers::StatsPerFiletypeAnswer, commands::PodId},
-    service::{Service, commands::find_pod, connection::send_answer},
+    service::{commands::find_pod, connection::send_answer, Service},
 };
 
 impl Service {
@@ -10,12 +10,12 @@ impl Service {
         stream: &mut either::Either<&mut Stream, &mut String>,
     ) -> std::io::Result<()>
     where
-    Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
+        Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
     {
         match find_pod(&pod, &self.pods) {
             Some((_, pod)) => {
                 let stats = pod.get_stats_per_filetype();
-                
+
                 send_answer(
                     match stats {
                         Ok(i) => StatsPerFiletypeAnswer::Stats(i),
@@ -27,8 +27,7 @@ impl Service {
             }
             None => send_answer(StatsPerFiletypeAnswer::PodNotFound, stream).await?,
         };
-        
+
         Ok(())
     }
 }
-    
