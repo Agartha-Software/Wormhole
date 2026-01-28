@@ -42,6 +42,7 @@ impl PodPrototype {
             name: self.name.clone(),
             connected_peers: vec![],
             mount: self.mountpoint.clone(),
+            disk_space: None,
         }
     }
 

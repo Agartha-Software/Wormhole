@@ -122,6 +122,7 @@ libp2p = { version = "0.56.0", features = [
 ] }
 async-trait = "0.1.89"
 port_check = "0.3.0"
+tower-http = {version = "0.6.8", features = ["cors"] }
 
 [dev-dependencies]
 assert_fs = "1.1.2"

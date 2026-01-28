@@ -1,21 +1,23 @@
 use super::network_interface::NetworkInterface;
 use crate::{
-    error::WhError,
+    error::{WhError, WhResult},
     network::message::{Request, ToNetworkMessage},
     pods::{
         filesystem::{fs_interface::FsInterface, File},
         itree::{FsEntry, ITree, Ino},
         network::swarm::MAX_CONCURRENT_STREAMS,
+        pod::Pod,
     },
 };
 use either::Either;
 use libp2p::PeerId;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use tokio::{
     sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
     task::{AbortHandle, JoinSet},
 };
+use ts_rs::TS;
 
 custom_error::custom_error! {pub RedundancyError
     WhError{source: WhError} = "{source}",
@@ -343,6 +345,58 @@ impl RedundancyTracker {
         }
         workers
     }
+}
+
+#[derive(Eq, Hash, PartialEq, Serialize, Deserialize, Debug, TS)]
+#[ts(export)]
+pub enum RedundancyStatus {
+    NotRedundant,
+    BelowTarget,
+    OnTarget,
+    AboveTarget,
+}
+
+// Lists the number of files that goes into each RedundancyStatus field
+pub fn check_integrity(pod: &Pod) -> WhResult<HashMap<RedundancyStatus, u64>> {
+    let target = pod.global_config.read().redundancy.number;
+
+    let selected_files: Vec<(Ino, RedundancyStatus)> =
+        ITree::read_lock(&pod.network_interface.itree, "redundancy: check_integrity")?
+            .iter()
+            .filter_map(|(ino, inode)| {
+                if ITree::is_local_only(*ino) {
+                    return None;
+                }
+                let hosts = if let FsEntry::File(hosts) = &inode.entry {
+                    hosts.len() as u64
+                } else {
+                    return None;
+                };
+
+                let status = if hosts <= 1 {
+                    RedundancyStatus::NotRedundant
+                } else if hosts < target {
+                    RedundancyStatus::BelowTarget
+                } else if hosts == target {
+                    RedundancyStatus::OnTarget
+                } else {
+                    RedundancyStatus::AboveTarget
+                };
+
+                Some((*ino, status))
+            })
+            .collect();
+
+    Ok(selected_files
+        .into_iter()
+        .fold(HashMap::new(), |mut acc, f| {
+            if let Some(entry) = acc.get_mut(&f.1) {
+                *entry += 1;
+            } else {
+                acc.insert(f.1, 1);
+            }
+            acc
+        }))
 }
 
 impl NetworkInterface {
