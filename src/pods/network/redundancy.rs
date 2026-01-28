@@ -12,7 +12,7 @@ use libp2p::PeerId;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::{
-    sync::{mpsc::UnboundedReceiver, oneshot},
+    sync::{Semaphore, mpsc::UnboundedReceiver, oneshot},
     task::{AbortHandle, JoinSet},
 };
 
@@ -37,7 +37,7 @@ type Tombstone = ();
 
 /// Left<Tombstone> if the send failed, Right<AbortHandle> if it's still pending
 type PendingStatus = Either<Tombstone, AbortHandle>;
-#[derive(Clone)]
+// #[derive(Clone)]
 struct PendingRedundancy {
     pub ino: Ino,
     pub file: Option<File>,
@@ -55,6 +55,8 @@ struct RedundancyTracker {
     pub pending: Vec<PendingRedundancy>,
     /// FsInterface for convenience
     pub fs_interface: Arc<FsInterface>,
+    /// max number of streams accessible at one time for this system
+    pub concurrent_streams: Arc<Semaphore>, 
 }
 
 impl RedundancyTracker {
@@ -63,6 +65,7 @@ impl RedundancyTracker {
             fs_interface,
             tasks: Default::default(),
             pending: Default::default(),
+            concurrent_streams: Arc::new(Semaphore::new(1024)),
         }
     }
 
@@ -152,6 +155,7 @@ impl RedundancyTracker {
             .and_then(|f| f.ok_or(WhError::InodeNotFound))?;
         let sends = Self::push_redundancy(
             &self.fs_interface,
+            &self.concurrent_streams,
             &mut self.tasks,
             &to,
             ino,
@@ -231,6 +235,7 @@ impl RedundancyTracker {
             };
             let mut sent = Self::push_redundancy(
                 &self.fs_interface,
+                &self.concurrent_streams,
                 &mut self.tasks,
                 &remanining_hosts,
                 ino,
@@ -299,6 +304,7 @@ impl RedundancyTracker {
     /// start download to others concurrently
     async fn push_redundancy(
         fs_interface: &FsInterface,
+        semaphore: &Arc<Semaphore>,
         tasks: &mut JoinSet<Result<(Ino, PeerId), Ino>>,
         to: &[PeerId],
         ino: Ino,
@@ -308,11 +314,26 @@ impl RedundancyTracker {
         let mut workers = Vec::new();
 
         for to in to.iter().copied().take(target_redundancy) {
+            let permit = if let Ok(permit) = Semaphore::try_acquire_owned(semaphore.clone()) {
+                permit
+            } else {
+                break;
+            };
             let nwi_clone = fs_interface.network_interface.clone();
             let bin_clone = file_binary.clone();
             let handle = tasks
-                .spawn(async move { nwi_clone.send_file_redundancy(ino, bin_clone, to).await });
+                .spawn(async move { let res = nwi_clone.send_file_redundancy(ino, bin_clone, to).await; drop(permit); res });
             workers.push((to, Either::Right(handle)));
+        }
+
+        // If no workers were created, none will finish to wake this PendingRedundancy.
+        // it would get lost and never retried.
+        // can only happen if the streams semaphore is full
+        // artificially create a task that will wake when the semaphore opens again
+        if workers.is_empty() {
+            let semaphore = semaphore.clone();
+            tasks
+                .spawn(async move { let _ = semaphore.acquire().await; Err(ino) });
         }
         workers
     }
