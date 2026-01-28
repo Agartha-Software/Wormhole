@@ -21,30 +21,32 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<String> {
     let NewArgs {
         name,
         url,
-        hostname,
-        additional_hosts,
+        mut additional_hosts,
         allow_other_users,
-        listen_url,
         ip_address,
         port,
         ..
     } = args;
+
+    if let Some(url) = url {
+        additional_hosts.insert(0, url);
+    }
 
     let request = NewRequest {
         mountpoint: mountpoint.clone(),
         name: name.clone(),
         ip_address,
         port,
-        public_url: listen_url,
-        url,
-        hostname,
-        additional_hosts,
+        hosts: additional_hosts,
         allow_other_users,
     };
     send_command(Command::New(request), &mut stream).await?;
 
     match recieve_answer::<NewAnswer>(&mut stream).await? {
-        NewAnswer::Success(listen_url) => Ok(format!(
+        NewAnswer::Success(_, true) => Ok(format!(
+            "Pod '{name}' successfully created and connected."
+        )),
+        NewAnswer::Success(listen_url, false) => Ok(format!(
             "Pod '{name}' created with success, listening to '{listen_url}'."
         )),
         NewAnswer::AlreadyExist => Err(io::Error::new(
@@ -55,22 +57,22 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<String> {
             io::ErrorKind::AlreadyExists,
             format!("A pod at {mountpoint:#?} is already mounted, couldn't create."),
         )),
-        NewAnswer::InvalidIp => Err(io::Error::new(
+        NewAnswer::PortAlreadyTaken => Err(io::Error::new(
             io::ErrorKind::AddrInUse,
-            "Given port is already used, couldn't create.",
+            "Given port already used.",
         )),
-        NewAnswer::BindImpossible(e) => {
-            print_err("Failed to bind the given pod:");
-            Err(e.into())
-        }
+        NewAnswer::NoFreePortInRage => Err(io::Error::new(
+            io::ErrorKind::AddrNotAvailable,
+            "No free port in range 40000-40100",
+        )),
+        NewAnswer::InvalidIp(e) => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Invalid Ip given, couldn't create: {e}"),
+        )),
         NewAnswer::FailedToCreatePod(e) => {
             print_err("Failed to create the given pod:");
             Err(e.into())
         }
-        NewAnswer::InvalidUrlIp => Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "The given Url to connect to is invalid.",
-        )),
         NewAnswer::ConflictWithConfig(field) => Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             format!("The field '{field}' have a conflicting value between args and configuration files."),

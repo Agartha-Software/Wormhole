@@ -43,10 +43,14 @@ pub enum CliCommand {
     Tree(IdentifyPodArgs),
     /// Checks if the service is working
     Status,
+    // Lists all the pods
+    ListPods,
     // /// Start the service
     // Start,
     // /// Stops the service
     // Stop,
+    /// Display the redundancy status for all files
+    RedundancyStatus(IdentifyPodArgs),
 }
 
 fn canonicalize(path: PathBuf) -> std::io::Result<PathBuf> {
@@ -135,12 +139,6 @@ pub struct NewArgs {
     /// Network to join
     #[arg(long, short)]
     pub url: Option<String>,
-    /// Name for this pod to use as a machine name with the network. Defaults to your Machine's name
-    #[arg(long, short = 'H')]
-    pub hostname: Option<String>,
-    /// Url this Pod reports to other to reach it
-    #[arg(long, short)]
-    pub listen_url: Option<String>, // listen_url in the Cli and public_url in the code because the -p would conflict with the port
     /// Ip address this Pod listen [default: 0.0.0.0]
     #[arg(long, short)]
     pub ip_address: Option<IpAddr>,

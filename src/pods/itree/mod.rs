@@ -1,15 +1,15 @@
+pub mod creation;
 mod fsentry;
 mod inode;
 
 pub use fsentry::*;
 pub use inode::*;
+use libp2p::PeerId;
 
 #[cfg(target_os = "windows")]
 pub use crate::pods::itree::WINDOWS_DEFAULT_PERMS_MODE;
 use crate::{
-    data::tree_hosts::TreeLine,
     error::WhResult,
-    network::message::Address,
     pods::whpath::{InodeName, InodeNameError, WhPath},
 };
 
@@ -42,8 +42,6 @@ pub const GLOBAL_CONFIG_INO: u64 = 2;
 pub const GLOBAL_CONFIG_FNAME: &str = ".global_config.toml";
 pub const LOCAL_CONFIG_INO: u64 = 3;
 pub const LOCAL_CONFIG_FNAME: &str = ".local_config.toml";
-pub const ITREE_FILE_INO: u64 = 4;
-pub const ITREE_FILE_FNAME: &str = ".itree";
 pub const FIRST_INO: u64 = 11;
 
 // SECTION types
@@ -51,7 +49,7 @@ pub type ITreeIndex = HashMap<Ino, Inode>;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ITree {
-    entries: ITreeIndex,
+    pub entries: ITreeIndex,
     pub next_ino: RangeFrom<Ino>,
 }
 
@@ -71,7 +69,7 @@ impl ITree {
             Inode {
                 parent: ROOT,
                 id: ROOT,
-                name: WhPath::root().to_string().try_into().unwrap(),
+                name: InodeName::root(),
                 entry: FsEntry::Directory(vec![]),
                 meta: Metadata {
                     ino: ROOT,
@@ -122,10 +120,6 @@ impl ITree {
         Ok(())
     }
 
-    pub fn overwrite_self(&mut self, entries: ITreeIndex) {
-        self.entries = entries;
-    }
-
     /// Removed 'local only' files from the tree
     /// This takes and mutates self, so that it can't accidentally be used in place
     /// only meant to create a 'clean' network copy of an itree for sharing
@@ -139,8 +133,8 @@ impl ITree {
         self
     }
 
-    pub fn get_raw_entries(&self) -> ITreeIndex {
-        self.entries.clone()
+    pub fn raw_entries(&self) -> &ITreeIndex {
+        &self.entries
     }
 
     pub fn iter(&self) -> std::collections::hash_map::Iter<'_, Ino, Inode> {
@@ -190,7 +184,7 @@ impl ITree {
 
     pub fn files_hosted_only_by<'a>(
         &'a self,
-        host: &'a Address,
+        host: &'a PeerId,
     ) -> impl Iterator<Item = &'a Inode> + use<'a> {
         self.iter()
             .filter_map(move |(_, inode)| match &inode.entry {
@@ -358,25 +352,26 @@ impl ITree {
         Ok(actual_inode)
     }
 
-    pub fn set_inode_hosts(&mut self, ino: Ino, hosts: Vec<Address>) -> WhResult<()> {
-        let inode = self.get_inode_mut(ino)?;
+    /// Get the hosts of a file
+    pub fn get_inode_hosts(&self, ino: Ino) -> WhResult<&[PeerId]> {
+        let inode = self.get_inode(ino)?;
 
-        inode.entry = match &inode.entry {
-            FsEntry::File(_) => FsEntry::File(hosts),
-            _ => return Err(WhError::InodeIsADirectory),
-        };
-        Ok(())
+        if let FsEntry::File(hosts) = &inode.entry {
+            Ok(hosts)
+        } else {
+            Err(WhError::InodeIsADirectory)
+        }
     }
 
     /// Add hosts to an inode
     ///
     /// Only works on inodes pointing files (no folders)
     /// Ignore already existing hosts to avoid duplicates
-    pub fn add_inode_hosts(&mut self, ino: Ino, mut new_hosts: Vec<Address>) -> WhResult<()> {
+    pub fn add_inode_hosts(&mut self, ino: Ino, new_hosts: &[PeerId]) -> WhResult<()> {
         let inode = self.get_inode_mut(ino)?;
 
         if let FsEntry::File(hosts) = &mut inode.entry {
-            hosts.append(&mut new_hosts);
+            hosts.extend_from_slice(new_hosts);
             hosts.sort();
             hosts.dedup();
             Ok(())
@@ -388,7 +383,7 @@ impl ITree {
     /// Remove hosts from an inode
     ///
     /// Only works on inodes pointing files (no folders)
-    pub fn remove_inode_hosts(&mut self, ino: Ino, remove_hosts: Vec<Address>) -> WhResult<()> {
+    pub fn remove_inode_hosts(&mut self, ino: Ino, remove_hosts: &[PeerId]) -> WhResult<()> {
         let inode = self.get_inode_mut(ino)?;
 
         match &mut inode.entry {
@@ -423,34 +418,6 @@ impl ITree {
         inode.xattrs.remove(key);
         Ok(())
     }
-
-    pub fn get_file_tree_and_hosts(&self, path: Option<&WhPath>) -> WhResult<Vec<TreeLine>> {
-        let ino = if let Some(path) = path {
-            self.get_inode_from_path(path)
-                .map_err(|_| WhError::InodeNotFound)?
-                .id
-        } else {
-            ROOT
-        };
-
-        self.recurse_tree(ino, 0)
-    }
-
-    /// given ino is not checked -> must exist in itree
-    fn recurse_tree(&self, ino: Ino, indentation: u8) -> WhResult<Vec<TreeLine>> {
-        let entry = &self.get_inode(ino)?.entry;
-        let path = self.get_path_from_inode_id(ino)?;
-        match entry {
-            FsEntry::Directory(children) => Ok(children
-                .iter()
-                .map(|c| self.recurse_tree(*c, indentation + 1))
-                .collect::<WhResult<Vec<Vec<TreeLine>>>>()?
-                .into_iter()
-                .flatten()
-                .collect::<Vec<TreeLine>>()),
-            entry => Ok(vec![(indentation, ino, path, entry.clone())]),
-        }
-    }
 }
 
 impl Default for ITree {
@@ -461,19 +428,11 @@ impl Default for ITree {
 
 // !SECTION
 
-/// If itree can be read and deserialized from parent_folder/[ITREE_FILE_NAME] returns Some(ITree)
-fn recover_serialized_itree(parent_folder: &Path) -> Option<ITree> {
-    // error handling is silent on purpose as it will be recoded with the new error system
-    // If an error happens, will just proceed like the itree was not on disk
-    // In the future, we should maybe warn and keep a copy, avoiding the user from losing data
-    bincode::deserialize(&fs::read(parent_folder.join(ITREE_FILE_FNAME)).ok()?).ok()
-}
-
 fn index_folder_recursive(
     itree: &mut ITree,
     parent: Ino,
     path: &Path,
-    host: &String,
+    host: &PeerId,
     mountpoint: &Path,
 ) -> io::Result<()> {
     for entry in fs::read_dir(path)? {
@@ -503,14 +462,15 @@ fn index_folder_recursive(
         };
 
         #[cfg(target_os = "linux")]
-        let perm_mode = meta.permissions().mode() as u16;
+        let mut perm_mode = meta.permissions().mode() as u16;
         #[cfg(target_os = "windows")]
-        let perm_mode = WINDOWS_DEFAULT_PERMS_MODE;
+        let mut perm_mode = WINDOWS_DEFAULT_PERMS_MODE;
 
         let fs_entry = match ftype.try_into()? {
             SimpleFileType::Directory => FsEntry::new_directory(),
-            SimpleFileType::File => FsEntry::File(vec![host.clone()]),
+            SimpleFileType::File => FsEntry::File(vec![*host]),
             SimpleFileType::Symlink => {
+                perm_mode = 0o777; // symlink's metadata.mode() is unreliable
                 let target = std::fs::read_link(entry.path());
                 let link = EntrySymlink::parse(&target?, mountpoint);
                 FsEntry::Symlink(link.unwrap_or_else(|e| e))
@@ -538,15 +498,4 @@ fn index_folder_recursive(
         };
     }
     Ok(())
-}
-
-pub fn generate_itree(mountpoint: &Path, host: &String) -> io::Result<ITree> {
-    if let Some(itree) = recover_serialized_itree(mountpoint) {
-        Ok(itree)
-    } else {
-        let mut itree = ITree::new();
-
-        index_folder_recursive(&mut itree, ROOT, mountpoint, host, mountpoint)?;
-        Ok(itree)
-    }
 }

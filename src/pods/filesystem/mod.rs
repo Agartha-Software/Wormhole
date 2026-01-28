@@ -15,6 +15,8 @@ pub mod write;
 pub mod xattrs;
 
 use std::{fmt::Debug, sync::Arc};
+
+#[derive(Clone)]
 pub struct File(pub Arc<Vec<u8>>);
 
 impl File {

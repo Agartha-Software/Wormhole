@@ -1,9 +1,11 @@
-use std::sync::Arc;
+use std::net::IpAddr;
+
+use libp2p::Multiaddr;
+use port_check::{free_local_port_in_range, is_local_port_free};
 
 use crate::{
     config::{local_file::LocalConfigFile, types::Config, GlobalConfig},
     ipc::{answers::NewAnswer, commands::NewRequest},
-    network::server::Server,
     pods::{
         itree::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
         pod::Pod,
@@ -39,64 +41,53 @@ impl Service {
         let local_config =
             LocalConfigFile::read(args.mountpoint.join(LOCAL_CONFIG_FNAME)).unwrap_or_default();
 
-        let (server, bound_socket) = match Server::new(args.ip_address, args.port) {
-            Ok((server, bound_socket)) => (Arc::new(server), bound_socket),
-            Err(answer) => {
-                return send_answer(NewAnswer::BindImpossible(answer.into()), stream).await;
-            }
+        global_config = global_config.add_hosts(args.hosts);
+
+        let (ip_type, ip) = match args.ip_address {
+            Some(IpAddr::V4(v4)) => ("ip4", v4.to_string()),
+            Some(IpAddr::V6(v6)) => ("ip6", v6.to_string()),
+            None => ("ip4", "0.0.0.0".to_string()),
         };
 
-        let public_url = match (local_config.public_url, args.public_url) {
-            (None, None) => None,
-            (None, Some(public_url)) => Some(public_url),
-            (Some(public_url), None) if public_url.is_empty() => None,
-            (Some(public_url), None) => Some(public_url),
-            (Some(url_config), Some(url_args)) if url_config == url_args => Some(url_config),
-            (Some(_), Some(_)) => {
-                return send_answer(
-                    NewAnswer::ConflictWithConfig("Public url".to_string()),
-                    stream,
-                )
-                .await;
-            }
+        let port = match args.port {
+            Some(port) => match is_local_port_free(port) {
+                true => port,
+                false => return send_answer(NewAnswer::PortAlreadyTaken, stream).await,
+            },
+            None => match free_local_port_in_range(40000..=40100) {
+                Some(port) => port,
+                None => return send_answer(NewAnswer::NoFreePortInRage, stream).await,
+            },
         };
 
-        global_config = global_config.add_hosts(args.url, args.additional_hosts);
-
-        let hostname = match (local_config.hostname, args.hostname) {
-            (None, None) => gethostname::gethostname()
-                .into_string()
-                .unwrap_or("wormhole-default-hostname".into()),
-            (None, Some(hostname)) => hostname,
-            (Some(hostname), None) => hostname,
-            (Some(h_config), Some(h_args)) if h_config == h_args => h_config,
-            (Some(_), Some(_)) => {
-                return send_answer(
-                    NewAnswer::ConflictWithConfig("Hostname".to_string()),
-                    stream,
-                )
-                .await;
-            }
+        let listen_address: Multiaddr = match format!("/{}/{}/tcp/{}/ws", ip_type, ip, port).parse()
+        {
+            Ok(listen_address) => listen_address,
+            Err(err) => return send_answer(NewAnswer::InvalidIp(err.to_string()), stream).await,
         };
+
+        let display_addr = format!("{}:{}", ip, port);
 
         let prototype = PodPrototype {
             global_config,
+            listen_addrs: vec![listen_address.clone()],
             name: args.name.clone(),
-            hostname,
-            public_url,
-            bound_socket,
             mountpoint: args.mountpoint,
             should_restart: local_config.restart.unwrap_or(true),
             allow_other_users: args.allow_other_users,
         };
 
-        match Pod::new(prototype, server).await {
-            Ok(pod) => {
+        match Pod::new(prototype, self.nickname.clone()).await {
+            Ok((pod, dialed)) => {
                 self.pods.insert(args.name, pod);
-                println!("New pod created successfully, listening to '{bound_socket}'");
-                send_answer(NewAnswer::Success(bound_socket), stream).await
+                if dialed {
+                    println!("New pod created successfully, listening to '{display_addr}', connected to a network.");
+                } else {
+                    println!("New pod created successfully, listening to '{display_addr}', no valid peers found.");
+                }
+                send_answer(NewAnswer::Success(display_addr, dialed), stream).await
             }
-            Err(err) => send_answer(NewAnswer::FailedToCreatePod(err.into()), stream).await,
+            Err(err) => send_answer(NewAnswer::FailedToCreatePod(err), stream).await,
         }
     }
 }

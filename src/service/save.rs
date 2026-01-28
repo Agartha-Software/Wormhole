@@ -1,3 +1,4 @@
+use camino::{Utf8Path, Utf8PathBuf};
 use custom_error::custom_error;
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
@@ -5,22 +6,63 @@ use std::{
     ffi::OsStr,
     fs,
     io::{self, Write},
-    path::PathBuf,
-    sync::Arc,
+    path::{Path, PathBuf},
 };
 
 use crate::{
-    network::server::Server,
     pods::{pod::Pod, prototype::PodPrototype},
     service::Service,
 };
 
-pub fn local_data_path(socket_address: &String) -> PathBuf {
+/// Key representing a service, based off the socket it listens to
+/// Used as the path to save known pods on shutdown
+/// It may only contain a non-path string, the root /
+/// and where subsequent / are replaced with '-'
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ServiceKey(String);
+
+impl ServiceKey {
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Self {
+        let p = path.as_ref().to_string_lossy();
+        let mut components = Utf8Path::new(&p).components().peekable();
+        'prefix: loop {
+            if components
+                .next_if(|c| {
+                    matches!(
+                        c,
+                        camino::Utf8Component::Prefix(_) | camino::Utf8Component::RootDir
+                    )
+                })
+                .is_none()
+            {
+                break 'prefix;
+            }
+        }
+        let mut path = Utf8PathBuf::from_iter(components)
+            .into_string()
+            .into_bytes();
+        for c in &mut path.iter_mut() {
+            if *c == b'/' || *c == b'\\' {
+                *c = b'-';
+            }
+        }
+        let path = String::from_utf8_lossy(&path);
+        Self(path.into())
+    }
+}
+
+impl AsRef<Path> for ServiceKey {
+    fn as_ref(&self) -> &Path {
+        self.0.as_ref()
+    }
+}
+
+pub fn local_data_path(service_key: &ServiceKey) -> PathBuf {
     let mut path = ProjectDirs::from("", "Agartha-Software", "Wormhole")
         .expect("Unsupported operating system, couldn't create the local data directory.")
         .data_local_dir()
         .to_path_buf();
-    path.push(socket_address);
+    path.push(service_key);
     path
 }
 
@@ -37,10 +79,10 @@ custom_error! {pub SavePodError
 
 pub fn save_prototype(
     prototype: PodPrototype,
-    socket_address: &String,
+    service_key: &ServiceKey,
     frozen: bool,
 ) -> io::Result<()> {
-    let mut path = local_data_path(socket_address);
+    let mut path = local_data_path(service_key);
 
     if !path.exists() {
         fs::create_dir_all(&path)?;
@@ -56,8 +98,8 @@ pub fn save_prototype(
     file.write_all(&bin)
 }
 
-pub fn delete_saved_pod(socket_address: &String, name: &String) -> io::Result<()> {
-    let mut path = local_data_path(socket_address);
+pub fn delete_saved_pod(service_key: &ServiceKey, name: &String) -> io::Result<()> {
+    let mut path = local_data_path(service_key);
     path.push(format!("{name}.bak"));
 
     if path.exists() && path.is_file() {
@@ -66,8 +108,8 @@ pub fn delete_saved_pod(socket_address: &String, name: &String) -> io::Result<()
     Ok(())
 }
 
-pub fn delete_saved_pods(socket_address: &String) -> io::Result<()> {
-    let folder = local_data_path(socket_address);
+pub fn delete_saved_pods(service_key: &ServiceKey) -> io::Result<()> {
+    let folder = local_data_path(service_key);
 
     if !folder.exists() {
         return Ok(());
@@ -84,7 +126,8 @@ pub fn delete_saved_pods(socket_address: &String) -> io::Result<()> {
 
 impl Service {
     pub async fn load_saved_pods(&mut self) -> io::Result<()> {
-        let path = local_data_path(&self.socket);
+        let key = ServiceKey::from_path(&self.socket);
+        let path = local_data_path(&key);
 
         if !path.exists() {
             fs::create_dir_all(&path)?;
@@ -118,19 +161,11 @@ impl Service {
             if frozen {
                 self.frozen_pods.insert(prototype.name.clone(), prototype);
             } else {
-                let server = match Server::from_specific_address(prototype.bound_socket) {
-                    Ok(server) => Arc::new(server),
-                    Err(err) => {
-                        log::trace!("Could'nt bind address {:?}: {err}", prototype.bound_socket);
-                        continue;
-                    }
-                };
-
                 let name = prototype.name.clone();
-                match Pod::new(prototype, server).await {
-                    Ok(pod) => self.pods.insert(name, pod),
+                match Pod::new(prototype, self.nickname.clone()).await {
+                    Ok((pod, _)) => self.pods.insert(name, pod),
                     Err(err) => {
-                        log::trace!("Failed to create the pod '{name}': {err}");
+                        log::trace!("Failed to create the pod '{name}': {err:?}");
                         // Delete failing save?
                         continue;
                     }

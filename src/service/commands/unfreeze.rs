@@ -1,7 +1,4 @@
-use std::sync::Arc;
-
 use crate::ipc::{answers::UnfreezeAnswer, commands::PodId};
-use crate::network::server::Server;
 use crate::pods::pod::Pod;
 use crate::service::commands::{find_frozen_pod, find_pod};
 use crate::service::connection::send_answer;
@@ -27,17 +24,10 @@ impl Service {
             }
         };
 
-        let server = match Server::from_specific_address(proto.bound_socket) {
-            Ok(server) => Arc::new(server),
+        match Pod::new(proto.clone(), self.nickname.clone()).await {
+            Ok((pod, _)) => self.pods.insert(name.clone(), pod),
             Err(err) => {
-                return send_answer(UnfreezeAnswer::CouldntBind(err.into()), stream).await;
-            }
-        };
-
-        match Pod::new(proto.clone(), server).await {
-            Ok(pod) => self.pods.insert(name.clone(), pod),
-            Err(err) => {
-                return send_answer(UnfreezeAnswer::PodCreationFailed(err.into()), stream).await;
+                return send_answer(UnfreezeAnswer::PodCreationFailed(err), stream).await;
             }
         };
 

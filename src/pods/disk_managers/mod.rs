@@ -2,6 +2,9 @@ use std::io;
 
 use std::fmt::Debug;
 
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+
 use crate::pods::itree::EntrySymlink;
 use crate::pods::whpath::WhPath;
 #[cfg(target_os = "linux")]
@@ -9,6 +12,8 @@ pub mod unix_disk_manager;
 #[cfg(target_os = "windows")]
 pub mod windows_disk_manager;
 
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct DiskSizeInfo {
     pub free_size: usize,
     pub total_size: usize,

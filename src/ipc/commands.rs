@@ -37,17 +37,13 @@ impl From<IdentifyNewPodGroup> for PodId {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct NewRequest {
     pub name: String,
     pub mountpoint: PathBuf,
-    pub url: Option<String>,
-    pub public_url: Option<String>,
     pub ip_address: Option<IpAddr>,
     pub port: Option<u16>,
-    pub hostname: Option<String>,
-    pub additional_hosts: Vec<String>,
+    pub hosts: Vec<String>,
     pub allow_other_users: bool,
 }
 
@@ -64,8 +60,7 @@ pub struct RemoveRequest {
     pub mode: Mode,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Command {
     Unfreeze(PodId),
     Freeze(PodId),
@@ -79,4 +74,7 @@ pub enum Command {
     ShowConfig(PodId, ConfigType),
     CheckConfig(PodId, ConfigType),
     Status,
+    ListPods,
+    RedundancyStatus(PodId),
+    StatsPerFiletype(PodId),
 }

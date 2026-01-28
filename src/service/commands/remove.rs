@@ -1,6 +1,6 @@
 use crate::{
     ipc::{answers::RemoveAnswer, commands::RemoveRequest},
-    service::save::delete_saved_pod,
+    service::save::{delete_saved_pod, ServiceKey},
     service::{commands::find_pod, connection::send_answer, Service},
 };
 
@@ -20,7 +20,7 @@ impl Service {
 
         let answer = if let Some(pod) = self.pods.remove(&name) {
             match pod.stop().await {
-                Ok(()) => match delete_saved_pod(&self.socket, &name) {
+                Ok(()) => match delete_saved_pod(&ServiceKey::from_path(&self.socket), &name) {
                     Ok(()) => RemoveAnswer::Success,
                     Err(err) => RemoveAnswer::PodStopFailed(err.into()),
                 },

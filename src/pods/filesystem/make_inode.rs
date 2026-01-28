@@ -81,10 +81,10 @@ impl FsInterface {
             if special_ino.is_some() {
                 return Err(MakeInodeError::ProtectedNameIsFolder);
             }
-            *hosts = vec![self.network_interface.hostname.clone()];
+            *hosts = vec![self.network_interface.id];
         }
 
-        let mut itree = self.itree.upgradable_read();
+        let mut itree = self.network_interface.itree.upgradable_read();
 
         let new_inode_id = special_ino
             .ok_or(())
