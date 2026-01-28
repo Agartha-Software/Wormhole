@@ -130,8 +130,7 @@ pub enum InspectAnswer {
     PodNotFound,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
-#[ts(export)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum TreeAnswer {
     Tree(CliHostTree),
     PodNotFound,

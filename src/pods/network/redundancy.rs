@@ -4,7 +4,7 @@ use crate::{
     network::message::{Address, MessageContent, RedundancyMessage, ToNetworkMessage},
     pods::{
         filesystem::fs_interface::FsInterface,
-        itree::{FsEntry, ITree, Ino, InodeId},
+        itree::{FsEntry, ITree, Ino},
         pod::Pod,
     },
 };
