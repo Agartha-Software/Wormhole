@@ -501,14 +501,15 @@ fn index_folder_recursive(
         };
 
         #[cfg(target_os = "linux")]
-        let perm_mode = meta.permissions().mode() as u16;
+        let mut perm_mode = meta.permissions().mode() as u16;
         #[cfg(target_os = "windows")]
-        let perm_mode = WINDOWS_DEFAULT_PERMS_MODE;
+        let mut perm_mode = WINDOWS_DEFAULT_PERMS_MODE;
 
         let fs_entry = match ftype.try_into()? {
             SimpleFileType::Directory => FsEntry::new_directory(),
             SimpleFileType::File => FsEntry::File(vec![*host]),
             SimpleFileType::Symlink => {
+                perm_mode = 0o777; // symlink's metadata.mode() is unreliable
                 let target = std::fs::read_link(entry.path());
                 let link = EntrySymlink::parse(&target?, mountpoint);
                 FsEntry::Symlink(link.unwrap_or_else(|e| e))
