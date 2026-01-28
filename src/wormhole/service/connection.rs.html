@@ -19,9 +19,9 @@
 <a href=#19 id=19 data-nosnippet>19</a>            .read_u32()
 <a href=#20 id=20 data-nosnippet>20</a>            .<span class="kw">await
 <a href=#21 id=21 data-nosnippet>21</a>            </span>.expect(<span class="string">"Failed to read recieved command, shouldn't be possible!"</span>);
-<a href=#22 id=22 data-nosnippet>22</a>        <span class="kw">let </span><span class="kw-2">mut </span>buffer: Vec&lt;u8&gt; = Vec::with_capacity(size <span class="kw">as </span>usize);
+<a href=#22 id=22 data-nosnippet>22</a>        <span class="kw">let </span><span class="kw-2">mut </span>buffer: Vec&lt;u8&gt; = <span class="macro">vec!</span>[<span class="number">0</span>; size <span class="kw">as </span>usize];
 <a href=#23 id=23 data-nosnippet>23</a>        <span class="kw">let </span>_size = stream
-<a href=#24 id=24 data-nosnippet>24</a>            .read_buf(<span class="kw-2">&amp;mut </span>buffer)
+<a href=#24 id=24 data-nosnippet>24</a>            .read_exact(<span class="kw-2">&amp;mut </span>buffer)
 <a href=#25 id=25 data-nosnippet>25</a>            .<span class="kw">await
 <a href=#26 id=26 data-nosnippet>26</a>            </span>.expect(<span class="string">"Failed to read recieved command, shouldn't be possible!"</span>);
 <a href=#27 id=27 data-nosnippet>27</a>
@@ -85,32 +85,36 @@
 <a href=#85 id=85 data-nosnippet>85</a>            Command::CheckConfig(pod_id, config_type) =&gt; {
 <a href=#86 id=86 data-nosnippet>86</a>                <span class="self">self</span>.check(pod_id, config_type, stream).<span class="kw">await
 <a href=#87 id=87 data-nosnippet>87</a>            </span>}
-<a href=#88 id=88 data-nosnippet>88</a>        }<span class="question-mark">?</span>;
-<a href=#89 id=89 data-nosnippet>89</a>        <span class="prelude-val">Ok</span>(stop)
-<a href=#90 id=90 data-nosnippet>90</a>    }
-<a href=#91 id=91 data-nosnippet>91</a>}
-<a href=#92 id=92 data-nosnippet>92</a>
-<a href=#93 id=93 data-nosnippet>93</a><span class="kw">pub async fn </span>send_answer&lt;T, Stream&gt;(
-<a href=#94 id=94 data-nosnippet>94</a>    answer: T,
-<a href=#95 id=95 data-nosnippet>95</a>    stream: <span class="kw-2">&amp;mut </span>Either&lt;<span class="kw-2">&amp;mut </span>Stream, <span class="kw-2">&amp;mut </span>String&gt;,
-<a href=#96 id=96 data-nosnippet>96</a>) -&gt; std::io::Result&lt;()&gt;
-<a href=#97 id=97 data-nosnippet>97</a><span class="kw">where
-<a href=#98 id=98 data-nosnippet>98</a>    </span>T: Serialize,
-<a href=#99 id=99 data-nosnippet>99</a>    Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
-<a href=#100 id=100 data-nosnippet>100</a>{
-<a href=#101 id=101 data-nosnippet>101</a>    <span class="kw">match </span>stream {
-<a href=#102 id=102 data-nosnippet>102</a>        Either::Left(stream) =&gt; {
-<a href=#103 id=103 data-nosnippet>103</a>            <span class="kw">let </span>serialized = bincode::serialize(<span class="kw-2">&amp;</span>answer)
-<a href=#104 id=104 data-nosnippet>104</a>                .expect(<span class="string">"Can't serialize cli answer, shouldn't be possible!"</span>);
-<a href=#105 id=105 data-nosnippet>105</a>
-<a href=#106 id=106 data-nosnippet>106</a>            stream.write_u32(serialized.len() <span class="kw">as </span>u32).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#107 id=107 data-nosnippet>107</a>            stream.write_all(<span class="kw-2">&amp;</span>serialized).<span class="kw">await
-<a href=#108 id=108 data-nosnippet>108</a>        </span>}
-<a href=#109 id=109 data-nosnippet>109</a>        Either::Right(stream) =&gt; {
-<a href=#110 id=110 data-nosnippet>110</a>            <span class="kw">let </span>serialized = serde_json::to_value(answer)<span class="question-mark">?</span>;
-<a href=#111 id=111 data-nosnippet>111</a>            <span class="kw-2">**</span>stream = serialized.to_string();
-<a href=#112 id=112 data-nosnippet>112</a>            <span class="prelude-val">Ok</span>(())
-<a href=#113 id=113 data-nosnippet>113</a>        }
-<a href=#114 id=114 data-nosnippet>114</a>    }
-<a href=#115 id=115 data-nosnippet>115</a>}
+<a href=#88 id=88 data-nosnippet>88</a>            Command::RedundancyStatus(pod_id) =&gt; <span class="self">self</span>.redundancy_status(pod_id, stream).<span class="kw">await</span>,
+<a href=#89 id=89 data-nosnippet>89</a>            Command::StatsPerFiletype(pod_id) =&gt; <span class="self">self</span>.stats_per_filetype(pod_id, stream).<span class="kw">await</span>,
+<a href=#90 id=90 data-nosnippet>90</a>            Command::ListPods =&gt; <span class="self">self</span>.list_pods(stream).<span class="kw">await</span>,
+<a href=#91 id=91 data-nosnippet>91</a>        }<span class="question-mark">?</span>;
+<a href=#92 id=92 data-nosnippet>92</a>        <span class="prelude-val">Ok</span>(stop)
+<a href=#93 id=93 data-nosnippet>93</a>    }
+<a href=#94 id=94 data-nosnippet>94</a>}
+<a href=#95 id=95 data-nosnippet>95</a>
+<a href=#96 id=96 data-nosnippet>96</a><span class="kw">pub async fn </span>send_answer&lt;T, Stream&gt;(
+<a href=#97 id=97 data-nosnippet>97</a>    answer: T,
+<a href=#98 id=98 data-nosnippet>98</a>    stream: <span class="kw-2">&amp;mut </span>Either&lt;<span class="kw-2">&amp;mut </span>Stream, <span class="kw-2">&amp;mut </span>String&gt;,
+<a href=#99 id=99 data-nosnippet>99</a>) -&gt; std::io::Result&lt;()&gt;
+<a href=#100 id=100 data-nosnippet>100</a><span class="kw">where
+<a href=#101 id=101 data-nosnippet>101</a>    </span>T: Serialize,
+<a href=#102 id=102 data-nosnippet>102</a>    Stream: tokio::io::AsyncWrite + tokio::io::AsyncRead + Unpin,
+<a href=#103 id=103 data-nosnippet>103</a>{
+<a href=#104 id=104 data-nosnippet>104</a>    <span class="kw">match </span>stream {
+<a href=#105 id=105 data-nosnippet>105</a>        Either::Left(stream) =&gt; {
+<a href=#106 id=106 data-nosnippet>106</a>            <span class="kw">let </span>serialized = bincode::serialize(<span class="kw-2">&amp;</span>answer)
+<a href=#107 id=107 data-nosnippet>107</a>                .expect(<span class="string">"Can't serialize cli answer, shouldn't be possible!"</span>);
+<a href=#108 id=108 data-nosnippet>108</a>
+<a href=#109 id=109 data-nosnippet>109</a>            stream.write_u32(serialized.len() <span class="kw">as </span>u32).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#110 id=110 data-nosnippet>110</a>            stream.write_all(<span class="kw-2">&amp;</span>serialized).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#111 id=111 data-nosnippet>111</a>            stream.flush().<span class="kw">await
+<a href=#112 id=112 data-nosnippet>112</a>        </span>}
+<a href=#113 id=113 data-nosnippet>113</a>        Either::Right(stream) =&gt; {
+<a href=#114 id=114 data-nosnippet>114</a>            <span class="kw">let </span>serialized = serde_json::to_value(answer)<span class="question-mark">?</span>;
+<a href=#115 id=115 data-nosnippet>115</a>            <span class="kw-2">**</span>stream = serialized.to_string();
+<a href=#116 id=116 data-nosnippet>116</a>            <span class="prelude-val">Ok</span>(())
+<a href=#117 id=117 data-nosnippet>117</a>        }
+<a href=#118 id=118 data-nosnippet>118</a>    }
+<a href=#119 id=119 data-nosnippet>119</a>}
 </code></pre></div></section></main></body></html>

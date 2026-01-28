@@ -9,11 +9,19 @@
 <a href=#9 id=9 data-nosnippet>9</a>    send_command(Command::Status, <span class="kw-2">&amp;mut </span>stream).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#10 id=10 data-nosnippet>10</a>
 <a href=#11 id=11 data-nosnippet>11</a>    <span class="kw">match </span>recieve_answer::&lt;StatusAnswer&gt;(<span class="kw-2">&amp;mut </span>stream).<span class="kw">await</span><span class="question-mark">? </span>{
-<a href=#12 id=12 data-nosnippet>12</a>        StatusAnswer::Success(StatusSuccess { running, frozen }) =&gt; <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(
-<a href=#13 id=13 data-nosnippet>13</a>            <span class="string">"Service running: \n  Running Pods:\t[ {} ]\n  Frozen Pods:\t[ {} ]"</span>,
-<a href=#14 id=14 data-nosnippet>14</a>            running.join(<span class="string">", "</span>),
-<a href=#15 id=15 data-nosnippet>15</a>            frozen.join(<span class="string">", "</span>)
-<a href=#16 id=16 data-nosnippet>16</a>        )),
-<a href=#17 id=17 data-nosnippet>17</a>    }
-<a href=#18 id=18 data-nosnippet>18</a>}
+<a href=#12 id=12 data-nosnippet>12</a>        StatusAnswer::Success(StatusSuccess {
+<a href=#13 id=13 data-nosnippet>13</a>            nickname,
+<a href=#14 id=14 data-nosnippet>14</a>            running,
+<a href=#15 id=15 data-nosnippet>15</a>            frozen,
+<a href=#16 id=16 data-nosnippet>16</a>        }) =&gt; <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(
+<a href=#17 id=17 data-nosnippet>17</a>            <span class="string">"Service running: \n\
+<a href=#18 id=18 data-nosnippet>18</a>            \tNickname:\t{}\n\
+<a href=#19 id=19 data-nosnippet>19</a>            \tRunning Pods:\t[ {} ]\n\
+<a href=#20 id=20 data-nosnippet>20</a>            \tFrozen Pods:\t[ {} ]"</span>,
+<a href=#21 id=21 data-nosnippet>21</a>            nickname.escape_debug(),
+<a href=#22 id=22 data-nosnippet>22</a>            running.join(<span class="string">", "</span>),
+<a href=#23 id=23 data-nosnippet>23</a>            frozen.join(<span class="string">", "</span>)
+<a href=#24 id=24 data-nosnippet>24</a>        )),
+<a href=#25 id=25 data-nosnippet>25</a>    }
+<a href=#26 id=26 data-nosnippet>26</a>}
 </code></pre></div></section></main></body></html>

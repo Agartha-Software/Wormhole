@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["callbacks","network_interface","pull_file","redundancy","xattrs"]};
+window.SIDEBAR_ITEMS = {"mod":["behaviour","codec","event_loop","network_interface","pull_file","redundancy","swarm","xattrs"]};

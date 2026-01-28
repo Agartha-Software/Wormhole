@@ -2,8 +2,8 @@
 <a href=#2 id=2 data-nosnippet>2</a>
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span><span class="kw">crate</span>::cli::{
 <a href=#4 id=4 data-nosnippet>4</a>    commands::{
-<a href=#5 id=5 data-nosnippet>5</a>        check, freeze, generate, gethosts, inspect, new, remove, restart, show, status, tree,
-<a href=#6 id=6 data-nosnippet>6</a>        unfreeze,
+<a href=#5 id=5 data-nosnippet>5</a>        check, freeze, generate, gethosts, inspect, list_pods, new, redundancy_status, remove,
+<a href=#6 id=6 data-nosnippet>6</a>        restart, show, status, tree, unfreeze,
 <a href=#7 id=7 data-nosnippet>7</a>    },
 <a href=#8 id=8 data-nosnippet>8</a>    CliCommand, ConfigCommand,
 <a href=#9 id=9 data-nosnippet>9</a>};
@@ -24,6 +24,8 @@
 <a href=#24 id=24 data-nosnippet>24</a>        CliCommand::Config(ConfigCommand::Show(args)) =&gt; show(args, stream).<span class="kw">await</span>,
 <a href=#25 id=25 data-nosnippet>25</a>        CliCommand::Config(ConfigCommand::Check(args)) =&gt; check(args, stream).<span class="kw">await</span>,
 <a href=#26 id=26 data-nosnippet>26</a>        CliCommand::Status =&gt; status(stream).<span class="kw">await</span>,
-<a href=#27 id=27 data-nosnippet>27</a>    }
-<a href=#28 id=28 data-nosnippet>28</a>}
+<a href=#27 id=27 data-nosnippet>27</a>        CliCommand::ListPods =&gt; list_pods(stream).<span class="kw">await</span>,
+<a href=#28 id=28 data-nosnippet>28</a>        CliCommand::RedundancyStatus(args) =&gt; redundancy_status(args, stream).<span class="kw">await</span>,
+<a href=#29 id=29 data-nosnippet>29</a>    }
+<a href=#30 id=30 data-nosnippet>30</a>}
 </code></pre></div></section></main></body></html>

@@ -2,36 +2,40 @@
 <a href=#2 id=2 data-nosnippet>2</a><span class="kw">mod </span>freeze;
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">mod </span>gethosts;
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">mod </span>inspect;
-<a href=#5 id=5 data-nosnippet>5</a><span class="kw">mod </span>new;
-<a href=#6 id=6 data-nosnippet>6</a><span class="kw">mod </span>remove;
-<a href=#7 id=7 data-nosnippet>7</a><span class="kw">mod </span>restart;
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">mod </span>status;
-<a href=#9 id=9 data-nosnippet>9</a><span class="kw">mod </span>tree;
-<a href=#10 id=10 data-nosnippet>10</a><span class="kw">mod </span>unfreeze;
-<a href=#11 id=11 data-nosnippet>11</a>
-<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>std::collections::HashMap;
-<a href=#13 id=13 data-nosnippet>13</a>
-<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span><span class="kw">crate</span>::ipc::commands::PodId;
-<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span><span class="kw">crate</span>::pods::{pod::Pod, prototype::PodPrototype};
-<a href=#16 id=16 data-nosnippet>16</a>
-<a href=#17 id=17 data-nosnippet>17</a><span class="kw">fn </span>find_pod&lt;<span class="lifetime">'a</span>&gt;(id: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>PodId, pods: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>HashMap&lt;String, Pod&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>String, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Pod)&gt; {
-<a href=#18 id=18 data-nosnippet>18</a>    <span class="kw">match </span>id {
-<a href=#19 id=19 data-nosnippet>19</a>        PodId::Name(name) =&gt; pods.get_key_value(name),
-<a href=#20 id=20 data-nosnippet>20</a>        PodId::Path(path) =&gt; pods
-<a href=#21 id=21 data-nosnippet>21</a>            .iter()
-<a href=#22 id=22 data-nosnippet>22</a>            .find(|(<span class="kw">_</span>, pod)| pod.get_mountpoint().as_os_str() == path.as_os_str()),
-<a href=#23 id=23 data-nosnippet>23</a>    }
-<a href=#24 id=24 data-nosnippet>24</a>}
-<a href=#25 id=25 data-nosnippet>25</a>
-<a href=#26 id=26 data-nosnippet>26</a><span class="kw">pub fn </span>find_frozen_pod&lt;<span class="lifetime">'a</span>&gt;(
-<a href=#27 id=27 data-nosnippet>27</a>    id: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>PodId,
-<a href=#28 id=28 data-nosnippet>28</a>    pods: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>HashMap&lt;String, PodPrototype&gt;,
-<a href=#29 id=29 data-nosnippet>29</a>) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>String, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>PodPrototype)&gt; {
-<a href=#30 id=30 data-nosnippet>30</a>    <span class="kw">match </span>id {
-<a href=#31 id=31 data-nosnippet>31</a>        PodId::Name(name) =&gt; pods.get_key_value(name),
-<a href=#32 id=32 data-nosnippet>32</a>        PodId::Path(path) =&gt; pods
-<a href=#33 id=33 data-nosnippet>33</a>            .iter()
-<a href=#34 id=34 data-nosnippet>34</a>            .find(|(<span class="kw">_</span>, pod)| pod.mountpoint.as_os_str() == path.as_os_str()),
-<a href=#35 id=35 data-nosnippet>35</a>    }
-<a href=#36 id=36 data-nosnippet>36</a>}
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">mod </span>list_pods;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">mod </span>new;
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">mod </span>redundancy_status;
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">mod </span>remove;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">mod </span>restart;
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">mod </span>stats_per_filetype;
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">mod </span>status;
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">mod </span>tree;
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">mod </span>unfreeze;
+<a href=#14 id=14 data-nosnippet>14</a>
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span><span class="kw">crate</span>::ipc::commands::PodId;
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span><span class="kw">crate</span>::pods::pod::Pod;
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>std::collections::HashMap;
+<a href=#18 id=18 data-nosnippet>18</a>
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span><span class="kw">crate</span>::pods::prototype::PodPrototype;
+<a href=#20 id=20 data-nosnippet>20</a>
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">fn </span>find_pod&lt;<span class="lifetime">'a</span>&gt;(id: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>PodId, pods: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>HashMap&lt;String, Pod&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>String, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Pod)&gt; {
+<a href=#22 id=22 data-nosnippet>22</a>    <span class="kw">match </span>id {
+<a href=#23 id=23 data-nosnippet>23</a>        PodId::Name(name) =&gt; pods.get_key_value(name),
+<a href=#24 id=24 data-nosnippet>24</a>        PodId::Path(path) =&gt; pods
+<a href=#25 id=25 data-nosnippet>25</a>            .iter()
+<a href=#26 id=26 data-nosnippet>26</a>            .find(|(<span class="kw">_</span>, pod)| pod.get_mountpoint().as_os_str() == path.as_os_str()),
+<a href=#27 id=27 data-nosnippet>27</a>    }
+<a href=#28 id=28 data-nosnippet>28</a>}
+<a href=#29 id=29 data-nosnippet>29</a>
+<a href=#30 id=30 data-nosnippet>30</a><span class="kw">pub fn </span>find_frozen_pod&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#31 id=31 data-nosnippet>31</a>    id: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>PodId,
+<a href=#32 id=32 data-nosnippet>32</a>    pods: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>HashMap&lt;String, PodPrototype&gt;,
+<a href=#33 id=33 data-nosnippet>33</a>) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>String, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>PodPrototype)&gt; {
+<a href=#34 id=34 data-nosnippet>34</a>    <span class="kw">match </span>id {
+<a href=#35 id=35 data-nosnippet>35</a>        PodId::Name(name) =&gt; pods.get_key_value(name),
+<a href=#36 id=36 data-nosnippet>36</a>        PodId::Path(path) =&gt; pods
+<a href=#37 id=37 data-nosnippet>37</a>            .iter()
+<a href=#38 id=38 data-nosnippet>38</a>            .find(|(<span class="kw">_</span>, pod)| pod.mountpoint.as_os_str() == path.as_os_str()),
+<a href=#39 id=39 data-nosnippet>39</a>    }
+<a href=#40 id=40 data-nosnippet>40</a>}
 </code></pre></div></section></main></body></html>

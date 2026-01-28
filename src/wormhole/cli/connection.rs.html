@@ -25,17 +25,17 @@
 <a href=#25 id=25 data-nosnippet>25</a>    <span class="macro">log::trace!</span>(<span class="string">"Sending cmd: {:?}, bytes {}"</span>, command, serialized.len());
 <a href=#26 id=26 data-nosnippet>26</a>
 <a href=#27 id=27 data-nosnippet>27</a>    stream.write_u32(serialized.len() <span class="kw">as </span>u32).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#28 id=28 data-nosnippet>28</a>    stream.write_all(<span class="kw-2">&amp;</span>serialized).<span class="kw">await
-<a href=#29 id=29 data-nosnippet>29</a></span>}
-<a href=#30 id=30 data-nosnippet>30</a>
-<a href=#31 id=31 data-nosnippet>31</a><span class="kw">pub async fn </span>recieve_answer&lt;T&gt;(stream: <span class="kw-2">&amp;mut </span>Stream) -&gt; <span class="prelude-ty">Result</span>&lt;T, std::io::Error&gt;
-<a href=#32 id=32 data-nosnippet>32</a><span class="kw">where
-<a href=#33 id=33 data-nosnippet>33</a>    </span>T: <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; Deserialize&lt;<span class="lifetime">'a</span>&gt; + std::fmt::Debug,
-<a href=#34 id=34 data-nosnippet>34</a>{
-<a href=#35 id=35 data-nosnippet>35</a>    <span class="kw">let </span>size = stream.read_u32().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#36 id=36 data-nosnippet>36</a>    <span class="kw">let </span><span class="kw-2">mut </span>recived_answer = Vec::with_capacity(size <span class="kw">as </span>usize);
-<a href=#37 id=37 data-nosnippet>37</a>
-<a href=#38 id=38 data-nosnippet>38</a>    stream.read_buf(<span class="kw-2">&amp;mut </span>recived_answer).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#28 id=28 data-nosnippet>28</a>    stream.write_all(<span class="kw-2">&amp;</span>serialized).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#29 id=29 data-nosnippet>29</a>    stream.flush().<span class="kw">await
+<a href=#30 id=30 data-nosnippet>30</a></span>}
+<a href=#31 id=31 data-nosnippet>31</a>
+<a href=#32 id=32 data-nosnippet>32</a><span class="kw">pub async fn </span>recieve_answer&lt;T&gt;(stream: <span class="kw-2">&amp;mut </span>Stream) -&gt; <span class="prelude-ty">Result</span>&lt;T, std::io::Error&gt;
+<a href=#33 id=33 data-nosnippet>33</a><span class="kw">where
+<a href=#34 id=34 data-nosnippet>34</a>    </span>T: <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; Deserialize&lt;<span class="lifetime">'a</span>&gt; + std::fmt::Debug,
+<a href=#35 id=35 data-nosnippet>35</a>{
+<a href=#36 id=36 data-nosnippet>36</a>    <span class="kw">let </span>size = stream.read_u32().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#37 id=37 data-nosnippet>37</a>    <span class="kw">let </span><span class="kw-2">mut </span>recived_answer = <span class="macro">vec!</span>[<span class="number">0</span>; size <span class="kw">as </span>usize];
+<a href=#38 id=38 data-nosnippet>38</a>    stream.read_exact(<span class="kw-2">&amp;mut </span>recived_answer).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#39 id=39 data-nosnippet>39</a>
 <a href=#40 id=40 data-nosnippet>40</a>    bincode::deserialize::&lt;T&gt;(<span class="kw-2">&amp;</span>recived_answer)
 <a href=#41 id=41 data-nosnippet>41</a>        .map_err(|err| {

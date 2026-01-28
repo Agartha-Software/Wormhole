@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["MessageContent","RedundancyMessage","ToNetworkMessage"],"struct":["FromNetworkMessage"],"type":["Address","MessageAndStatus"]};
+window.SIDEBAR_ITEMS = {"enum":["Request","Response","ToNetworkMessage"],"struct":["PeerInfoNet"]};

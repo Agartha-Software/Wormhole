@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["CliHostTree"],"type":["TreeLine"]};
+window.SIDEBAR_ITEMS = {"fn":["get_tree"],"struct":["TreeData"]};

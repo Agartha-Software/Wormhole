@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["forward_peer_to_receiver","forward_sender_to_peer"]};

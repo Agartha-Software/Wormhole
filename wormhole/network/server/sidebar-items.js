@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["POD_DEFAULT_IP","POD_DEFAULT_PORT","POD_PORT_MAX_TRIES","POD_PORT_RANGE_END"],"struct":["Server"],"type":["PeerMap","Tx"]};

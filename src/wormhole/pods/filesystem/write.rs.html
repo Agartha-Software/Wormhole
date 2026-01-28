@@ -69,7 +69,7 @@
 <a href=#69 id=69 data-nosnippet>69</a>
 <a href=#70 id=70 data-nosnippet>70</a>        file_handle.dirty = <span class="bool-val">true</span>;
 <a href=#71 id=71 data-nosnippet>71</a>
-<a href=#72 id=72 data-nosnippet>72</a>        <span class="kw">let </span>itree = ITree::read_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"fs_interface.write"</span>)<span class="question-mark">?</span>;
+<a href=#72 id=72 data-nosnippet>72</a>        <span class="kw">let </span>itree = ITree::read_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.network_interface.itree, <span class="string">"fs_interface.write"</span>)<span class="question-mark">?</span>;
 <a href=#73 id=73 data-nosnippet>73</a>        <span class="kw">let </span>path = itree.get_path_from_inode_id(id)<span class="question-mark">?</span>;
 <a href=#74 id=74 data-nosnippet>74</a>        drop(itree);
 <a href=#75 id=75 data-nosnippet>75</a>
@@ -81,15 +81,18 @@
 <a href=#81 id=81 data-nosnippet>81</a>    }
 <a href=#82 id=82 data-nosnippet>82</a>
 <a href=#83 id=83 data-nosnippet>83</a>    <span class="kw">fn </span>affect_write_locally(<span class="kw-2">&amp;</span><span class="self">self</span>, id: Ino, new_size: usize) -&gt; WhResult&lt;Metadata&gt; {
-<a href=#84 id=84 data-nosnippet>84</a>        <span class="kw">let </span><span class="kw-2">mut </span>itree = ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"network_interface.affect_write_locally"</span>)<span class="question-mark">?</span>;
-<a href=#85 id=85 data-nosnippet>85</a>        <span class="kw">let </span>inode = itree.get_inode_mut(id)<span class="question-mark">?</span>;
-<a href=#86 id=86 data-nosnippet>86</a>        <span class="kw">let </span>new_size = (new_size <span class="kw">as </span>u64).max(inode.meta.size);
-<a href=#87 id=87 data-nosnippet>87</a>        inode.meta.size = new_size;
-<a href=#88 id=88 data-nosnippet>88</a>        inode.meta.blocks = new_size.div_ceil(BLOCK_SIZE);
-<a href=#89 id=89 data-nosnippet>89</a>
-<a href=#90 id=90 data-nosnippet>90</a>        inode.meta.mtime = SystemTime::now();
-<a href=#91 id=91 data-nosnippet>91</a>
-<a href=#92 id=92 data-nosnippet>92</a>        <span class="prelude-val">Ok</span>(inode.meta.clone())
-<a href=#93 id=93 data-nosnippet>93</a>    }
-<a href=#94 id=94 data-nosnippet>94</a>}
+<a href=#84 id=84 data-nosnippet>84</a>        <span class="kw">let </span><span class="kw-2">mut </span>itree = ITree::write_lock(
+<a href=#85 id=85 data-nosnippet>85</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.network_interface.itree,
+<a href=#86 id=86 data-nosnippet>86</a>            <span class="string">"network_interface.affect_write_locally"</span>,
+<a href=#87 id=87 data-nosnippet>87</a>        )<span class="question-mark">?</span>;
+<a href=#88 id=88 data-nosnippet>88</a>        <span class="kw">let </span>inode = itree.get_inode_mut(id)<span class="question-mark">?</span>;
+<a href=#89 id=89 data-nosnippet>89</a>        <span class="kw">let </span>new_size = (new_size <span class="kw">as </span>u64).max(inode.meta.size);
+<a href=#90 id=90 data-nosnippet>90</a>        inode.meta.size = new_size;
+<a href=#91 id=91 data-nosnippet>91</a>        inode.meta.blocks = new_size.div_ceil(BLOCK_SIZE);
+<a href=#92 id=92 data-nosnippet>92</a>
+<a href=#93 id=93 data-nosnippet>93</a>        inode.meta.mtime = SystemTime::now();
+<a href=#94 id=94 data-nosnippet>94</a>
+<a href=#95 id=95 data-nosnippet>95</a>        <span class="prelude-val">Ok</span>(inode.meta.clone())
+<a href=#96 id=96 data-nosnippet>96</a>    }
+<a href=#97 id=97 data-nosnippet>97</a>}
 </code></pre></div></section></main></body></html>

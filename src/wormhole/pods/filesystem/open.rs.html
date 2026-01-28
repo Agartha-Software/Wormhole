@@ -84,7 +84,7 @@
 <a href=#84 id=84 data-nosnippet>84</a>
 <a href=#85 id=85 data-nosnippet>85</a><span class="kw">impl </span>FsInterface {
 <a href=#86 id=86 data-nosnippet>86</a>    <span class="kw">pub fn </span>open(<span class="kw-2">&amp;</span><span class="self">self</span>, ino: Ino, flags: OpenFlags, access: AccessMode) -&gt; <span class="prelude-ty">Result</span>&lt;UUID, OpenError&gt; {
-<a href=#87 id=87 data-nosnippet>87</a>        <span class="kw">let </span>meta = ITree::read_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"open"</span>)<span class="question-mark">?
+<a href=#87 id=87 data-nosnippet>87</a>        <span class="kw">let </span>meta = ITree::read_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.network_interface.itree, <span class="string">"open"</span>)<span class="question-mark">?
 <a href=#88 id=88 data-nosnippet>88</a>            </span>.get_inode(ino)<span class="question-mark">?
 <a href=#89 id=89 data-nosnippet>89</a>            </span>.meta
 <a href=#90 id=90 data-nosnippet>90</a>            .clone();

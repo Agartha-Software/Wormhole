@@ -81,10 +81,10 @@
 <a href=#81 id=81 data-nosnippet>81</a>            <span class="kw">if </span>special_ino.is_some() {
 <a href=#82 id=82 data-nosnippet>82</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(MakeInodeError::ProtectedNameIsFolder);
 <a href=#83 id=83 data-nosnippet>83</a>            }
-<a href=#84 id=84 data-nosnippet>84</a>            <span class="kw-2">*</span>hosts = <span class="macro">vec!</span>[<span class="self">self</span>.network_interface.hostname.clone()];
+<a href=#84 id=84 data-nosnippet>84</a>            <span class="kw-2">*</span>hosts = <span class="macro">vec!</span>[<span class="self">self</span>.network_interface.id];
 <a href=#85 id=85 data-nosnippet>85</a>        }
 <a href=#86 id=86 data-nosnippet>86</a>
-<a href=#87 id=87 data-nosnippet>87</a>        <span class="kw">let </span><span class="kw-2">mut </span>itree = <span class="self">self</span>.itree.upgradable_read();
+<a href=#87 id=87 data-nosnippet>87</a>        <span class="kw">let </span><span class="kw-2">mut </span>itree = <span class="self">self</span>.network_interface.itree.upgradable_read();
 <a href=#88 id=88 data-nosnippet>88</a>
 <a href=#89 id=89 data-nosnippet>89</a>        <span class="kw">let </span>new_inode_id = special_ino
 <a href=#90 id=90 data-nosnippet>90</a>            .ok_or(())

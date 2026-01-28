@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["RedundancyError"],"fn":["redundancy_worker"]};
+window.SIDEBAR_ITEMS = {"enum":["RedundancyError","RedundancyMessage","RedundancyStatus"],"fn":["check_integrity","redundancy_worker"]};

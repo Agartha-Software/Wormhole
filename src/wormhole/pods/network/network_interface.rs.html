@@ -1,529 +1,298 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/pods/network/network_interface.rs`."><title>network_interface.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="wormhole" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0 (254b59607 2026-01-19)" data-channel="1.93.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../../../../static.files/storage-e2aeef58.js"></script><script defer src="../../../../static.files/src-script-813739b1.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">wormhole/pods/network/</div>network_interface.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>std::{
-<a href=#2 id=2 data-nosnippet>2</a>    io::{<span class="self">self</span>, ErrorKind},
-<a href=#3 id=3 data-nosnippet>3</a>    net::SocketAddr,
-<a href=#4 id=4 data-nosnippet>4</a>    sync::Arc,
-<a href=#5 id=5 data-nosnippet>5</a>    time::UNIX_EPOCH,
-<a href=#6 id=6 data-nosnippet>6</a>};
-<a href=#7 id=7 data-nosnippet>7</a>
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use crate</span>::{
-<a href=#9 id=9 data-nosnippet>9</a>    config::GlobalConfig,
-<a href=#10 id=10 data-nosnippet>10</a>    error::{WhError, WhResult},
-<a href=#11 id=11 data-nosnippet>11</a>    network::{
-<a href=#12 id=12 data-nosnippet>12</a>        message::{
-<a href=#13 id=13 data-nosnippet>13</a>            Address, FromNetworkMessage, MessageAndStatus, MessageContent, RedundancyMessage,
-<a href=#14 id=14 data-nosnippet>14</a>            ToNetworkMessage,
-<a href=#15 id=15 data-nosnippet>15</a>        },
-<a href=#16 id=16 data-nosnippet>16</a>        peer_ipc::PeerIPC,
-<a href=#17 id=17 data-nosnippet>17</a>        server::Server,
-<a href=#18 id=18 data-nosnippet>18</a>    },
-<a href=#19 id=19 data-nosnippet>19</a>    pods::{filesystem::make_inode::MakeInodeError, whpath::InodeName},
-<a href=#20 id=20 data-nosnippet>20</a>};
-<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>parking_lot::RwLock;
-<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-<a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
-<a href=#24 id=24 data-nosnippet>24</a>
-<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span><span class="kw">crate</span>::pods::filesystem::{remove_inode::RemoveInodeError, rename::RenameError};
-<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span><span class="kw">crate</span>::pods::itree::{FsEntry, Metadata};
+<a href=#2 id=2 data-nosnippet>2</a>    collections::{HashMap, HashSet},
+<a href=#3 id=3 data-nosnippet>3</a>    sync::Arc,
+<a href=#4 id=4 data-nosnippet>4</a>    time::UNIX_EPOCH,
+<a href=#5 id=5 data-nosnippet>5</a>};
+<a href=#6 id=6 data-nosnippet>6</a>
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use crate</span>::{
+<a href=#8 id=8 data-nosnippet>8</a>    config::GlobalConfig,
+<a href=#9 id=9 data-nosnippet>9</a>    error::{WhError, WhResult},
+<a href=#10 id=10 data-nosnippet>10</a>    network::{
+<a href=#11 id=11 data-nosnippet>11</a>        <span class="self">self</span>,
+<a href=#12 id=12 data-nosnippet>12</a>        message::{Request, Response, ToNetworkMessage},
+<a href=#13 id=13 data-nosnippet>13</a>    },
+<a href=#14 id=14 data-nosnippet>14</a>    pods::{
+<a href=#15 id=15 data-nosnippet>15</a>        filesystem::make_inode::MakeInodeError, network::redundancy::RedundancyMessage,
+<a href=#16 id=16 data-nosnippet>16</a>        whpath::InodeName,
+<a href=#17 id=17 data-nosnippet>17</a>    },
+<a href=#18 id=18 data-nosnippet>18</a>};
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>libp2p::{identify::Info, Multiaddr, PeerId};
+<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>parking_lot::RwLock;
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>tokio::sync::mpsc::UnboundedSender;
+<a href=#22 id=22 data-nosnippet>22</a>
+<a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span><span class="kw">crate</span>::pods::filesystem::{remove_inode::RemoveInodeError, rename::RenameError};
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span><span class="kw">crate</span>::pods::itree::{FsEntry, Metadata};
+<a href=#25 id=25 data-nosnippet>25</a>
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span><span class="kw">crate</span>::pods::itree::{ITree, Ino, Inode, LOCK_TIMEOUT};
 <a href=#27 id=27 data-nosnippet>27</a>
-<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span><span class="kw">crate</span>::pods::{
-<a href=#29 id=29 data-nosnippet>29</a>    filesystem::fs_interface::FsInterface,
-<a href=#30 id=30 data-nosnippet>30</a>    itree::{ITree, Ino, Inode, LOCK_TIMEOUT},
-<a href=#31 id=31 data-nosnippet>31</a>};
-<a href=#32 id=32 data-nosnippet>32</a>
-<a href=#33 id=33 data-nosnippet>33</a><span class="kw">use </span><span class="kw">crate</span>::pods::network::callbacks::Callbacks;
-<a href=#34 id=34 data-nosnippet>34</a>
-<a href=#35 id=35 data-nosnippet>35</a><span class="comment">// We use a function here because we need templates, but we don't want to leak this kind of weird function to anywhere else
-<a href=#36 id=36 data-nosnippet>36</a></span><span class="kw">fn </span>into_boxed_io&lt;T: std::error::Error&gt;(err: T) -&gt; io::Error {
-<a href=#37 id=37 data-nosnippet>37</a>    std::io::Error::other(<span class="macro">format!</span>(<span class="string">"{}: {err}"</span>, std::any::type_name::&lt;T&gt;()))
-<a href=#38 id=38 data-nosnippet>38</a>}
-<a href=#39 id=39 data-nosnippet>39</a>
-<a href=#40 id=40 data-nosnippet>40</a><span class="kw">pub fn </span>get_all_peers_address(peers: <span class="kw-2">&amp;</span>Arc&lt;RwLock&lt;Vec&lt;PeerIPC&gt;&gt;&gt;) -&gt; WhResult&lt;Vec&lt;String&gt;&gt; {
-<a href=#41 id=41 data-nosnippet>41</a>    <span class="prelude-val">Ok</span>(peers
-<a href=#42 id=42 data-nosnippet>42</a>        .try_read_for(LOCK_TIMEOUT)
-<a href=#43 id=43 data-nosnippet>43</a>        .ok_or(WhError::WouldBlock {
-<a href=#44 id=44 data-nosnippet>44</a>            called_from: <span class="string">"get_all_peers_address: can't lock peers mutex"</span>.to_string(),
-<a href=#45 id=45 data-nosnippet>45</a>        })<span class="question-mark">?
-<a href=#46 id=46 data-nosnippet>46</a>        </span>.iter()
-<a href=#47 id=47 data-nosnippet>47</a>        .map(|peer| peer.hostname.clone())
-<a href=#48 id=48 data-nosnippet>48</a>        .collect::&lt;Vec&lt;String&gt;&gt;())
-<a href=#49 id=49 data-nosnippet>49</a>}
-<a href=#50 id=50 data-nosnippet>50</a>
-<a href=#51 id=51 data-nosnippet>51</a><span class="attr">#[derive(Debug)]
-<a href=#52 id=52 data-nosnippet>52</a></span><span class="kw">pub struct </span>NetworkInterface {
-<a href=#53 id=53 data-nosnippet>53</a>    <span class="kw">pub </span>itree: Arc&lt;RwLock&lt;ITree&gt;&gt;,
-<a href=#54 id=54 data-nosnippet>54</a>    <span class="kw">pub </span>public_url: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#55 id=55 data-nosnippet>55</a>    <span class="kw">pub </span>bound_socket: SocketAddr,
-<a href=#56 id=56 data-nosnippet>56</a>    <span class="kw">pub </span>hostname: String,
-<a href=#57 id=57 data-nosnippet>57</a>    <span class="kw">pub </span>to_network_message_tx: UnboundedSender&lt;ToNetworkMessage&gt;,
-<a href=#58 id=58 data-nosnippet>58</a>    <span class="kw">pub </span>to_redundancy_tx: UnboundedSender&lt;RedundancyMessage&gt;,
-<a href=#59 id=59 data-nosnippet>59</a>    <span class="kw">pub </span>callbacks: Callbacks,
-<a href=#60 id=60 data-nosnippet>60</a>    <span class="kw">pub </span>peers: Arc&lt;RwLock&lt;Vec&lt;PeerIPC&gt;&gt;&gt;,
-<a href=#61 id=61 data-nosnippet>61</a>    <span class="kw">pub </span>global_config: Arc&lt;RwLock&lt;GlobalConfig&gt;&gt;,
-<a href=#62 id=62 data-nosnippet>62</a>}
+<a href=#28 id=28 data-nosnippet>28</a><span class="kw">pub struct </span>NetworkInterface {
+<a href=#29 id=29 data-nosnippet>29</a>    <span class="kw">pub </span>itree: Arc&lt;RwLock&lt;ITree&gt;&gt;,
+<a href=#30 id=30 data-nosnippet>30</a>    <span class="kw">pub </span>id: PeerId,
+<a href=#31 id=31 data-nosnippet>31</a>    <span class="kw">pub </span>to_network_message_tx: UnboundedSender&lt;ToNetworkMessage&gt;,
+<a href=#32 id=32 data-nosnippet>32</a>    <span class="kw">pub </span>to_redundancy_tx: UnboundedSender&lt;RedundancyMessage&gt;,
+<a href=#33 id=33 data-nosnippet>33</a>    <span class="kw">pub </span>global_config: Arc&lt;RwLock&lt;GlobalConfig&gt;&gt;,
+<a href=#34 id=34 data-nosnippet>34</a>    <span class="kw">pub </span>listen_addrs: Arc&lt;RwLock&lt;HashSet&lt;Multiaddr&gt;&gt;&gt;,
+<a href=#35 id=35 data-nosnippet>35</a>    <span class="kw">pub </span>peers: Arc&lt;RwLock&lt;Vec&lt;PeerId&gt;&gt;&gt;,
+<a href=#36 id=36 data-nosnippet>36</a>    <span class="kw">pub </span>peers_info: Arc&lt;RwLock&lt;HashMap&lt;PeerId, network::PeerInfo&gt;&gt;&gt;, <span class="comment">// Only used to store state for restart and inspect
+<a href=#37 id=37 data-nosnippet>37</a></span>}
+<a href=#38 id=38 data-nosnippet>38</a>
+<a href=#39 id=39 data-nosnippet>39</a><span class="kw">impl </span>NetworkInterface {
+<a href=#40 id=40 data-nosnippet>40</a>    <span class="kw">pub fn </span>new(
+<a href=#41 id=41 data-nosnippet>41</a>        itree: Arc&lt;RwLock&lt;ITree&gt;&gt;,
+<a href=#42 id=42 data-nosnippet>42</a>        id: PeerId,
+<a href=#43 id=43 data-nosnippet>43</a>        to_network_message_tx: UnboundedSender&lt;ToNetworkMessage&gt;,
+<a href=#44 id=44 data-nosnippet>44</a>        to_redundancy_tx: UnboundedSender&lt;RedundancyMessage&gt;,
+<a href=#45 id=45 data-nosnippet>45</a>        peers: Arc&lt;RwLock&lt;Vec&lt;PeerId&gt;&gt;&gt;,
+<a href=#46 id=46 data-nosnippet>46</a>        global_config: Arc&lt;RwLock&lt;GlobalConfig&gt;&gt;,
+<a href=#47 id=47 data-nosnippet>47</a>    ) -&gt; <span class="self">Self </span>{
+<a href=#48 id=48 data-nosnippet>48</a>        <span class="self">Self </span>{
+<a href=#49 id=49 data-nosnippet>49</a>            itree,
+<a href=#50 id=50 data-nosnippet>50</a>            id,
+<a href=#51 id=51 data-nosnippet>51</a>            to_network_message_tx,
+<a href=#52 id=52 data-nosnippet>52</a>            to_redundancy_tx,
+<a href=#53 id=53 data-nosnippet>53</a>            peers,
+<a href=#54 id=54 data-nosnippet>54</a>            global_config,
+<a href=#55 id=55 data-nosnippet>55</a>            listen_addrs: Arc::new(RwLock::new(HashSet::new())),
+<a href=#56 id=56 data-nosnippet>56</a>            peers_info: Arc::new(RwLock::new(HashMap::new())),
+<a href=#57 id=57 data-nosnippet>57</a>        }
+<a href=#58 id=58 data-nosnippet>58</a>    }
+<a href=#59 id=59 data-nosnippet>59</a>
+<a href=#60 id=60 data-nosnippet>60</a>    <span class="doccomment">/// Add the requested entry to the itree and inform the network
+<a href=#61 id=61 data-nosnippet>61</a>    </span><span class="kw">pub fn </span>register_new_inode(<span class="kw-2">&amp;</span><span class="self">self</span>, inode: Inode) -&gt; <span class="prelude-ty">Result</span>&lt;(), MakeInodeError&gt; {
+<a href=#62 id=62 data-nosnippet>62</a>        ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"register_new_inode"</span>)<span class="question-mark">?</span>.add_inode(inode.clone())<span class="question-mark">?</span>;
 <a href=#63 id=63 data-nosnippet>63</a>
-<a href=#64 id=64 data-nosnippet>64</a><span class="kw">impl </span>NetworkInterface {
-<a href=#65 id=65 data-nosnippet>65</a>    <span class="attr">#[allow(clippy::too_many_arguments)]
-<a href=#66 id=66 data-nosnippet>66</a>    </span><span class="kw">pub fn </span>new(
-<a href=#67 id=67 data-nosnippet>67</a>        itree: Arc&lt;RwLock&lt;ITree&gt;&gt;,
-<a href=#68 id=68 data-nosnippet>68</a>        public_url: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#69 id=69 data-nosnippet>69</a>        bound_socket: SocketAddr,
-<a href=#70 id=70 data-nosnippet>70</a>        hostname: String,
-<a href=#71 id=71 data-nosnippet>71</a>        to_network_message_tx: UnboundedSender&lt;ToNetworkMessage&gt;,
-<a href=#72 id=72 data-nosnippet>72</a>        to_redundancy_tx: UnboundedSender&lt;RedundancyMessage&gt;,
-<a href=#73 id=73 data-nosnippet>73</a>        peers: Arc&lt;RwLock&lt;Vec&lt;PeerIPC&gt;&gt;&gt;,
-<a href=#74 id=74 data-nosnippet>74</a>        global_config: Arc&lt;RwLock&lt;GlobalConfig&gt;&gt;,
-<a href=#75 id=75 data-nosnippet>75</a>    ) -&gt; <span class="self">Self </span>{
-<a href=#76 id=76 data-nosnippet>76</a>        <span class="self">Self </span>{
-<a href=#77 id=77 data-nosnippet>77</a>            itree,
-<a href=#78 id=78 data-nosnippet>78</a>            public_url,
-<a href=#79 id=79 data-nosnippet>79</a>            bound_socket,
-<a href=#80 id=80 data-nosnippet>80</a>            hostname,
-<a href=#81 id=81 data-nosnippet>81</a>            to_network_message_tx,
-<a href=#82 id=82 data-nosnippet>82</a>            to_redundancy_tx,
-<a href=#83 id=83 data-nosnippet>83</a>            callbacks: Callbacks::new(),
-<a href=#84 id=84 data-nosnippet>84</a>            peers,
-<a href=#85 id=85 data-nosnippet>85</a>            global_config,
-<a href=#86 id=86 data-nosnippet>86</a>        }
-<a href=#87 id=87 data-nosnippet>87</a>    }
-<a href=#88 id=88 data-nosnippet>88</a>
-<a href=#89 id=89 data-nosnippet>89</a>    <span class="doccomment">/// Add the requested entry to the itree and inform the network
-<a href=#90 id=90 data-nosnippet>90</a>    </span><span class="kw">pub fn </span>register_new_inode(<span class="kw-2">&amp;</span><span class="self">self</span>, inode: Inode) -&gt; <span class="prelude-ty">Result</span>&lt;(), MakeInodeError&gt; {
-<a href=#91 id=91 data-nosnippet>91</a>        ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"register_new_inode"</span>)<span class="question-mark">?</span>.add_inode(inode.clone())<span class="question-mark">?</span>;
+<a href=#64 id=64 data-nosnippet>64</a>        <span class="kw">if </span>!ITree::is_local_only(inode.id) {
+<a href=#65 id=65 data-nosnippet>65</a>            <span class="self">self</span>.to_network_message_tx
+<a href=#66 id=66 data-nosnippet>66</a>                .send(ToNetworkMessage::BroadcastMessage(Request::Inode(inode)))
+<a href=#67 id=67 data-nosnippet>67</a>                .expect(<span class="string">"register inode: unable to update modification on the network thread"</span>);
+<a href=#68 id=68 data-nosnippet>68</a>        }
+<a href=#69 id=69 data-nosnippet>69</a>        <span class="prelude-val">Ok</span>(())
+<a href=#70 id=70 data-nosnippet>70</a>        <span class="comment">// TODO - if unable to update for some reason, should be passed to the background worker
+<a href=#71 id=71 data-nosnippet>71</a>    </span>}
+<a href=#72 id=72 data-nosnippet>72</a>
+<a href=#73 id=73 data-nosnippet>73</a>    <span class="kw">pub fn </span>rename(
+<a href=#74 id=74 data-nosnippet>74</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#75 id=75 data-nosnippet>75</a>        parent: Ino,
+<a href=#76 id=76 data-nosnippet>76</a>        new_parent: Ino,
+<a href=#77 id=77 data-nosnippet>77</a>        name: InodeName,
+<a href=#78 id=78 data-nosnippet>78</a>        new_name: InodeName,
+<a href=#79 id=79 data-nosnippet>79</a>        overwrite: bool,
+<a href=#80 id=80 data-nosnippet>80</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), RenameError&gt; {
+<a href=#81 id=81 data-nosnippet>81</a>        <span class="kw">let </span><span class="kw-2">mut </span>itree = ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"itree_rename_file"</span>)<span class="question-mark">?</span>;
+<a href=#82 id=82 data-nosnippet>82</a>
+<a href=#83 id=83 data-nosnippet>83</a>        itree.mv_inode(parent, new_parent, name.as_ref(), new_name.clone())<span class="question-mark">?</span>;
+<a href=#84 id=84 data-nosnippet>84</a>
+<a href=#85 id=85 data-nosnippet>85</a>        <span class="self">self</span>.to_network_message_tx
+<a href=#86 id=86 data-nosnippet>86</a>            .send(ToNetworkMessage::BroadcastMessage(Request::Rename(
+<a href=#87 id=87 data-nosnippet>87</a>                parent, new_parent, name, new_name, overwrite,
+<a href=#88 id=88 data-nosnippet>88</a>            )))
+<a href=#89 id=89 data-nosnippet>89</a>            .expect(<span class="string">"broadcast_rename_file: unable to update modification on the network thread"</span>);
+<a href=#90 id=90 data-nosnippet>90</a>        <span class="prelude-val">Ok</span>(())
+<a href=#91 id=91 data-nosnippet>91</a>    }
 <a href=#92 id=92 data-nosnippet>92</a>
-<a href=#93 id=93 data-nosnippet>93</a>        <span class="kw">if </span>!ITree::is_local_only(inode.id) {
-<a href=#94 id=94 data-nosnippet>94</a>            <span class="self">self</span>.to_network_message_tx
-<a href=#95 id=95 data-nosnippet>95</a>                .send(ToNetworkMessage::BroadcastMessage(MessageContent::Inode(
-<a href=#96 id=96 data-nosnippet>96</a>                    inode,
-<a href=#97 id=97 data-nosnippet>97</a>                )))
-<a href=#98 id=98 data-nosnippet>98</a>                .expect(<span class="string">"register inode: unable to update modification on the network thread"</span>);
-<a href=#99 id=99 data-nosnippet>99</a>        }
-<a href=#100 id=100 data-nosnippet>100</a>        <span class="prelude-val">Ok</span>(())
-<a href=#101 id=101 data-nosnippet>101</a>        <span class="comment">// TODO - if unable to update for some reason, should be passed to the background worker
-<a href=#102 id=102 data-nosnippet>102</a>    </span>}
-<a href=#103 id=103 data-nosnippet>103</a>
-<a href=#104 id=104 data-nosnippet>104</a>    <span class="kw">pub fn </span>rename(
-<a href=#105 id=105 data-nosnippet>105</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#106 id=106 data-nosnippet>106</a>        parent: Ino,
-<a href=#107 id=107 data-nosnippet>107</a>        new_parent: Ino,
-<a href=#108 id=108 data-nosnippet>108</a>        name: InodeName,
-<a href=#109 id=109 data-nosnippet>109</a>        new_name: InodeName,
-<a href=#110 id=110 data-nosnippet>110</a>        overwrite: bool,
-<a href=#111 id=111 data-nosnippet>111</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), RenameError&gt; {
-<a href=#112 id=112 data-nosnippet>112</a>        <span class="kw">let </span><span class="kw-2">mut </span>itree = ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"itree_rename_file"</span>)<span class="question-mark">?</span>;
-<a href=#113 id=113 data-nosnippet>113</a>
-<a href=#114 id=114 data-nosnippet>114</a>        itree.mv_inode(parent, new_parent, name.as_ref(), new_name.clone())<span class="question-mark">?</span>;
-<a href=#115 id=115 data-nosnippet>115</a>
-<a href=#116 id=116 data-nosnippet>116</a>        <span class="self">self</span>.to_network_message_tx
-<a href=#117 id=117 data-nosnippet>117</a>            .send(ToNetworkMessage::BroadcastMessage(MessageContent::Rename(
-<a href=#118 id=118 data-nosnippet>118</a>                parent, new_parent, name, new_name, overwrite,
-<a href=#119 id=119 data-nosnippet>119</a>            )))
-<a href=#120 id=120 data-nosnippet>120</a>            .expect(<span class="string">"broadcast_rename_file: unable to update modification on the network thread"</span>);
-<a href=#121 id=121 data-nosnippet>121</a>        <span class="prelude-val">Ok</span>(())
-<a href=#122 id=122 data-nosnippet>122</a>    }
-<a href=#123 id=123 data-nosnippet>123</a>
-<a href=#124 id=124 data-nosnippet>124</a>    <span class="kw">pub fn </span>acknowledge_rename(
-<a href=#125 id=125 data-nosnippet>125</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#126 id=126 data-nosnippet>126</a>        parent: Ino,
-<a href=#127 id=127 data-nosnippet>127</a>        new_parent: Ino,
-<a href=#128 id=128 data-nosnippet>128</a>        name: InodeName,
-<a href=#129 id=129 data-nosnippet>129</a>        new_name: InodeName,
-<a href=#130 id=130 data-nosnippet>130</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), RenameError&gt; {
-<a href=#131 id=131 data-nosnippet>131</a>        <span class="kw">let </span><span class="kw-2">mut </span>itree = ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"itree_rename_file"</span>)<span class="question-mark">?</span>;
-<a href=#132 id=132 data-nosnippet>132</a>
-<a href=#133 id=133 data-nosnippet>133</a>        itree
-<a href=#134 id=134 data-nosnippet>134</a>            .mv_inode(parent, new_parent, name.as_ref(), new_name)
-<a href=#135 id=135 data-nosnippet>135</a>            .map_err(|err| <span class="kw">match </span>err {
-<a href=#136 id=136 data-nosnippet>136</a>                WhError::InodeNotFound =&gt; RenameError::DestinationParentNotFound,
-<a href=#137 id=137 data-nosnippet>137</a>                WhError::InodeIsNotADirectory =&gt; RenameError::DestinationParentNotFolder,
-<a href=#138 id=138 data-nosnippet>138</a>                source =&gt; RenameError::WhError { source },
-<a href=#139 id=139 data-nosnippet>139</a>            })
-<a href=#140 id=140 data-nosnippet>140</a>    }
-<a href=#141 id=141 data-nosnippet>141</a>
-<a href=#142 id=142 data-nosnippet>142</a>    <span class="doccomment">/// Get a new inode, add the requested entry to the itree and inform the network
-<a href=#143 id=143 data-nosnippet>143</a>    /// marks as reserved the Ino range up to the new Inode id
-<a href=#144 id=144 data-nosnippet>144</a>    </span><span class="kw">pub fn </span>acknowledge_new_file(<span class="kw-2">&amp;</span><span class="self">self</span>, inode: Inode) -&gt; <span class="prelude-ty">Result</span>&lt;(), MakeInodeError&gt; {
-<a href=#145 id=145 data-nosnippet>145</a>        <span class="kw">let </span><span class="kw-2">mut </span>itree = ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"acknowledge_new_file"</span>)<span class="question-mark">?</span>;
-<a href=#146 id=146 data-nosnippet>146</a>        <span class="kw">let _ </span>= itree.mark_reserved_ino(inode.id); <span class="comment">// this only happens in out-of-order handling of peer's inode creation, and isn't really an error
-<a href=#147 id=147 data-nosnippet>147</a>        </span>itree.add_inode(inode)
-<a href=#148 id=148 data-nosnippet>148</a>    }
-<a href=#149 id=149 data-nosnippet>149</a>
-<a href=#150 id=150 data-nosnippet>150</a>    <span class="doccomment">/// Remove [Inode] from the [ITree] and inform the network of the removal
-<a href=#151 id=151 data-nosnippet>151</a>    </span><span class="kw">pub fn </span>unregister_inode(<span class="kw-2">&amp;</span><span class="self">self</span>, id: Ino) -&gt; <span class="prelude-ty">Result</span>&lt;(), RemoveInodeError&gt; {
-<a href=#152 id=152 data-nosnippet>152</a>        ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"unregister_inode"</span>)<span class="question-mark">?</span>.remove_inode(id)<span class="question-mark">?</span>;
-<a href=#153 id=153 data-nosnippet>153</a>
-<a href=#154 id=154 data-nosnippet>154</a>        <span class="kw">if </span>!ITree::is_local_only(id) {
-<a href=#155 id=155 data-nosnippet>155</a>            <span class="self">self</span>.to_network_message_tx
-<a href=#156 id=156 data-nosnippet>156</a>                .send(ToNetworkMessage::BroadcastMessage(MessageContent::Remove(
-<a href=#157 id=157 data-nosnippet>157</a>                    id,
-<a href=#158 id=158 data-nosnippet>158</a>                )))
-<a href=#159 id=159 data-nosnippet>159</a>                .expect(<span class="string">"unregister_inode: unable to update modification on the network thread"</span>);
-<a href=#160 id=160 data-nosnippet>160</a>        }
-<a href=#161 id=161 data-nosnippet>161</a>        <span class="comment">// TODO - if unable to update for some reason, should be passed to the background worker
-<a href=#162 id=162 data-nosnippet>162</a>        </span><span class="prelude-val">Ok</span>(())
-<a href=#163 id=163 data-nosnippet>163</a>    }
-<a href=#164 id=164 data-nosnippet>164</a>
-<a href=#165 id=165 data-nosnippet>165</a>    <span class="doccomment">/// Remove [Inode] from the [ITree]
-<a href=#166 id=166 data-nosnippet>166</a>    </span><span class="kw">pub fn </span>acknowledge_unregister_inode(<span class="kw-2">&amp;</span><span class="self">self</span>, id: Ino) -&gt; <span class="prelude-ty">Result</span>&lt;Inode, RemoveInodeError&gt; {
-<a href=#167 id=167 data-nosnippet>167</a>        ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"acknowledge_unregister_inode"</span>)<span class="question-mark">?</span>.remove_inode(id)
-<a href=#168 id=168 data-nosnippet>168</a>    }
-<a href=#169 id=169 data-nosnippet>169</a>
-<a href=#170 id=170 data-nosnippet>170</a>    <span class="kw">pub fn </span>acknowledge_hosts_edition(<span class="kw-2">&amp;</span><span class="self">self</span>, id: Ino, hosts: Vec&lt;Address&gt;) -&gt; WhResult&lt;()&gt; {
-<a href=#171 id=171 data-nosnippet>171</a>        <span class="kw">let </span><span class="kw-2">mut </span>itree = ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"acknowledge_hosts_edition"</span>)<span class="question-mark">?</span>;
-<a href=#172 id=172 data-nosnippet>172</a>
-<a href=#173 id=173 data-nosnippet>173</a>        itree.set_inode_hosts(id, hosts) <span class="comment">// TODO - if unable to update for some reason, should be passed to the background worker
-<a href=#174 id=174 data-nosnippet>174</a>    </span>}
+<a href=#93 id=93 data-nosnippet>93</a>    <span class="kw">pub fn </span>acknowledge_rename(
+<a href=#94 id=94 data-nosnippet>94</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#95 id=95 data-nosnippet>95</a>        parent: Ino,
+<a href=#96 id=96 data-nosnippet>96</a>        new_parent: Ino,
+<a href=#97 id=97 data-nosnippet>97</a>        name: InodeName,
+<a href=#98 id=98 data-nosnippet>98</a>        new_name: InodeName,
+<a href=#99 id=99 data-nosnippet>99</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), RenameError&gt; {
+<a href=#100 id=100 data-nosnippet>100</a>        <span class="kw">let </span><span class="kw-2">mut </span>itree = ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"itree_rename_file"</span>)<span class="question-mark">?</span>;
+<a href=#101 id=101 data-nosnippet>101</a>
+<a href=#102 id=102 data-nosnippet>102</a>        itree
+<a href=#103 id=103 data-nosnippet>103</a>            .mv_inode(parent, new_parent, name.as_ref(), new_name)
+<a href=#104 id=104 data-nosnippet>104</a>            .map_err(|err| <span class="kw">match </span>err {
+<a href=#105 id=105 data-nosnippet>105</a>                WhError::InodeNotFound =&gt; RenameError::DestinationParentNotFound,
+<a href=#106 id=106 data-nosnippet>106</a>                WhError::InodeIsNotADirectory =&gt; RenameError::DestinationParentNotFolder,
+<a href=#107 id=107 data-nosnippet>107</a>                source =&gt; RenameError::WhError { source },
+<a href=#108 id=108 data-nosnippet>108</a>            })
+<a href=#109 id=109 data-nosnippet>109</a>    }
+<a href=#110 id=110 data-nosnippet>110</a>
+<a href=#111 id=111 data-nosnippet>111</a>    <span class="doccomment">/// Get a new inode, add the requested entry to the itree and inform the network
+<a href=#112 id=112 data-nosnippet>112</a>    /// marks as reserved the Ino range up to the new Inode id
+<a href=#113 id=113 data-nosnippet>113</a>    </span><span class="kw">pub fn </span>acknowledge_new_file(<span class="kw-2">&amp;</span><span class="self">self</span>, inode: Inode) -&gt; <span class="prelude-ty">Result</span>&lt;(), MakeInodeError&gt; {
+<a href=#114 id=114 data-nosnippet>114</a>        <span class="kw">let </span><span class="kw-2">mut </span>itree = ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"acknowledge_new_file"</span>)<span class="question-mark">?</span>;
+<a href=#115 id=115 data-nosnippet>115</a>        <span class="kw">let _ </span>= itree.mark_reserved_ino(inode.id); <span class="comment">// this only happens in out-of-order handling of peer's inode creation, and isn't really an error
+<a href=#116 id=116 data-nosnippet>116</a>        </span>itree.add_inode(inode)
+<a href=#117 id=117 data-nosnippet>117</a>    }
+<a href=#118 id=118 data-nosnippet>118</a>
+<a href=#119 id=119 data-nosnippet>119</a>    <span class="doccomment">/// Remove [Inode] from the [ITree] and inform the network of the removal
+<a href=#120 id=120 data-nosnippet>120</a>    </span><span class="kw">pub fn </span>unregister_inode(<span class="kw-2">&amp;</span><span class="self">self</span>, id: Ino) -&gt; <span class="prelude-ty">Result</span>&lt;(), RemoveInodeError&gt; {
+<a href=#121 id=121 data-nosnippet>121</a>        ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"unregister_inode"</span>)<span class="question-mark">?</span>.remove_inode(id)<span class="question-mark">?</span>;
+<a href=#122 id=122 data-nosnippet>122</a>
+<a href=#123 id=123 data-nosnippet>123</a>        <span class="kw">if </span>!ITree::is_local_only(id) {
+<a href=#124 id=124 data-nosnippet>124</a>            <span class="self">self</span>.to_network_message_tx
+<a href=#125 id=125 data-nosnippet>125</a>                .send(ToNetworkMessage::BroadcastMessage(Request::Remove(id)))
+<a href=#126 id=126 data-nosnippet>126</a>                .expect(<span class="string">"unregister_inode: unable to update modification on the network thread"</span>);
+<a href=#127 id=127 data-nosnippet>127</a>        }
+<a href=#128 id=128 data-nosnippet>128</a>        <span class="comment">// TODO - if unable to update for some reason, should be passed to the background worker
+<a href=#129 id=129 data-nosnippet>129</a>        </span><span class="prelude-val">Ok</span>(())
+<a href=#130 id=130 data-nosnippet>130</a>    }
+<a href=#131 id=131 data-nosnippet>131</a>
+<a href=#132 id=132 data-nosnippet>132</a>    <span class="doccomment">/// Remove [Inode] from the [ITree]
+<a href=#133 id=133 data-nosnippet>133</a>    </span><span class="kw">pub fn </span>acknowledge_unregister_inode(<span class="kw-2">&amp;</span><span class="self">self</span>, id: Ino) -&gt; <span class="prelude-ty">Result</span>&lt;Inode, RemoveInodeError&gt; {
+<a href=#134 id=134 data-nosnippet>134</a>        ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"acknowledge_unregister_inode"</span>)<span class="question-mark">?</span>.remove_inode(id)
+<a href=#135 id=135 data-nosnippet>135</a>    }
+<a href=#136 id=136 data-nosnippet>136</a>
+<a href=#137 id=137 data-nosnippet>137</a>    <span class="kw">pub fn </span>add_inode_hosts(<span class="kw-2">&amp;</span><span class="self">self</span>, ino: Ino, hosts: <span class="kw-2">&amp;</span>[PeerId]) -&gt; WhResult&lt;()&gt; {
+<a href=#138 id=138 data-nosnippet>138</a>        ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"network_interface::update_hosts"</span>)<span class="question-mark">?
+<a href=#139 id=139 data-nosnippet>139</a>            </span>.add_inode_hosts(ino, hosts)<span class="question-mark">?</span>;
+<a href=#140 id=140 data-nosnippet>140</a>
+<a href=#141 id=141 data-nosnippet>141</a>        <span class="kw">if </span>!ITree::is_local_only(ino) {
+<a href=#142 id=142 data-nosnippet>142</a>            <span class="self">self</span>.to_network_message_tx
+<a href=#143 id=143 data-nosnippet>143</a>                .send(ToNetworkMessage::BroadcastMessage(Request::AddHosts(
+<a href=#144 id=144 data-nosnippet>144</a>                    ino,
+<a href=#145 id=145 data-nosnippet>145</a>                    hosts.to_vec(),
+<a href=#146 id=146 data-nosnippet>146</a>                )))
+<a href=#147 id=147 data-nosnippet>147</a>                .expect(<span class="string">"update_remote_hosts: unable to update modification on the network thread"</span>);
+<a href=#148 id=148 data-nosnippet>148</a>        }
+<a href=#149 id=149 data-nosnippet>149</a>        <span class="prelude-val">Ok</span>(())
+<a href=#150 id=150 data-nosnippet>150</a>    }
+<a href=#151 id=151 data-nosnippet>151</a>
+<a href=#152 id=152 data-nosnippet>152</a>    <span class="kw">pub fn </span>aknowledge_new_hosts(<span class="kw-2">&amp;</span><span class="self">self</span>, id: Ino, new_hosts: <span class="kw-2">&amp;</span>[PeerId]) -&gt; WhResult&lt;()&gt; {
+<a href=#153 id=153 data-nosnippet>153</a>        ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"aknowledge_new_hosts"</span>)<span class="question-mark">?</span>.add_inode_hosts(id, new_hosts)
+<a href=#154 id=154 data-nosnippet>154</a>    }
+<a href=#155 id=155 data-nosnippet>155</a>
+<a href=#156 id=156 data-nosnippet>156</a>    <span class="kw">pub fn </span>aknowledge_hosts_removal(<span class="kw-2">&amp;</span><span class="self">self</span>, id: Ino, new_hosts: <span class="kw-2">&amp;</span>[PeerId]) -&gt; WhResult&lt;()&gt; {
+<a href=#157 id=157 data-nosnippet>157</a>        ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"aknowledge_hosts_removal"</span>)<span class="question-mark">?
+<a href=#158 id=158 data-nosnippet>158</a>            </span>.remove_inode_hosts(id, new_hosts)
+<a href=#159 id=159 data-nosnippet>159</a>    }
+<a href=#160 id=160 data-nosnippet>160</a>
+<a href=#161 id=161 data-nosnippet>161</a>    <span class="kw">pub fn </span>update_metadata(<span class="kw-2">&amp;</span><span class="self">self</span>, id: Ino, meta: Metadata) -&gt; WhResult&lt;()&gt; {
+<a href=#162 id=162 data-nosnippet>162</a>        <span class="kw">let </span><span class="kw-2">mut </span>itree = ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"network_interface::update_metadata"</span>)<span class="question-mark">?</span>;
+<a href=#163 id=163 data-nosnippet>163</a>        <span class="kw">let </span><span class="kw-2">mut </span>fixed_meta = meta;
+<a href=#164 id=164 data-nosnippet>164</a>        <span class="kw">let </span>ref_meta = <span class="kw-2">&amp;</span>itree.get_inode(id)<span class="question-mark">?</span>.meta;
+<a href=#165 id=165 data-nosnippet>165</a>
+<a href=#166 id=166 data-nosnippet>166</a>        <span class="comment">// meta's SystemTime is fragile: it can be silently corrupted such that
+<a href=#167 id=167 data-nosnippet>167</a>        // serialization leads to a failure we can't deal with
+<a href=#168 id=168 data-nosnippet>168</a>        </span><span class="kw">if </span>fixed_meta.atime.duration_since(UNIX_EPOCH).is_err() {
+<a href=#169 id=169 data-nosnippet>169</a>            fixed_meta.atime = ref_meta.atime;
+<a href=#170 id=170 data-nosnippet>170</a>        }
+<a href=#171 id=171 data-nosnippet>171</a>
+<a href=#172 id=172 data-nosnippet>172</a>        <span class="kw">if </span>fixed_meta.ctime.duration_since(UNIX_EPOCH).is_err() {
+<a href=#173 id=173 data-nosnippet>173</a>            fixed_meta.ctime = ref_meta.ctime;
+<a href=#174 id=174 data-nosnippet>174</a>        }
 <a href=#175 id=175 data-nosnippet>175</a>
-<a href=#176 id=176 data-nosnippet>176</a>    <span class="kw">pub fn </span>send_file(<span class="kw-2">&amp;</span><span class="self">self</span>, inode: Ino, data: Vec&lt;u8&gt;, to: Address) -&gt; WhResult&lt;()&gt; {
-<a href=#177 id=177 data-nosnippet>177</a>        <span class="self">self</span>.to_network_message_tx
-<a href=#178 id=178 data-nosnippet>178</a>            .send(ToNetworkMessage::SpecificMessage(
-<a href=#179 id=179 data-nosnippet>179</a>                (MessageContent::PullAnswer(inode, data), <span class="prelude-val">None</span>),
-<a href=#180 id=180 data-nosnippet>180</a>                <span class="macro">vec!</span>[to],
-<a href=#181 id=181 data-nosnippet>181</a>            ))
-<a href=#182 id=182 data-nosnippet>182</a>            .expect(<span class="string">"send_file: unable to update modification on the network thread"</span>);
-<a href=#183 id=183 data-nosnippet>183</a>        <span class="prelude-val">Ok</span>(())
-<a href=#184 id=184 data-nosnippet>184</a>    }
-<a href=#185 id=185 data-nosnippet>185</a>
-<a href=#186 id=186 data-nosnippet>186</a>    <span class="kw">pub fn </span>revoke_remote_hosts(<span class="kw-2">&amp;</span><span class="self">self</span>, id: Ino) -&gt; WhResult&lt;()&gt; {
-<a href=#187 id=187 data-nosnippet>187</a>        <span class="self">self</span>.update_hosts(id, <span class="macro">vec!</span>[<span class="self">self</span>.hostname.clone()])<span class="question-mark">?</span>;
-<a href=#188 id=188 data-nosnippet>188</a>        <span class="comment">// self.apply_redundancy(id);
-<a href=#189 id=189 data-nosnippet>189</a>        </span><span class="prelude-val">Ok</span>(())
-<a href=#190 id=190 data-nosnippet>190</a>    }
-<a href=#191 id=191 data-nosnippet>191</a>
-<a href=#192 id=192 data-nosnippet>192</a>    <span class="kw">pub fn </span>add_inode_hosts(<span class="kw-2">&amp;</span><span class="self">self</span>, ino: Ino, hosts: Vec&lt;Address&gt;) -&gt; WhResult&lt;()&gt; {
-<a href=#193 id=193 data-nosnippet>193</a>        ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"network_interface::update_hosts"</span>)<span class="question-mark">?
-<a href=#194 id=194 data-nosnippet>194</a>            </span>.add_inode_hosts(ino, hosts)<span class="question-mark">?</span>;
-<a href=#195 id=195 data-nosnippet>195</a>        <span class="self">self</span>.update_remote_hosts(ino)
-<a href=#196 id=196 data-nosnippet>196</a>    }
-<a href=#197 id=197 data-nosnippet>197</a>
-<a href=#198 id=198 data-nosnippet>198</a>    <span class="kw">pub fn </span>update_hosts(<span class="kw-2">&amp;</span><span class="self">self</span>, ino: Ino, hosts: Vec&lt;Address&gt;) -&gt; WhResult&lt;()&gt; {
-<a href=#199 id=199 data-nosnippet>199</a>        ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"network_interface::update_hosts"</span>)<span class="question-mark">?
-<a href=#200 id=200 data-nosnippet>200</a>            </span>.set_inode_hosts(ino, hosts)<span class="question-mark">?</span>;
-<a href=#201 id=201 data-nosnippet>201</a>        <span class="self">self</span>.update_remote_hosts(ino)
-<a href=#202 id=202 data-nosnippet>202</a>    }
+<a href=#176 id=176 data-nosnippet>176</a>        <span class="kw">if </span>fixed_meta.crtime.duration_since(UNIX_EPOCH).is_err() {
+<a href=#177 id=177 data-nosnippet>177</a>            fixed_meta.crtime = ref_meta.crtime;
+<a href=#178 id=178 data-nosnippet>178</a>        }
+<a href=#179 id=179 data-nosnippet>179</a>
+<a href=#180 id=180 data-nosnippet>180</a>        <span class="kw">if </span>fixed_meta.mtime.duration_since(UNIX_EPOCH).is_err() {
+<a href=#181 id=181 data-nosnippet>181</a>            fixed_meta.mtime = ref_meta.mtime;
+<a href=#182 id=182 data-nosnippet>182</a>        }
+<a href=#183 id=183 data-nosnippet>183</a>
+<a href=#184 id=184 data-nosnippet>184</a>        itree.set_inode_meta(id, fixed_meta.clone())<span class="question-mark">?</span>;
+<a href=#185 id=185 data-nosnippet>185</a>        drop(itree);
+<a href=#186 id=186 data-nosnippet>186</a>
+<a href=#187 id=187 data-nosnippet>187</a>        <span class="kw">if </span>!ITree::is_local_only(id) {
+<a href=#188 id=188 data-nosnippet>188</a>            <span class="self">self</span>.to_network_message_tx
+<a href=#189 id=189 data-nosnippet>189</a>                .send(ToNetworkMessage::BroadcastMessage(Request::EditMetadata(
+<a href=#190 id=190 data-nosnippet>190</a>                    id, fixed_meta,
+<a href=#191 id=191 data-nosnippet>191</a>                )))
+<a href=#192 id=192 data-nosnippet>192</a>                .expect(<span class="string">"update_metadata: unable to update modification on the network thread"</span>);
+<a href=#193 id=193 data-nosnippet>193</a>        }
+<a href=#194 id=194 data-nosnippet>194</a>        <span class="prelude-val">Ok</span>(())
+<a href=#195 id=195 data-nosnippet>195</a>        <span class="comment">/* REVIEW
+<a href=#196 id=196 data-nosnippet>196</a>         * This system (and others broadcasts systems) should be reviewed as they don't check success.
+<a href=#197 id=197 data-nosnippet>197</a>         * In this case, if another host misses this order, it will not update it's file.
+<a href=#198 id=198 data-nosnippet>198</a>         * We could create a "broadcast" callback with the number of awaited confirmations and a timeout
+<a href=#199 id=199 data-nosnippet>199</a>         * before resend or fail declaration.
+<a href=#200 id=200 data-nosnippet>200</a>         * Or send a bunch of Specific messages
+<a href=#201 id=201 data-nosnippet>201</a>         */
+<a href=#202 id=202 data-nosnippet>202</a>    </span>}
 <a href=#203 id=203 data-nosnippet>203</a>
-<a href=#204 id=204 data-nosnippet>204</a>    <span class="kw">fn </span>update_remote_hosts(<span class="kw-2">&amp;</span><span class="self">self</span>, ino: Ino) -&gt; WhResult&lt;()&gt; {
-<a href=#205 id=205 data-nosnippet>205</a>        <span class="kw">let </span>inode = ITree::read_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"update_remote_hosts"</span>)<span class="question-mark">?
-<a href=#206 id=206 data-nosnippet>206</a>            </span>.get_inode(ino)<span class="question-mark">?
-<a href=#207 id=207 data-nosnippet>207</a>            </span>.clone();
-<a href=#208 id=208 data-nosnippet>208</a>
-<a href=#209 id=209 data-nosnippet>209</a>        <span class="kw">if let </span>FsEntry::File(hosts) = <span class="kw-2">&amp;</span>inode.entry {
-<a href=#210 id=210 data-nosnippet>210</a>            <span class="kw">if </span>!ITree::is_local_only(inode.id) {
-<a href=#211 id=211 data-nosnippet>211</a>                <span class="self">self</span>.to_network_message_tx
-<a href=#212 id=212 data-nosnippet>212</a>                    .send(ToNetworkMessage::BroadcastMessage(
-<a href=#213 id=213 data-nosnippet>213</a>                        MessageContent::EditHosts(inode.id, hosts.clone()),
-<a href=#214 id=214 data-nosnippet>214</a>                    ))
-<a href=#215 id=215 data-nosnippet>215</a>                    .expect(
-<a href=#216 id=216 data-nosnippet>216</a>                        <span class="string">"update_remote_hosts: unable to update modification on the network thread"</span>,
-<a href=#217 id=217 data-nosnippet>217</a>                    );
-<a href=#218 id=218 data-nosnippet>218</a>            }
-<a href=#219 id=219 data-nosnippet>219</a>            <span class="prelude-val">Ok</span>(())
-<a href=#220 id=220 data-nosnippet>220</a>        } <span class="kw">else </span>{
-<a href=#221 id=221 data-nosnippet>221</a>            <span class="prelude-val">Err</span>(WhError::InodeIsADirectory)
-<a href=#222 id=222 data-nosnippet>222</a>        }
-<a href=#223 id=223 data-nosnippet>223</a>    }
-<a href=#224 id=224 data-nosnippet>224</a>
-<a href=#225 id=225 data-nosnippet>225</a>    <span class="kw">pub fn </span>aknowledge_new_hosts(<span class="kw-2">&amp;</span><span class="self">self</span>, id: Ino, new_hosts: Vec&lt;Address&gt;) -&gt; WhResult&lt;()&gt; {
-<a href=#226 id=226 data-nosnippet>226</a>        ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"aknowledge_new_hosts"</span>)<span class="question-mark">?</span>.add_inode_hosts(id, new_hosts)
-<a href=#227 id=227 data-nosnippet>227</a>    }
-<a href=#228 id=228 data-nosnippet>228</a>
-<a href=#229 id=229 data-nosnippet>229</a>    <span class="kw">pub fn </span>aknowledge_hosts_removal(<span class="kw-2">&amp;</span><span class="self">self</span>, id: Ino, new_hosts: Vec&lt;Address&gt;) -&gt; WhResult&lt;()&gt; {
-<a href=#230 id=230 data-nosnippet>230</a>        ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"aknowledge_hosts_removal"</span>)<span class="question-mark">?
-<a href=#231 id=231 data-nosnippet>231</a>            </span>.remove_inode_hosts(id, new_hosts)
-<a href=#232 id=232 data-nosnippet>232</a>    }
-<a href=#233 id=233 data-nosnippet>233</a>
-<a href=#234 id=234 data-nosnippet>234</a>    <span class="kw">pub fn </span>update_metadata(<span class="kw-2">&amp;</span><span class="self">self</span>, id: Ino, meta: Metadata) -&gt; WhResult&lt;()&gt; {
-<a href=#235 id=235 data-nosnippet>235</a>        <span class="kw">let </span><span class="kw-2">mut </span>itree = ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"network_interface::update_metadata"</span>)<span class="question-mark">?</span>;
-<a href=#236 id=236 data-nosnippet>236</a>        <span class="kw">let </span><span class="kw-2">mut </span>fixed_meta = meta;
-<a href=#237 id=237 data-nosnippet>237</a>        <span class="kw">let </span>ref_meta = <span class="kw-2">&amp;</span>itree.get_inode(id)<span class="question-mark">?</span>.meta;
+<a href=#204 id=204 data-nosnippet>204</a>    <span class="comment">// SECTION Redundancy related
+<a href=#205 id=205 data-nosnippet>205</a>
+<a href=#206 id=206 data-nosnippet>206</a>    </span><span class="kw">pub fn </span>apply_redundancy(<span class="kw-2">&amp;</span><span class="self">self</span>, file_id: Ino) {
+<a href=#207 id=207 data-nosnippet>207</a>        <span class="self">self</span>.to_redundancy_tx
+<a href=#208 id=208 data-nosnippet>208</a>            .send(RedundancyMessage::ApplyTo(file_id))
+<a href=#209 id=209 data-nosnippet>209</a>            .expect(<span class="string">"network_interface::apply_redundancy: tx error"</span>);
+<a href=#210 id=210 data-nosnippet>210</a>    }
+<a href=#211 id=211 data-nosnippet>211</a>
+<a href=#212 id=212 data-nosnippet>212</a>    <span class="kw">pub fn </span>check_integrity(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+<a href=#213 id=213 data-nosnippet>213</a>        <span class="self">self</span>.to_redundancy_tx
+<a href=#214 id=214 data-nosnippet>214</a>            .send(RedundancyMessage::CheckIntegrity)
+<a href=#215 id=215 data-nosnippet>215</a>            .expect(<span class="string">"network_interface::check_integrity: tx error"</span>);
+<a href=#216 id=216 data-nosnippet>216</a>    }
+<a href=#217 id=217 data-nosnippet>217</a>
+<a href=#218 id=218 data-nosnippet>218</a>    <span class="comment">// !SECTION ^ Redundancy related
+<a href=#219 id=219 data-nosnippet>219</a>
+<a href=#220 id=220 data-nosnippet>220</a>    // SECTION Node related
+<a href=#221 id=221 data-nosnippet>221</a>
+<a href=#222 id=222 data-nosnippet>222</a>    // pub fn register_to_others(&amp;self) {
+<a href=#223 id=223 data-nosnippet>223</a>    //     self.to_network_message_tx
+<a href=#224 id=224 data-nosnippet>224</a>    //         .send(ToNetworkMessage::BroadcastMessage(
+<a href=#225 id=225 data-nosnippet>225</a>    //             Request::Register(
+<a href=#226 id=226 data-nosnippet>226</a>    //                 LocalConfig::read_lock(
+<a href=#227 id=227 data-nosnippet>227</a>    //                     &amp;self.local_config,
+<a href=#228 id=228 data-nosnippet>228</a>    //                     ".",
+<a href=#229 id=229 data-nosnippet>229</a>    //                 )
+<a href=#230 id=230 data-nosnippet>230</a>    //                 .expect("network_interface::register_to_others: can't read the address in the local config")
+<a href=#231 id=231 data-nosnippet>231</a>    //                 .general
+<a href=#232 id=232 data-nosnippet>232</a>    //                 .address
+<a href=#233 id=233 data-nosnippet>233</a>    //                 .clone(),
+<a href=#234 id=234 data-nosnippet>234</a>    //             ),
+<a href=#235 id=235 data-nosnippet>235</a>    //         ))
+<a href=#236 id=236 data-nosnippet>236</a>    //         .expect("register_to_others: unable to update modification on the network thread");
+<a href=#237 id=237 data-nosnippet>237</a>    // }
 <a href=#238 id=238 data-nosnippet>238</a>
-<a href=#239 id=239 data-nosnippet>239</a>        <span class="comment">// meta's SystemTime is fragile: it can be silently corrupted such that
-<a href=#240 id=240 data-nosnippet>240</a>        // serialization leads to a failure we can't deal with
-<a href=#241 id=241 data-nosnippet>241</a>        </span><span class="kw">if </span>fixed_meta.atime.duration_since(UNIX_EPOCH).is_err() {
-<a href=#242 id=242 data-nosnippet>242</a>            fixed_meta.atime = ref_meta.atime;
-<a href=#243 id=243 data-nosnippet>243</a>        }
-<a href=#244 id=244 data-nosnippet>244</a>
-<a href=#245 id=245 data-nosnippet>245</a>        <span class="kw">if </span>fixed_meta.ctime.duration_since(UNIX_EPOCH).is_err() {
-<a href=#246 id=246 data-nosnippet>246</a>            fixed_meta.ctime = ref_meta.ctime;
-<a href=#247 id=247 data-nosnippet>247</a>        }
-<a href=#248 id=248 data-nosnippet>248</a>
-<a href=#249 id=249 data-nosnippet>249</a>        <span class="kw">if </span>fixed_meta.crtime.duration_since(UNIX_EPOCH).is_err() {
-<a href=#250 id=250 data-nosnippet>250</a>            fixed_meta.crtime = ref_meta.crtime;
-<a href=#251 id=251 data-nosnippet>251</a>        }
-<a href=#252 id=252 data-nosnippet>252</a>
-<a href=#253 id=253 data-nosnippet>253</a>        <span class="kw">if </span>fixed_meta.mtime.duration_since(UNIX_EPOCH).is_err() {
-<a href=#254 id=254 data-nosnippet>254</a>            fixed_meta.mtime = ref_meta.mtime;
-<a href=#255 id=255 data-nosnippet>255</a>        }
+<a href=#239 id=239 data-nosnippet>239</a>    // pub fn edit_peer_ip(&amp;self, actual: Address, new: Address) {
+<a href=#240 id=240 data-nosnippet>240</a>    //     log::info!("changing host {} to {}", actual, new);
+<a href=#241 id=241 data-nosnippet>241</a>    //     if let Some(mut peers) = self.peers.try_write_for(LOCK_TIMEOUT) {
+<a href=#242 id=242 data-nosnippet>242</a>    //         for peer in peers.iter_mut() {
+<a href=#243 id=243 data-nosnippet>243</a>    //             if peer.address == actual {
+<a href=#244 id=244 data-nosnippet>244</a>    //                 log::info!("done once");
+<a href=#245 id=245 data-nosnippet>245</a>    //                 peer.address = new.clone();
+<a href=#246 id=246 data-nosnippet>246</a>    //             }
+<a href=#247 id=247 data-nosnippet>247</a>    //         }
+<a href=#248 id=248 data-nosnippet>248</a>    //     }
+<a href=#249 id=249 data-nosnippet>249</a>    // }
+<a href=#250 id=250 data-nosnippet>250</a>
+<a href=#251 id=251 data-nosnippet>251</a>    </span><span class="kw">pub fn </span>send_filesystem(<span class="kw-2">&amp;</span><span class="self">self</span>, to: PeerId) -&gt; WhResult&lt;Response&gt; {
+<a href=#252 id=252 data-nosnippet>252</a>        <span class="kw">let </span>clean_itree = <span class="self">self</span>.itree.read().clone().clean_local();
+<a href=#253 id=253 data-nosnippet>253</a>
+<a href=#254 id=254 data-nosnippet>254</a>        <span class="kw">let </span><span class="kw-2">mut </span>peers_address_list = <span class="self">self</span>.peers_info.read().clone();
+<a href=#255 id=255 data-nosnippet>255</a>        peers_address_list.remove(<span class="kw-2">&amp;</span>to);
 <a href=#256 id=256 data-nosnippet>256</a>
-<a href=#257 id=257 data-nosnippet>257</a>        itree.set_inode_meta(id, fixed_meta.clone())<span class="question-mark">?</span>;
-<a href=#258 id=258 data-nosnippet>258</a>        drop(itree);
-<a href=#259 id=259 data-nosnippet>259</a>
-<a href=#260 id=260 data-nosnippet>260</a>        <span class="kw">if </span>!ITree::is_local_only(id) {
-<a href=#261 id=261 data-nosnippet>261</a>            <span class="self">self</span>.to_network_message_tx
-<a href=#262 id=262 data-nosnippet>262</a>                .send(ToNetworkMessage::BroadcastMessage(
-<a href=#263 id=263 data-nosnippet>263</a>                    MessageContent::EditMetadata(id, fixed_meta),
-<a href=#264 id=264 data-nosnippet>264</a>                ))
-<a href=#265 id=265 data-nosnippet>265</a>                .expect(<span class="string">"update_metadata: unable to update modification on the network thread"</span>);
-<a href=#266 id=266 data-nosnippet>266</a>        }
-<a href=#267 id=267 data-nosnippet>267</a>        <span class="prelude-val">Ok</span>(())
-<a href=#268 id=268 data-nosnippet>268</a>        <span class="comment">/* REVIEW
-<a href=#269 id=269 data-nosnippet>269</a>         * This system (and others broadcasts systems) should be reviewed as they don't check success.
-<a href=#270 id=270 data-nosnippet>270</a>         * In this case, if another host misses this order, it will not update it's file.
-<a href=#271 id=271 data-nosnippet>271</a>         * We could create a "broadcast" callback with the number of awaited confirmations and a timeout
-<a href=#272 id=272 data-nosnippet>272</a>         * before resend or fail declaration.
-<a href=#273 id=273 data-nosnippet>273</a>         * Or send a bunch of Specific messages
-<a href=#274 id=274 data-nosnippet>274</a>         */
-<a href=#275 id=275 data-nosnippet>275</a>    </span>}
-<a href=#276 id=276 data-nosnippet>276</a>
-<a href=#277 id=277 data-nosnippet>277</a>    <span class="comment">// SECTION Redundancy related
-<a href=#278 id=278 data-nosnippet>278</a>
-<a href=#279 id=279 data-nosnippet>279</a>    </span><span class="kw">pub fn </span>apply_redundancy(<span class="kw-2">&amp;</span><span class="self">self</span>, file_id: Ino) {
-<a href=#280 id=280 data-nosnippet>280</a>        <span class="self">self</span>.to_redundancy_tx
-<a href=#281 id=281 data-nosnippet>281</a>            .send(RedundancyMessage::ApplyTo(file_id))
-<a href=#282 id=282 data-nosnippet>282</a>            .expect(<span class="string">"network_interface::apply_redundancy: tx error"</span>);
-<a href=#283 id=283 data-nosnippet>283</a>    }
-<a href=#284 id=284 data-nosnippet>284</a>
-<a href=#285 id=285 data-nosnippet>285</a>    <span class="comment">// !SECTION ^ Redundancy related
-<a href=#286 id=286 data-nosnippet>286</a>
-<a href=#287 id=287 data-nosnippet>287</a>    // SECTION Node related
-<a href=#288 id=288 data-nosnippet>288</a>
-<a href=#289 id=289 data-nosnippet>289</a>    // pub fn register_to_others(&amp;self) {
-<a href=#290 id=290 data-nosnippet>290</a>    //     self.to_network_message_tx
-<a href=#291 id=291 data-nosnippet>291</a>    //         .send(ToNetworkMessage::BroadcastMessage(
-<a href=#292 id=292 data-nosnippet>292</a>    //             MessageContent::Register(
-<a href=#293 id=293 data-nosnippet>293</a>    //                 LocalConfig::read_lock(
-<a href=#294 id=294 data-nosnippet>294</a>    //                     &amp;self.local_config,
-<a href=#295 id=295 data-nosnippet>295</a>    //                     ".",
-<a href=#296 id=296 data-nosnippet>296</a>    //                 )
-<a href=#297 id=297 data-nosnippet>297</a>    //                 .expect("network_interface::register_to_others: can't read the address in the local config")
-<a href=#298 id=298 data-nosnippet>298</a>    //                 .general
-<a href=#299 id=299 data-nosnippet>299</a>    //                 .address
-<a href=#300 id=300 data-nosnippet>300</a>    //                 .clone(),
-<a href=#301 id=301 data-nosnippet>301</a>    //             ),
-<a href=#302 id=302 data-nosnippet>302</a>    //         ))
-<a href=#303 id=303 data-nosnippet>303</a>    //         .expect("register_to_others: unable to update modification on the network thread");
-<a href=#304 id=304 data-nosnippet>304</a>    // }
-<a href=#305 id=305 data-nosnippet>305</a>
-<a href=#306 id=306 data-nosnippet>306</a>    // pub async fn request_itree(&amp;self, to: Address) -&gt; io::Result&lt;bool&gt; {
-<a href=#307 id=307 data-nosnippet>307</a>    //     let callback = self.callbacks.create(Callback::PullFs)?;
-<a href=#308 id=308 data-nosnippet>308</a>
-<a href=#309 id=309 data-nosnippet>309</a>    //     self.to_network_message_tx
-<a href=#310 id=310 data-nosnippet>310</a>    //         .send(ToNetworkMessage::SpecificMessage(
-<a href=#311 id=311 data-nosnippet>311</a>    //             (MessageContent::RequestFs, None),
-<a href=#312 id=312 data-nosnippet>312</a>    //             vec![to],
-<a href=#313 id=313 data-nosnippet>313</a>    //         ))
-<a href=#314 id=314 data-nosnippet>314</a>    //         .expect("request_itree: unable to update modification on the network thread");
-<a href=#315 id=315 data-nosnippet>315</a>
-<a href=#316 id=316 data-nosnippet>316</a>    //     self.callbacks.async_wait_for(callback).await
-<a href=#317 id=317 data-nosnippet>317</a>    // }
-<a href=#318 id=318 data-nosnippet>318</a>
-<a href=#319 id=319 data-nosnippet>319</a>    // pub fn edit_peer_ip(&amp;self, actual: Address, new: Address) {
-<a href=#320 id=320 data-nosnippet>320</a>    //     log::info!("changing host {} to {}", actual, new);
-<a href=#321 id=321 data-nosnippet>321</a>    //     if let Some(mut peers) = self.peers.try_write_for(LOCK_TIMEOUT) {
-<a href=#322 id=322 data-nosnippet>322</a>    //         for peer in peers.iter_mut() {
-<a href=#323 id=323 data-nosnippet>323</a>    //             if peer.address == actual {
-<a href=#324 id=324 data-nosnippet>324</a>    //                 log::info!("done once");
-<a href=#325 id=325 data-nosnippet>325</a>    //                 peer.address = new.clone();
-<a href=#326 id=326 data-nosnippet>326</a>    //             }
-<a href=#327 id=327 data-nosnippet>327</a>    //         }
-<a href=#328 id=328 data-nosnippet>328</a>    //     }
-<a href=#329 id=329 data-nosnippet>329</a>    // }
-<a href=#330 id=330 data-nosnippet>330</a>
-<a href=#331 id=331 data-nosnippet>331</a>    </span><span class="kw">pub fn </span>send_itree(<span class="kw-2">&amp;</span><span class="self">self</span>, to: Address, global_config_bytes: Vec&lt;u8&gt;) -&gt; WhResult&lt;()&gt; {
-<a href=#332 id=332 data-nosnippet>332</a>        <span class="kw">let </span>clean_itree = ITree::read_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"send_itree"</span>)<span class="question-mark">?
-<a href=#333 id=333 data-nosnippet>333</a>            </span>.clone()
-<a href=#334 id=334 data-nosnippet>334</a>            .clean_local();
-<a href=#335 id=335 data-nosnippet>335</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(peers) = <span class="self">self</span>.peers.try_read_for(LOCK_TIMEOUT) {
-<a href=#336 id=336 data-nosnippet>336</a>            <span class="kw">let </span>peers_address_list = peers
-<a href=#337 id=337 data-nosnippet>337</a>                .iter()
-<a href=#338 id=338 data-nosnippet>338</a>                .filter_map(|peer| {
-<a href=#339 id=339 data-nosnippet>339</a>                    <span class="kw">if </span>peer.<span class="macro">hostname !</span>= to {
-<a href=#340 id=340 data-nosnippet>340</a>                        <span class="prelude-val">Some</span>(peer.hostname.clone())
-<a href=#341 id=341 data-nosnippet>341</a>                    } <span class="kw">else </span>{
-<a href=#342 id=342 data-nosnippet>342</a>                        <span class="prelude-val">None
-<a href=#343 id=343 data-nosnippet>343</a>                    </span>}
-<a href=#344 id=344 data-nosnippet>344</a>                })
-<a href=#345 id=345 data-nosnippet>345</a>                .collect();
-<a href=#346 id=346 data-nosnippet>346</a>
-<a href=#347 id=347 data-nosnippet>347</a>            <span class="self">self</span>.to_network_message_tx
-<a href=#348 id=348 data-nosnippet>348</a>                .send(ToNetworkMessage::SpecificMessage(
-<a href=#349 id=349 data-nosnippet>349</a>                    (
-<a href=#350 id=350 data-nosnippet>350</a>                        MessageContent::FsAnswer(
-<a href=#351 id=351 data-nosnippet>351</a>                            clean_itree,
-<a href=#352 id=352 data-nosnippet>352</a>                            peers_address_list,
-<a href=#353 id=353 data-nosnippet>353</a>                            global_config_bytes,
-<a href=#354 id=354 data-nosnippet>354</a>                        ),
-<a href=#355 id=355 data-nosnippet>355</a>                        <span class="prelude-val">None</span>,
-<a href=#356 id=356 data-nosnippet>356</a>                    ),
-<a href=#357 id=357 data-nosnippet>357</a>                    <span class="macro">vec!</span>[to],
-<a href=#358 id=358 data-nosnippet>358</a>                ))
-<a href=#359 id=359 data-nosnippet>359</a>                .expect(<span class="string">"send_itree: unable to update modification on the network thread"</span>);
-<a href=#360 id=360 data-nosnippet>360</a>            <span class="prelude-val">Ok</span>(())
-<a href=#361 id=361 data-nosnippet>361</a>        } <span class="kw">else </span>{
-<a href=#362 id=362 data-nosnippet>362</a>            <span class="prelude-val">Err</span>(WhError::WouldBlock {
-<a href=#363 id=363 data-nosnippet>363</a>                called_from: <span class="string">"send_tree"</span>.to_owned(),
-<a href=#364 id=364 data-nosnippet>364</a>            })
-<a href=#365 id=365 data-nosnippet>365</a>        }
-<a href=#366 id=366 data-nosnippet>366</a>    }
-<a href=#367 id=367 data-nosnippet>367</a>
-<a href=#368 id=368 data-nosnippet>368</a>    <span class="kw">pub fn </span>disconnect_peer(<span class="kw-2">&amp;</span><span class="self">self</span>, addr: Address) -&gt; WhResult&lt;()&gt; {
-<a href=#369 id=369 data-nosnippet>369</a>        <span class="self">self</span>.peers
-<a href=#370 id=370 data-nosnippet>370</a>            .try_write_for(LOCK_TIMEOUT)
-<a href=#371 id=371 data-nosnippet>371</a>            .ok_or(WhError::WouldBlock {
-<a href=#372 id=372 data-nosnippet>372</a>                called_from: <span class="string">"disconnect_peer: can't write lock peers"</span>.to_owned(),
-<a href=#373 id=373 data-nosnippet>373</a>            })<span class="question-mark">?
-<a href=#374 id=374 data-nosnippet>374</a>            </span>.retain(|p| p.<span class="macro">hostname !</span>= addr);
-<a href=#375 id=375 data-nosnippet>375</a>
-<a href=#376 id=376 data-nosnippet>376</a>        <span class="macro">log::debug!</span>(<span class="string">"Disconnecting {addr}. Removing from inodes hosts"</span>);
-<a href=#377 id=377 data-nosnippet>377</a>        <span class="kw">for </span>inode <span class="kw">in </span>ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"disconnect_peer"</span>)<span class="question-mark">?</span>.inodes_mut() {
-<a href=#378 id=378 data-nosnippet>378</a>            <span class="kw">if let </span>FsEntry::File(hosts) = <span class="kw-2">&amp;mut </span>inode.entry {
-<a href=#379 id=379 data-nosnippet>379</a>                hosts.retain(|h| <span class="kw-2">*</span><span class="macro">h !</span>= addr);
-<a href=#380 id=380 data-nosnippet>380</a>            }
-<a href=#381 id=381 data-nosnippet>381</a>        }
-<a href=#382 id=382 data-nosnippet>382</a>        <span class="self">self</span>.to_redundancy_tx
-<a href=#383 id=383 data-nosnippet>383</a>            .send(RedundancyMessage::CheckIntegrity)
-<a href=#384 id=384 data-nosnippet>384</a>            .unwrap();
-<a href=#385 id=385 data-nosnippet>385</a>        <span class="prelude-val">Ok</span>(())
-<a href=#386 id=386 data-nosnippet>386</a>    }
-<a href=#387 id=387 data-nosnippet>387</a>
-<a href=#388 id=388 data-nosnippet>388</a>    <span class="kw">pub async fn </span>network_airport(
-<a href=#389 id=389 data-nosnippet>389</a>        <span class="kw-2">mut </span>receiver: UnboundedReceiver&lt;FromNetworkMessage&gt;,
-<a href=#390 id=390 data-nosnippet>390</a>        fs_interface: Arc&lt;FsInterface&gt;,
-<a href=#391 id=391 data-nosnippet>391</a>    ) {
-<a href=#392 id=392 data-nosnippet>392</a>        <span class="kw">loop </span>{
-<a href=#393 id=393 data-nosnippet>393</a>            <span class="kw">let </span>FromNetworkMessage { origin, content } = <span class="kw">match </span>receiver.recv().<span class="kw">await </span>{
-<a href=#394 id=394 data-nosnippet>394</a>                <span class="prelude-val">Some</span>(message) =&gt; message,
-<a href=#395 id=395 data-nosnippet>395</a>                <span class="prelude-val">None </span>=&gt; <span class="kw">continue</span>,
-<a href=#396 id=396 data-nosnippet>396</a>            };
-<a href=#397 id=397 data-nosnippet>397</a>            <span class="kw">if </span><span class="macro">log::log_enabled!</span>(log::Level::Debug) {
-<a href=#398 id=398 data-nosnippet>398</a>                <span class="macro">log::debug!</span>(<span class="string">"From {}: {:?}"</span>, origin, content);
-<a href=#399 id=399 data-nosnippet>399</a>            } <span class="kw">else </span>{
-<a href=#400 id=400 data-nosnippet>400</a>                <span class="macro">log::info!</span>(<span class="string">"From {}: {}"</span>, origin, content);
-<a href=#401 id=401 data-nosnippet>401</a>            }
-<a href=#402 id=402 data-nosnippet>402</a>            <span class="kw">let </span>content_debug = <span class="macro">format!</span>(<span class="string">"{content:?}"</span>);
-<a href=#403 id=403 data-nosnippet>403</a>
-<a href=#404 id=404 data-nosnippet>404</a>            <span class="kw">let </span>action_result = <span class="kw">match </span>content {
-<a href=#405 id=405 data-nosnippet>405</a>                MessageContent::PullAnswer(id, binary) =&gt; fs_interface.recept_binary(id, binary)
-<a href=#406 id=406 data-nosnippet>406</a>                                                            .map_err(into_boxed_io),
-<a href=#407 id=407 data-nosnippet>407</a>                MessageContent::RedundancyFile(id, binary) =&gt; fs_interface.recept_redundancy(id, binary)
-<a href=#408 id=408 data-nosnippet>408</a>                                            .map_err(into_boxed_io),
-<a href=#409 id=409 data-nosnippet>409</a>                MessageContent::Inode(inode) =&gt; fs_interface.recept_inode(inode).map_err(into_boxed_io),
-<a href=#410 id=410 data-nosnippet>410</a>                MessageContent::EditHosts(id, hosts) =&gt; fs_interface.recept_edit_hosts(id, hosts).map_err(into_boxed_io),
-<a href=#411 id=411 data-nosnippet>411</a>                MessageContent::RevokeFile(id, host, meta) =&gt; fs_interface.recept_revoke_hosts(id, host, meta).map_err(into_boxed_io),
-<a href=#412 id=412 data-nosnippet>412</a>                MessageContent::AddHosts(id, hosts) =&gt; fs_interface.recept_add_hosts(id, hosts).map_err(into_boxed_io),
-<a href=#413 id=413 data-nosnippet>413</a>                MessageContent::RemoveHosts(id, hosts) =&gt; {
-<a href=#414 id=414 data-nosnippet>414</a>                                            fs_interface.recept_remove_hosts(id, hosts).map_err(into_boxed_io)
-<a href=#415 id=415 data-nosnippet>415</a>                                        }
-<a href=#416 id=416 data-nosnippet>416</a>                MessageContent::EditMetadata(id, meta) =&gt;
-<a href=#417 id=417 data-nosnippet>417</a>                                            fs_interface.acknowledge_metadata(id, meta).map_err(into_boxed_io),
-<a href=#418 id=418 data-nosnippet>418</a>                MessageContent::Remove(id) =&gt; fs_interface.recept_remove_inode(id).map_err(into_boxed_io),
-<a href=#419 id=419 data-nosnippet>419</a>                MessageContent::RequestFile(inode) =&gt; fs_interface.send_file(inode, origin).map_err(into_boxed_io),
-<a href=#420 id=420 data-nosnippet>420</a>                MessageContent::RequestFs =&gt; fs_interface.send_filesystem(origin).map_err(into_boxed_io),
-<a href=#421 id=421 data-nosnippet>421</a>                MessageContent::Rename(parent, new_parent, name, new_name, overwrite) =&gt;
-<a href=#422 id=422 data-nosnippet>422</a>                                            fs_interface
-<a href=#423 id=423 data-nosnippet>423</a>                                            .recept_rename(parent, new_parent, name, new_name, overwrite)
-<a href=#424 id=424 data-nosnippet>424</a>                                            .map_err(into_boxed_io),
-<a href=#425 id=425 data-nosnippet>425</a>                MessageContent::SetXAttr(ino, key, data) =&gt; fs_interface
-<a href=#426 id=426 data-nosnippet>426</a>                                            .network_interface
-<a href=#427 id=427 data-nosnippet>427</a>                                            .recept_inode_xattr(ino, <span class="kw-2">&amp;</span>key, data)
-<a href=#428 id=428 data-nosnippet>428</a>                                            .map_err(into_boxed_io),
-<a href=#429 id=429 data-nosnippet>429</a>
-<a href=#430 id=430 data-nosnippet>430</a>                MessageContent::RemoveXAttr(ino, key) =&gt; fs_interface
-<a href=#431 id=431 data-nosnippet>431</a>                                            .network_interface
-<a href=#432 id=432 data-nosnippet>432</a>                                            .recept_remove_inode_xattr(ino, <span class="kw-2">&amp;</span>key)
-<a href=#433 id=433 data-nosnippet>433</a>                                            .map_err(into_boxed_io),
-<a href=#434 id=434 data-nosnippet>434</a>                MessageContent::FsAnswer(<span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>) =&gt; {
-<a href=#435 id=435 data-nosnippet>435</a>                                            <span class="prelude-val">Err</span>(io::Error::new(ErrorKind::InvalidInput,
-<a href=#436 id=436 data-nosnippet>436</a>                                                <span class="string">"Late answer from first connection, loaded network interface shouldn't recieve FsAnswer"</span>))
-<a href=#437 id=437 data-nosnippet>437</a>                                        },
-<a href=#438 id=438 data-nosnippet>438</a>                MessageContent::Disconnect =&gt; fs_interface.network_interface.disconnect_peer(origin).map_err(into_boxed_io),
-<a href=#439 id=439 data-nosnippet>439</a>                MessageContent::FileDelta(ino, meta, sig, delta) =&gt; fs_interface.accept_delta(ino, meta, sig, delta, origin)
-<a href=#440 id=440 data-nosnippet>440</a>                                            .map_err(into_boxed_io),
-<a href=#441 id=441 data-nosnippet>441</a>                MessageContent::FileChanged(ino, meta) =&gt; fs_interface.accept_file_changed(ino, meta, origin).map_err(into_boxed_io),
-<a href=#442 id=442 data-nosnippet>442</a>                MessageContent::DeltaRequest(ino, sig) =&gt; fs_interface.respond_delta(ino, sig, origin).map_err(into_boxed_io),
-<a href=#443 id=443 data-nosnippet>443</a>            };
-<a href=#444 id=444 data-nosnippet>444</a>            <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = action_result {
-<a href=#445 id=445 data-nosnippet>445</a>                <span class="macro">log::error!</span>(
-<a href=#446 id=446 data-nosnippet>446</a>                    <span class="string">"Network airport couldn't operate operation {content_debug}, error found: {error}"
-<a href=#447 id=447 data-nosnippet>447</a>                </span>);
-<a href=#448 id=448 data-nosnippet>448</a>            }
-<a href=#449 id=449 data-nosnippet>449</a>        }
-<a href=#450 id=450 data-nosnippet>450</a>    }
-<a href=#451 id=451 data-nosnippet>451</a>
-<a href=#452 id=452 data-nosnippet>452</a>    <span class="kw">pub async fn </span>contact_peers(
-<a href=#453 id=453 data-nosnippet>453</a>        peers_list: Arc&lt;RwLock&lt;Vec&lt;PeerIPC&gt;&gt;&gt;,
-<a href=#454 id=454 data-nosnippet>454</a>        <span class="kw-2">mut </span>rx: UnboundedReceiver&lt;ToNetworkMessage&gt;,
-<a href=#455 id=455 data-nosnippet>455</a>    ) {
-<a href=#456 id=456 data-nosnippet>456</a>        <span class="macro">log::info!</span>(<span class="string">"contact peers"</span>);
-<a href=#457 id=457 data-nosnippet>457</a>        <span class="kw">while let </span><span class="prelude-val">Some</span>(message) = rx.recv().<span class="kw">await </span>{
-<a href=#458 id=458 data-nosnippet>458</a>            <span class="comment">// geeting all peers network senders
-<a href=#459 id=459 data-nosnippet>459</a>            </span><span class="kw">let </span>peers_tx: Vec&lt;(UnboundedSender&lt;MessageAndStatus&gt;, String)&gt; = peers_list
-<a href=#460 id=460 data-nosnippet>460</a>                .try_read_for(LOCK_TIMEOUT)
-<a href=#461 id=461 data-nosnippet>461</a>                .expect(<span class="string">"mutext error on contact_peers"</span>) <span class="comment">// TODO - handle timeout
-<a href=#462 id=462 data-nosnippet>462</a>                </span>.iter()
-<a href=#463 id=463 data-nosnippet>463</a>                .map(|peer| (peer.sender.clone(), peer.hostname.clone()))
-<a href=#464 id=464 data-nosnippet>464</a>                .collect();
-<a href=#465 id=465 data-nosnippet>465</a>
-<a href=#466 id=466 data-nosnippet>466</a>            <span class="kw">match </span>message {
-<a href=#467 id=467 data-nosnippet>467</a>                ToNetworkMessage::BroadcastMessage(message_content) =&gt; {
-<a href=#468 id=468 data-nosnippet>468</a>                    peers_tx.iter().for_each(|(channel, address)| {
-<a href=#469 id=469 data-nosnippet>469</a>                        channel
-<a href=#470 id=470 data-nosnippet>470</a>                            .send((message_content.clone(), <span class="prelude-val">None</span>))
-<a href=#471 id=471 data-nosnippet>471</a>                            .unwrap_or_else(|e| {
-<a href=#472 id=472 data-nosnippet>472</a>                                <span class="macro">panic!</span>(<span class="string">"Failed to send message to peer {}: {e:?}"</span>, address)
-<a href=#473 id=473 data-nosnippet>473</a>                            })
-<a href=#474 id=474 data-nosnippet>474</a>                    });
-<a href=#475 id=475 data-nosnippet>475</a>                }
-<a href=#476 id=476 data-nosnippet>476</a>                ToNetworkMessage::SpecificMessage((message_content, status_tx), origins) =&gt; {
-<a href=#477 id=477 data-nosnippet>477</a>                    <span class="kw">let </span>count = peers_tx
-<a href=#478 id=478 data-nosnippet>478</a>                        .iter()
-<a href=#479 id=479 data-nosnippet>479</a>                        .filter(|<span class="kw-2">&amp;</span>(<span class="kw">_</span>, address)| origins.contains(address))
-<a href=#480 id=480 data-nosnippet>480</a>                        .map(|(channel, address)| {
-<a href=#481 id=481 data-nosnippet>481</a>                            channel
-<a href=#482 id=482 data-nosnippet>482</a>                                .send((message_content.clone(), status_tx.clone())) <span class="comment">// warning: only the first peer channel can set a status
-<a href=#483 id=483 data-nosnippet>483</a>                                </span>.unwrap_or_else(|e| {
-<a href=#484 id=484 data-nosnippet>484</a>                                    <span class="macro">panic!</span>(<span class="string">"Failed to send message to peer {}: {e:?}"</span>, address)
-<a href=#485 id=485 data-nosnippet>485</a>                                })
-<a href=#486 id=486 data-nosnippet>486</a>                        })
-<a href=#487 id=487 data-nosnippet>487</a>                        .count();
-<a href=#488 id=488 data-nosnippet>488</a>                    <span class="kw">if </span>count == <span class="number">0 </span>{
-<a href=#489 id=489 data-nosnippet>489</a>                        <span class="macro">log::warn!</span>(
-<a href=#490 id=490 data-nosnippet>490</a>                            <span class="string">"contact_peers: {message_content}: No peers by hostname {origins:?}"
-<a href=#491 id=491 data-nosnippet>491</a>                        </span>)
-<a href=#492 id=492 data-nosnippet>492</a>                    }
-<a href=#493 id=493 data-nosnippet>493</a>                }
-<a href=#494 id=494 data-nosnippet>494</a>            };
-<a href=#495 id=495 data-nosnippet>495</a>        }
-<a href=#496 id=496 data-nosnippet>496</a>    }
-<a href=#497 id=497 data-nosnippet>497</a>
-<a href=#498 id=498 data-nosnippet>498</a>    <span class="kw">pub async fn </span>incoming_connections_watchdog(
-<a href=#499 id=499 data-nosnippet>499</a>        server: Arc&lt;Server&gt;,
-<a href=#500 id=500 data-nosnippet>500</a>        receiver_in: UnboundedSender&lt;FromNetworkMessage&gt;,
-<a href=#501 id=501 data-nosnippet>501</a>        network_interface: Arc&lt;NetworkInterface&gt;,
-<a href=#502 id=502 data-nosnippet>502</a>    ) {
-<a href=#503 id=503 data-nosnippet>503</a>        <span class="kw">while let </span><span class="prelude-val">Ok</span>((stream, addr)) = server.listener.accept().<span class="kw">await </span>{
-<a href=#504 id=504 data-nosnippet>504</a>            <span class="macro">log::debug!</span>(<span class="string">"GOT ADDRESS {addr}"</span>);
-<a href=#505 id=505 data-nosnippet>505</a>            <span class="kw">let </span>ws_stream = tokio_tungstenite::accept_async_with_config(
-<a href=#506 id=506 data-nosnippet>506</a>                stream,
-<a href=#507 id=507 data-nosnippet>507</a>                <span class="prelude-val">Some</span>(
-<a href=#508 id=508 data-nosnippet>508</a>                    WebSocketConfig::default()
-<a href=#509 id=509 data-nosnippet>509</a>                        .max_message_size(<span class="prelude-val">None</span>)
-<a href=#510 id=510 data-nosnippet>510</a>                        .max_frame_size(<span class="prelude-val">None</span>),
-<a href=#511 id=511 data-nosnippet>511</a>                ),
-<a href=#512 id=512 data-nosnippet>512</a>            )
-<a href=#513 id=513 data-nosnippet>513</a>            .<span class="kw">await
-<a href=#514 id=514 data-nosnippet>514</a>            </span>.expect(<span class="string">"Error during the websocket handshake occurred"</span>);
-<a href=#515 id=515 data-nosnippet>515</a>
-<a href=#516 id=516 data-nosnippet>516</a>            <span class="kw">match </span>PeerIPC::accept(<span class="kw-2">&amp;</span>network_interface, ws_stream, receiver_in.clone()).<span class="kw">await </span>{
-<a href=#517 id=517 data-nosnippet>517</a>                <span class="prelude-val">Ok</span>(new_peer) =&gt; network_interface
-<a href=#518 id=518 data-nosnippet>518</a>                    .peers
-<a href=#519 id=519 data-nosnippet>519</a>                    .try_write_for(LOCK_TIMEOUT)
-<a href=#520 id=520 data-nosnippet>520</a>                    .expect(<span class="string">"incoming_connections_watchdog: can't lock existing peers"</span>)
-<a href=#521 id=521 data-nosnippet>521</a>                    .push(new_peer),
-<a href=#522 id=522 data-nosnippet>522</a>                <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">log::error!</span>(<span class="string">"incomming: accept: {e}"</span>),
-<a href=#523 id=523 data-nosnippet>523</a>            }
-<a href=#524 id=524 data-nosnippet>524</a>        }
-<a href=#525 id=525 data-nosnippet>525</a>    }
-<a href=#526 id=526 data-nosnippet>526</a>
-<a href=#527 id=527 data-nosnippet>527</a>    <span class="comment">// !SECTION ^ Node related
-<a href=#528 id=528 data-nosnippet>528</a></span>}
+<a href=#257 id=257 data-nosnippet>257</a>        <span class="macro">log::trace!</span>(<span class="string">"send fs; {peers_address_list:?}"</span>);
+<a href=#258 id=258 data-nosnippet>258</a>
+<a href=#259 id=259 data-nosnippet>259</a>        <span class="kw">let </span>global_config = <span class="self">self</span>.global_config.read().clone();
+<a href=#260 id=260 data-nosnippet>260</a>
+<a href=#261 id=261 data-nosnippet>261</a>        <span class="prelude-val">Ok</span>(Response::FsAnswer(
+<a href=#262 id=262 data-nosnippet>262</a>            clean_itree,
+<a href=#263 id=263 data-nosnippet>263</a>            peers_address_list,
+<a href=#264 id=264 data-nosnippet>264</a>            global_config,
+<a href=#265 id=265 data-nosnippet>265</a>        ))
+<a href=#266 id=266 data-nosnippet>266</a>    }
+<a href=#267 id=267 data-nosnippet>267</a>
+<a href=#268 id=268 data-nosnippet>268</a>    <span class="kw">pub fn </span>connect_peer(<span class="kw-2">&amp;</span><span class="self">self</span>, peer_id: PeerId, info: Info) {
+<a href=#269 id=269 data-nosnippet>269</a>        <span class="self">self</span>.peers_info.write().insert(
+<a href=#270 id=270 data-nosnippet>270</a>            peer_id,
+<a href=#271 id=271 data-nosnippet>271</a>            network::PeerInfo {
+<a href=#272 id=272 data-nosnippet>272</a>                nickname: info.agent_version,
+<a href=#273 id=273 data-nosnippet>273</a>                listen_addrs: info.listen_addrs,
+<a href=#274 id=274 data-nosnippet>274</a>            },
+<a href=#275 id=275 data-nosnippet>275</a>        );
+<a href=#276 id=276 data-nosnippet>276</a>        <span class="self">self</span>.peers.write().push(peer_id);
+<a href=#277 id=277 data-nosnippet>277</a>        <span class="self">self</span>.check_integrity();
+<a href=#278 id=278 data-nosnippet>278</a>    }
+<a href=#279 id=279 data-nosnippet>279</a>
+<a href=#280 id=280 data-nosnippet>280</a>    <span class="kw">pub fn </span>disconnect_peer(<span class="kw-2">&amp;</span><span class="self">self</span>, addr: PeerId) -&gt; WhResult&lt;Response&gt; {
+<a href=#281 id=281 data-nosnippet>281</a>        <span class="self">self</span>.peers
+<a href=#282 id=282 data-nosnippet>282</a>            .try_write_for(LOCK_TIMEOUT)
+<a href=#283 id=283 data-nosnippet>283</a>            .ok_or(WhError::WouldBlock {
+<a href=#284 id=284 data-nosnippet>284</a>                called_from: <span class="string">"disconnect_peer: can't write lock peers"</span>.to_owned(),
+<a href=#285 id=285 data-nosnippet>285</a>            })<span class="question-mark">?
+<a href=#286 id=286 data-nosnippet>286</a>            </span>.retain(|p| <span class="macro">p !</span>= <span class="kw-2">&amp;</span>addr);
+<a href=#287 id=287 data-nosnippet>287</a>
+<a href=#288 id=288 data-nosnippet>288</a>        <span class="macro">log::debug!</span>(<span class="string">"Disconnecting {addr}. Removing from inodes hosts"</span>);
+<a href=#289 id=289 data-nosnippet>289</a>        <span class="kw">for </span>inode <span class="kw">in </span>ITree::write_lock(<span class="kw-2">&amp;</span><span class="self">self</span>.itree, <span class="string">"disconnect_peer"</span>)<span class="question-mark">?</span>.inodes_mut() {
+<a href=#290 id=290 data-nosnippet>290</a>            <span class="kw">if let </span>FsEntry::File(hosts) = <span class="kw-2">&amp;mut </span>inode.entry {
+<a href=#291 id=291 data-nosnippet>291</a>                hosts.retain(|h| <span class="kw-2">*</span><span class="macro">h !</span>= addr);
+<a href=#292 id=292 data-nosnippet>292</a>            }
+<a href=#293 id=293 data-nosnippet>293</a>        }
+<a href=#294 id=294 data-nosnippet>294</a>        <span class="self">self</span>.check_integrity();
+<a href=#295 id=295 data-nosnippet>295</a>        <span class="prelude-val">Ok</span>(Response::Success)
+<a href=#296 id=296 data-nosnippet>296</a>    }
+<a href=#297 id=297 data-nosnippet>297</a>}
 </code></pre></div></section></main></body></html>

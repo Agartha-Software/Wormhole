@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["get_all_peers_address"],"struct":["NetworkInterface"]};
+window.SIDEBAR_ITEMS = {"struct":["NetworkInterface"]};
