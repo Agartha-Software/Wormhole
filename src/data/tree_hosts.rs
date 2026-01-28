@@ -31,7 +31,12 @@ impl FsEntryInfo {
             FsEntry::File(peer_ids) => Self::File(
                 peer_ids
                     .iter()
-                    .map(|s| infos.get(s).cloned().expect(&format!("peer {s} is missing")))
+                    .map(|s| {
+                        infos
+                            .get(s)
+                            .cloned()
+                            .expect(&format!("peer {s} is missing"))
+                    })
                     // unwrap_or_else(|| s.to_base58()))
                     .collect(),
             ),
@@ -208,7 +213,8 @@ pub fn get_tree(pod: &Pod, path: Option<&WhPath>) -> TreeAnswer {
             .peers_info
             .read()
             .iter()
-            .map(|(k, v)| (*k, v.nickname.clone())).chain([(pod.network_interface.id, pod.nickname.clone())]),
+            .map(|(k, v)| (*k, v.nickname.clone()))
+            .chain([(pod.network_interface.id, pod.nickname.clone())]),
     );
     log::info!("INFOS: {infos:#?}");
 
