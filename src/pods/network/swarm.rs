@@ -8,6 +8,8 @@ use std::{error::Error, time::Duration};
 
 const PROTOCOL_VERSION: &str = "/wormhole/1.0.0";
 
+pub const MAX_CONCURRENT_STREAMS: usize = 128;
+
 pub async fn create_swarm(nickname: String) -> Result<Swarm<Behaviour>, Box<dyn Error>> {
     let swarm = libp2p::SwarmBuilder::with_new_identity()
         .with_tokio()
@@ -20,7 +22,8 @@ pub async fn create_swarm(nickname: String) -> Result<Swarm<Behaviour>, Box<dyn 
             Behaviour {
                 request_response: request_response::Behaviour::new(
                     [(StreamProtocol::new(PROTOCOL_VERSION), ProtocolSupport::Full)],
-                    request_response::Config::default(),
+                    request_response::Config::default()
+                        .with_max_concurrent_streams(MAX_CONCURRENT_STREAMS),
                 ),
                 identify: identify::Behaviour::new(cfg),
             }
