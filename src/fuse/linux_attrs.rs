@@ -70,28 +70,6 @@ impl<'a> From<&MetadataFileAttr<'a>> for FileAttr {
     }
 }
 
-impl From<FileAttr> for Metadata {
-    fn from(val: FileAttr) -> Self {
-        Metadata {
-            ino: val.ino,
-            size: val.size,
-            blocks: val.blocks,
-            atime: val.atime,
-            mtime: val.mtime,
-            ctime: val.ctime,
-            crtime: val.crtime,
-            kind: val.kind.into(),
-            perm: val.perm,
-            nlink: val.nlink,
-            uid: val.uid,
-            gid: val.gid,
-            rdev: val.rdev,
-            flags: val.flags,
-            blksize: val.blksize,
-        }
-    }
-}
-
 impl Metadata {
     pub fn with_ids(&self, uid: u32, gid: u32) -> FileAttr {
         let mut attr: FileAttr = (&MetadataFileAttr(self)).into();

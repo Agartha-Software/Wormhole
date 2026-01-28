@@ -25,7 +25,8 @@ pub async fn send_command(command: Command, stream: &mut Stream) -> Result<(), s
     log::trace!("Sending cmd: {:?}, bytes {}", command, serialized.len());
 
     stream.write_u32(serialized.len() as u32).await?;
-    stream.write_all(&serialized).await
+    stream.write_all(&serialized).await?;
+    stream.flush().await
 }
 
 pub async fn recieve_answer<T>(stream: &mut Stream) -> Result<T, std::io::Error>
@@ -33,9 +34,8 @@ where
     T: for<'a> Deserialize<'a> + std::fmt::Debug,
 {
     let size = stream.read_u32().await?;
-    let mut recived_answer = Vec::with_capacity(size as usize);
-
-    stream.read_buf(&mut recived_answer).await?;
+    let mut recived_answer = vec![0; size as usize];
+    stream.read_exact(&mut recived_answer).await?;
 
     bincode::deserialize::<T>(&recived_answer)
         .map_err(|err| {

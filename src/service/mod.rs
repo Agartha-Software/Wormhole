@@ -10,7 +10,7 @@ use crate::ipc::error::ListenerError;
 use crate::pods::pod::Pod;
 use crate::pods::prototype::PodPrototype;
 use crate::service::clap::ServiceArgs;
-use crate::service::save::{delete_saved_pods, save_prototype};
+use crate::service::save::{delete_saved_pods, save_prototype, ServiceKey};
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use interprocess::local_socket::tokio::Listener;
 use interprocess::local_socket::traits::tokio::Listener as TokioListenerExt;
@@ -27,6 +27,7 @@ pub struct Service {
     pub pods: HashMap<String, Pod>,
     pub frozen_pods: HashMap<String, PodPrototype>,
     pub socket: String,
+    pub nickname: String,
     rest_service: tokio::task::JoinHandle<Result<(), std::io::Error>>,
     web_request_rx: Receiver<(Command, Sender<String>)>,
     socket_listener: Listener,
@@ -49,17 +50,23 @@ impl Service {
             .inspect_err(|err| eprintln!("{err}"))
             .ok()?;
 
+        let nickname = args
+            .nickname
+            .unwrap_or_else(|| gethostname::gethostname().to_string_lossy().to_string());
+
         let mut service = Service {
             pods: HashMap::new(),
             frozen_pods: HashMap::new(),
             socket,
+            nickname,
             rest_service,
             web_request_rx: rx,
             socket_listener,
         };
 
         if args.clean {
-            delete_saved_pods(&service.socket)
+            let service_key = ServiceKey::from_path(&service.socket);
+            delete_saved_pods(&service_key)
                 .inspect_err(|err| eprintln!("Failed to delete saved pods: {:?}", err))
                 .ok()?;
         } else {
@@ -74,12 +81,13 @@ impl Service {
     }
 
     pub async fn stop_all_pods(self) -> ExitCode {
+        let service_key = ServiceKey::from_path(&self.socket);
         let mut status = ExitCode::SUCCESS;
         for (name, pod) in self.pods.into_iter() {
             if pod.should_restart {
                 match pod.try_generate_prototype() {
                     Some(prototype) => {
-                        let _ = save_prototype(prototype, &self.socket, false)
+                        let _ = save_prototype(prototype, &service_key, false)
                             .inspect_err(|e| log::error!("Couldn't save the pod data: {e:?}"));
                     }
                     None => log::error!("Couldn't access pod {} while saving.", name),
@@ -96,7 +104,7 @@ impl Service {
         }
 
         for prototype in self.frozen_pods.into_values() {
-            let _ = save_prototype(prototype, &self.socket, true)
+            let _ = save_prototype(prototype, &service_key, true)
                 .inspect_err(|e| log::error!("Couldn't save the frozen pod data: {e:?}"));
         }
 

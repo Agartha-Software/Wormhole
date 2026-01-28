@@ -23,6 +23,7 @@ pub const CLI_BIN: &str = "./target/debug/wormhole";
 pub struct Service {
     pub instance: std::process::Child,
     pub id: u16,
+    pub socket: String,
     pub pods: Vec<(String, u16, TempDir)>, // (network_name, ip, dir)
 }
 
