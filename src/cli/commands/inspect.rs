@@ -53,7 +53,7 @@ pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String
                 "Disconnected (Frozen)".to_string()
             } else {
                 display_peers(info.connected_peers)
-            }
+            },
             info.disk_space
                 .as_ref()
                 .map_or("Error".to_owned(), |s| s.free_size.to_string()),
