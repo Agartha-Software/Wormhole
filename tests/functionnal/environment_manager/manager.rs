@@ -15,7 +15,6 @@ pub struct EnvironmentManager {
     pub services: Vec<Service>,
 }
 
-
 impl EnvironmentManager {
     pub fn new(test: &str) -> Self {
         start_log();
@@ -44,7 +43,9 @@ impl EnvironmentManager {
         // checks that no service is running on this socket
         let (mut status, _, _) = cli_command(["-s", &self.socket_from_id(socket_id), "status"]);
         while status.success() {
-            log::warn!("\nA service is already running on socket {socket_id}. Trying next socket...");
+            log::warn!(
+                "\nA service is already running on socket {socket_id}. Trying next socket..."
+            );
             socket_id = self.reserve_socket_id();
             (status, _, _) = cli_command(["-s", &self.socket_from_id(socket_id), "status"]);
         }
@@ -54,7 +55,12 @@ impl EnvironmentManager {
         );
 
         let mut instance = std::process::Command::new(SERVICE_BIN)
-            .args(["-s", &self.socket_from_id(socket_id), "--nodeamon", "--clean"])
+            .args([
+                "-s",
+                &self.socket_from_id(socket_id),
+                "--nodeamon",
+                "--clean",
+            ])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .stdin(Stdio::piped())

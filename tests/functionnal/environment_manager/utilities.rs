@@ -3,9 +3,7 @@ use std::{path::Path, process::ExitStatus};
 use futures_util::io;
 use wormhole::pods::itree::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME};
 
-use crate::functionnal::environment_manager::{
-    types::{Service, CLI_BIN, MAX_POD_PORT},
-};
+use crate::functionnal::environment_manager::types::{Service, CLI_BIN, MAX_POD_PORT};
 
 /// Returns `true` if the given services runs a pod on the given network
 pub fn service_has_pod_on_network(service: &Service, network: &String) -> bool {
