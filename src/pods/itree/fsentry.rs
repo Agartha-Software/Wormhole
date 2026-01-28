@@ -7,6 +7,7 @@ use std::{
 use camino::Utf8PathBuf;
 use libp2p::PeerId;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::{
     error::{WhError, WhResult},
@@ -19,10 +20,10 @@ use crate::{
 
 pub type Hosts = Vec<PeerId>;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, TS)]
 pub enum SymlinkPath {
     /// Path relative to the symlink file itself
-    SymlinkPathRelative(Utf8PathBuf),
+    SymlinkPathRelative(#[ts(as = "String")] Utf8PathBuf),
     /// Path relative to the WH drive. Not really absolute but emulates absolute symlinks within the WH drive
     SymlinkPathAbsolute(WhPath),
     /// absolute Path pointing outside the WH drive
@@ -67,7 +68,7 @@ impl Display for SymlinkPath {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, TS)]
 pub struct EntrySymlink {
     pub target: SymlinkPath,
     pub hint: Option<SimpleFileType>,
@@ -85,7 +86,12 @@ impl Default for EntrySymlink {
 impl EntrySymlink {
     /// Err(None) means the 'absolute' test failed
     /// Err(Some(e)) is a parsing error of the target
-    pub fn from_absolute(target: &Path, mountpoint: &Path) -> Result<Self, Option<WhPathError>> {
+    pub fn from_absolute<P: AsRef<Path> + ?Sized, Q: AsRef<Path> + ?Sized>(
+        target: &P,
+        mountpoint: &Q,
+    ) -> Result<Self, Option<WhPathError>> {
+        let target = target.as_ref();
+        let mountpoint = mountpoint.as_ref();
         target.is_absolute().then_some(()).ok_or(None)?;
         let mut components = normalize(target);
 
@@ -114,9 +120,14 @@ impl EntrySymlink {
     /// If wormhole failed to parse, we can't handle it,
     /// but the os will always treat it as an arbitrary OsString
     ///
-    pub fn parse(target: &Path, mountpoint: &Path) -> Result<Self, Self> {
+    pub fn parse<P: AsRef<Path> + ?Sized, Q: AsRef<Path> + ?Sized>(
+        target: &P,
+        mountpoint: &Q,
+    ) -> Result<Self, Self> {
+        let target = target.as_ref();
+        let mountpoint = mountpoint.as_ref();
         let external = || Self {
-            target: SymlinkPath::SymlinkPathExternal(target.to_owned()),
+            target: SymlinkPath::SymlinkPathExternal(target.to_path_buf()),
             hint: None,
         };
 

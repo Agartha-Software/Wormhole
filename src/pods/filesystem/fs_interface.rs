@@ -11,6 +11,7 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
+use ts_rs::TS;
 
 use super::file_handle::FileHandleManager;
 use super::make_inode::MakeInodeError;
@@ -22,7 +23,7 @@ pub struct FsInterface {
     pub mountpoint: PathBuf,
 }
 
-#[derive(PartialEq, Debug, Serialize, Deserialize, Clone)]
+#[derive(PartialEq, Debug, Serialize, Deserialize, Clone, TS)]
 pub enum SimpleFileType {
     File,
     Directory,

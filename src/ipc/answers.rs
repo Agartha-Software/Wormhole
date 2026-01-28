@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::{cli::ConfigType, ipc::error::IoError, pods::itree::Hosts};
+use crate::{cli::ConfigType, data::tree_hosts::TreeData, ipc::error::IoError, pods::itree::Hosts};
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -134,7 +134,7 @@ pub enum InspectAnswer {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub enum TreeAnswer {
-    Tree(String),
+    Tree(Box<TreeData>),
     PodNotFound,
     PodTreeFailed(IoError),
 }
