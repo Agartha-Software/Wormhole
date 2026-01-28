@@ -1,11 +1,12 @@
-use std::path::PathBuf;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::{
-    cli::ConfigType, data::tree_hosts::TreeData,
+    cli::ConfigType,
+    data::tree_hosts::TreeData,
     ipc::error::IoError,
     pods::{disk_managers::DiskSizeInfo, itree::Hosts, network::redundancy::RedundancyStatus},
 };

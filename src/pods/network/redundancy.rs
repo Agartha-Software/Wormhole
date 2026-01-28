@@ -3,7 +3,7 @@ use crate::{
     error::{WhError, WhResult},
     network::message::{Request, ToNetworkMessage},
     pods::{
-        filesystem::{File, fs_interface::FsInterface},
+        filesystem::{fs_interface::FsInterface, File},
         itree::{FsEntry, ITree, Ino},
         network::swarm::MAX_CONCURRENT_STREAMS,
         pod::Pod,
@@ -346,7 +346,6 @@ impl RedundancyTracker {
         workers
     }
 }
-
 
 #[derive(Eq, Hash, PartialEq, Serialize, Deserialize, Debug, TS)]
 #[ts(export)]
