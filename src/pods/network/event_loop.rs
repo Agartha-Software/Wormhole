@@ -75,7 +75,10 @@ impl EventLoop {
                 to_network = self.to_network.recv() => match to_network {
                     Some(ToNetworkMessage::AnswerMessage(message, status, peer)) => self.send_with_answer(message, status, peer),
                     Some(ToNetworkMessage::SpecificMessage(message, to)) => self.send_to_multiple(message, &to),
-                    Some(ToNetworkMessage::BroadcastMessage(message)) => self.send_to_multiple(message, &self.swarm.connected_peers().copied().collect::<Vec<_>>()),
+                    Some(ToNetworkMessage::BroadcastMessage(message)) => {
+                        let peers = self.fs_interface.network_interface.peers.read().clone();
+                        self.send_to_multiple(message, &peers)
+                    },
                     Some(ToNetworkMessage::CloseNetwork) => {
                         self.close();
                         return;
@@ -104,6 +107,7 @@ impl EventLoop {
     }
 
     fn send_to_multiple(&mut self, message: Request, to: &[PeerId]) {
+        log::debug!("BROADCASTING TO {to:?}");
         if let Some(last) = to.last() {
             // Just to don't clone the message on first peer, lot's of message have only one peer and messages can be very heavy quickly
             for peer in &to[1..] {
