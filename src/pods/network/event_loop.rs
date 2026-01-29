@@ -108,7 +108,7 @@ impl EventLoop {
 
     fn send_to_multiple(&mut self, message: Request, to: &[PeerId]) {
         log::debug!("BROADCASTING TO {to:?}");
-        if let Some(last) = to.last() {
+        if let Some(last) = to.first() {
             // Just to don't clone the message on first peer, lot's of message have only one peer and messages can be very heavy quickly
             for peer in &to[1..] {
                 self.swarm
