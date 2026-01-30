@@ -35,7 +35,7 @@ impl FsEntryInfo {
                         infos
                             .get(s)
                             .cloned()
-                            .unwrap_or_else(|| panic!("peer {s} is missing"))
+                            .unwrap_or_else(||s.to_base58())
                     })
                     .collect(),
             ),
