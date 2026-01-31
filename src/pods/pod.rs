@@ -176,7 +176,6 @@ impl Pod {
             *swarm.local_peer_id(),
             senders_in.clone(),
             redundancy_tx.clone(),
-            Arc::new(RwLock::new(swarm.connected_peers().cloned().collect())),
             global.clone(),
         ));
 
@@ -328,7 +327,7 @@ impl Pod {
 
         let task = {
             let itree = ITree::read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
-            let peers: Vec<PeerId> = self.network_interface.peers.read().to_vec();
+            let peers: Vec<PeerId> = self.network_interface.peers_info.read().keys().copied().collect();
             self.send_files_when_stopping(itree, peers)
         };
         task.await;

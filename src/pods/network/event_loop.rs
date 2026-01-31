@@ -384,11 +384,6 @@ impl EventLoop {
                     .peers_info
                     .write()
                     .remove(&peer_id);
-                self.fs_interface
-                    .network_interface
-                    .peers
-                    .write()
-                    .retain(|id| id != &peer_id);
             }
             e => log::trace!("event: {e:?}"),
         };
