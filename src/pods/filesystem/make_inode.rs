@@ -77,10 +77,14 @@ impl FsInterface {
         mut entry: FsEntry,
     ) -> Result<Inode, MakeInodeError> {
         let special_ino = ITree::get_special(name.as_ref(), parent_ino);
-        if let FsEntry::File(hosts) = &mut entry {
+
+        if let FsEntry::Directory(_) = &mut entry {
             if special_ino.is_some() {
                 return Err(MakeInodeError::ProtectedNameIsFolder);
             }
+        }
+
+        if let FsEntry::File(hosts) = &mut entry {
             *hosts = vec![self.network_interface.id];
         }
 
