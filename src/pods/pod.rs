@@ -133,20 +133,19 @@ impl Pod {
                 .map_err(|err| PodCreationError::TransportError(err.to_string()))?;
         }
 
-        let dialed_success = proto
+        let has_dialed = proto
             .global_config
             .general
             .entrypoints
             .iter()
-            .cloned()
-            .find_map(|peer| {
+            .filter_map(|peer| {
                 multiaddr::from_url(&format!("ws://{peer}"))
                     .ok()
-                    .and_then(|p| swarm.dial(p).ok())
+                    .map(|p| swarm.dial(p))
             })
-            .is_some();
+            .count() != 0;
 
-        let itree = if dialed_success {
+        let itree = if has_dialed {
             ITree::default()
         } else {
             generate_itree(&proto.mountpoint, &swarm.local_peer_id().clone())
@@ -185,7 +184,7 @@ impl Pod {
             proto.mountpoint.clone(),
         ));
 
-        let event_loop = EventLoop::new(swarm, fs_interface.clone(), senders_out, dialed_success);
+        let event_loop = EventLoop::new(swarm, fs_interface.clone(), senders_out, has_dialed);
 
         let network_airport_handle = tokio::spawn(event_loop.run());
 
@@ -226,7 +225,7 @@ impl Pod {
                 should_restart: proto.should_restart,
                 allow_other_users: proto.allow_other_users,
             },
-            dialed_success,
+            has_dialed,
         ))
     }
 
