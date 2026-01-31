@@ -345,7 +345,7 @@ impl Pod {
 
         self.network_interface
             .to_network_message_tx
-            .send(ToNetworkMessage::CloseNetwork)
+            .send(ToNetworkMessage::LeaveNetwork)
             .expect("to_network_message_tx closed.");
 
         if let Err(err) = network_airport_handle.await {

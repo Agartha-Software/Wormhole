@@ -1,10 +1,10 @@
 use std::{collections::HashMap, io, ops::Deref, sync::Arc};
 
-use futures::StreamExt;
+use futures::{StreamExt};
 use libp2p::{
     identify,
     request_response::{self, OutboundRequestId, ResponseChannel},
-    swarm::{ConnectionError, SwarmEvent},
+    swarm::{ConnectionError, ConnectionId, SwarmEvent},
     PeerId, Swarm,
 };
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
@@ -53,39 +53,52 @@ impl EventLoop {
         }
     }
 
-    fn close(mut self) {
+    /// Tells all connected peers that we are leaving the network
+    /// This creates an answer for each peer, ensuring that we send the event to
+    /// all known peers before shutting down
+    ///
+    /// It is considered invalid to process any Behavior after the Leave event has been sent,
+    /// that is because locally and on remotes, the Leave is performed immediately and peers are removed from the list
+    /// this pod will not recognize any peers,
+    /// remotes will not recognize this peer after it has left,
+    fn leave(&mut self) {
         log::debug!("Closing Eventloop, ejecting all peers");
         self.closing = true;
-        for peer in self
-            .swarm
-            .connected_peers()
-            .cloned()
-            .collect::<Vec<PeerId>>()
-        {
-            let _ = self.swarm.disconnect_peer_id(peer);
+
+        let drain = self
+            .fs_interface
+            .network_interface
+            .peers_info
+            .write()
+            .drain()
+            .collect::<Vec<_>>();
+
+        for (peer, _) in drain {
+            let (status, recv) = oneshot::channel();
+            self.send_with_answer(Request::Leave, status, peer);
+            drop(recv); // we don't care about the answer, we just want it to be created;
         }
     }
 
     pub async fn run(mut self) {
-        loop {
+        while !self.closing || !self.answers.is_empty() {
             tokio::select! {
+                biased; // This forces tokio to respect the order specified: we want to close only if no network event are pending
                 event = self.swarm.select_next_some() => if self.handle_event(event) {
                     return
                 },
-                to_network = self.to_network.recv() => match to_network {
+                to_network = self.to_network.recv(), if !self.closing => match to_network {
                     Some(ToNetworkMessage::AnswerMessage(message, status, peer)) => self.send_with_answer(message, status, peer),
                     Some(ToNetworkMessage::SpecificMessage(message, to)) => self.send_to_multiple(message, &to),
                     Some(ToNetworkMessage::BroadcastMessage(message)) => {
                         let peers = self.fs_interface.network_interface.peers_info.read().keys().copied().collect::<Vec<_>>();
                         self.send_to_multiple(message, &peers)
                     },
-                    Some(ToNetworkMessage::CloseNetwork) => {
-                        self.close();
-                        return;
+                    Some(ToNetworkMessage::LeaveNetwork) => {
+                        self.leave();
                     }
                     None => {
-                        self.close();
-                        return;
+                        self.leave();
                     },
                 }
             }
@@ -201,6 +214,7 @@ impl EventLoop {
         request: Request,
         channel: ResponseChannel<Response>,
         peer: PeerId,
+        connection_id: ConnectionId,
     ) {
         log::trace!("Network Request: {:?}", request);
         let result = match request {
@@ -255,6 +269,20 @@ impl EventLoop {
                 .fs_interface
                 .accept_file_changed(ino, meta)
                 .map_err(into_boxed_io),
+            Request::Leave => {
+                self.swarm.close_connection(connection_id);
+                self.fs_interface
+                    .network_interface
+                    .disconnect_peer(peer)
+                    .map_err(into_boxed_io)
+            }
+            Request::Bannish(peer_id) => {
+                let _ = self.swarm.disconnect_peer_id(peer_id);
+                self.fs_interface
+                    .network_interface
+                    .disconnect_peer(peer_id)
+                    .map_err(into_boxed_io)
+            }
         };
 
         match result {
@@ -278,10 +306,15 @@ impl EventLoop {
 
     fn handle_rr_event(&mut self, event: request_response::Event<Request, Response>) {
         match event {
-            request_response::Event::Message { peer, message, .. } => match message {
+            request_response::Event::Message {
+                peer,
+                message,
+                connection_id,
+                ..
+            } => match message {
                 request_response::Message::Request {
                     request, channel, ..
-                } => self.handle_request_message(request, channel, peer),
+                } => self.handle_request_message(request, channel, peer, connection_id),
                 request_response::Message::Response {
                     response,
                     request_id,
@@ -292,9 +325,16 @@ impl EventLoop {
                     self.handle_response_message(response, peer);
                 }
             },
+            request_response::Event::ResponseSent { request_id, .. } => {
+                log::trace!("Response sent: {request_id}")
+            }
             request_response::Event::OutboundFailure {
-                peer, request_id, ..
+                peer,
+                request_id,
+                error,
+                ..
             } => {
+                log::error!("Outbout Failure: {error}");
                 if let Some(Some(id)) = self.need_initialisation {
                     if id == request_id {
                         self.retry_fs_request(peer);
@@ -329,6 +369,7 @@ impl EventLoop {
                     .network_interface
                     .connect_peer(peer_id, info);
             }
+            identify::Event::Sent { .. } => {}
             e => log::trace!("identify: {e:?}"),
         }
     }
@@ -336,10 +377,14 @@ impl EventLoop {
     pub fn handle_event(&mut self, event: SwarmEvent<BehaviourEvent>) -> bool {
         match event {
             SwarmEvent::Behaviour(BehaviourEvent::RequestResponse(event)) => {
-                self.handle_rr_event(event)
+                if !self.closing {
+                    self.handle_rr_event(event)
+                }
             }
             SwarmEvent::Behaviour(BehaviourEvent::Identify(event)) => {
-                self.handle_identify_event(event)
+                if !self.closing {
+                    self.handle_identify_event(event)
+                }
             }
             SwarmEvent::NewListenAddr { address, .. } => {
                 self.fs_interface
@@ -371,19 +416,6 @@ impl EventLoop {
                     "Connection closed with {peer_id}: {}",
                     cause.unwrap_or(ConnectionError::IO(io::Error::other("no cause given")))
                 );
-                if self.closing && self.swarm.connected_peers().count() == 0 {
-                    return true;
-                }
-
-                if let Err(err) = self.fs_interface.network_interface.disconnect_peer(peer_id) {
-                    log::error!("Error while disconnecting remote pod: {err}");
-                }
-
-                self.fs_interface
-                    .network_interface
-                    .peers_info
-                    .write()
-                    .remove(&peer_id);
             }
             e => log::trace!("event: {e:?}"),
         };

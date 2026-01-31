@@ -45,6 +45,13 @@ pub enum Request {
     SetXAttr(Ino, String, Vec<u8>),
     RemoveXAttr(Ino, String),
 
+    /// Leave the network. Informs other peers that this node is no longer a part of it.
+    Leave,
+
+    /// Forfully bannish a peer from the network, removing it from hosts and disconnecting it from every peer.
+    /// todo: yet unused
+    Bannish(PeerId),
+
     RequestFs,
 }
 
@@ -61,6 +68,8 @@ impl fmt::Display for Request {
             Request::SetXAttr(_, _, _) => "SetXAttr",
             Request::RemoveXAttr(_, _) => "RemoveXAttr",
             Request::RequestFs => "RequestFs",
+            Request::Leave => "Leave",
+            Request::Bannish(..) => "Bannish",
             Request::RedundancyFile(_, _) => "RedundancyFile",
             Request::FileDelta(_, _, _, _) => "FileDelta",
             Request::FileChanged(_, _) => "FileChanged",
@@ -110,6 +119,8 @@ impl fmt::Debug for Request {
             ),
             Request::RemoveXAttr(id, name) => write!(f, "RemoveXAttr({id}, {name})"),
             Request::RequestFs => write!(f, "RequestFs"),
+            Request::Leave => write!(f, "Leave"),
+            Request::Bannish(peer) => write!(f, "Bannish({peer}"),
             Request::FileDelta(ino, meta, _, _) => {
                 write!(f, "FileDelta({ino}, {:?})", meta.mtime)
             }
@@ -235,7 +246,7 @@ pub enum ToNetworkMessage {
     BroadcastMessage(Request),
     SpecificMessage(Request, Vec<PeerId>),
     AnswerMessage(Request, oneshot::Sender<Option<Response>>, PeerId),
-    CloseNetwork,
+    LeaveNetwork,
 }
 
 impl fmt::Display for ToNetworkMessage {
@@ -258,7 +269,7 @@ impl fmt::Display for ToNetworkMessage {
                     content, peer
                 )
             }
-            ToNetworkMessage::CloseNetwork => write!(f, "ToNetworkMessage::CloseNetwork"),
+            ToNetworkMessage::LeaveNetwork => write!(f, "ToNetworkMessage::LeaveNetwork"),
         }
     }
 }
