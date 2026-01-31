@@ -76,7 +76,7 @@ impl EventLoop {
                     Some(ToNetworkMessage::AnswerMessage(message, status, peer)) => self.send_with_answer(message, status, peer),
                     Some(ToNetworkMessage::SpecificMessage(message, to)) => self.send_to_multiple(message, &to),
                     Some(ToNetworkMessage::BroadcastMessage(message)) => {
-                        let peers = self.fs_interface.network_interface.peers.read().clone();
+                        let peers = self.fs_interface.network_interface.peers_info.read().keys().copied().collect::<Vec<_>>();
                         self.send_to_multiple(message, &peers)
                     },
                     Some(ToNetworkMessage::CloseNetwork) => {
@@ -106,21 +106,35 @@ impl EventLoop {
         self.answers.insert(answer, status);
     }
 
-    fn send_to_multiple(&mut self, message: Request, to: &[PeerId]) {
-        log::debug!("BROADCASTING TO {to:?}");
-        if let Some(last) = to.first() {
-            // Just to don't clone the message on first peer, lot's of message have only one peer and messages can be very heavy quickly
-            for peer in &to[1..] {
-                self.swarm
-                    .behaviour_mut()
-                    .request_response
-                    .send_request(peer, message.clone());
+    fn send_to_multiple<I: IntoIterator<Item = impl Deref<Target = PeerId>> + std::fmt::Debug>(
+        &mut self,
+        message: Request,
+        to: I,
+    ) {
+        let mut log_to = vec![];
+        let mut to = to.into_iter();
+        // avoid cloning the message an extra time. put aside the first send
+        if let Some(first) = to.next() {
+            if log::log_enabled!(log::Level::Debug) {
+                    log_to.push(*first);
             }
-
-            self.swarm
+            for peer in to {
+                self.swarm
                 .behaviour_mut()
                 .request_response
-                .send_request(last, message);
+                .send_request(peer.deref(), message.clone());
+                if log::log_enabled!(log::Level::Debug) {
+                    log_to.push(*peer);
+                }
+            }
+
+            log::debug!("Broadcasting {message} TO {log_to:?}");
+
+            // let it be moved in here
+            self.swarm
+            .behaviour_mut()
+                .request_response
+                .send_request(first.deref(), message);
         }
     }
 
@@ -151,13 +165,14 @@ impl EventLoop {
             Response::FsAnswer(tree, peers, global_config) => {
                 self.need_initialisation = None;
 
-                for (peer, info) in peers {
-                    log::trace!("Trying to connect to the other peer: {peer}");
-                    for addr in info.listen_addrs {
-                        match self.swarm.dial(addr.clone()) {
-                            Ok(_) => break,
-                            Err(e) => log::error!("Couldn't connect to {peer} at {addr}: {e}"),
-                        };
+                {
+                    let mut peers_info = self.fs_interface.network_interface.peers_info.write();
+                    for (peer, info) in peers {
+                        peers_info.insert(peer.clone(), info.clone());
+                        log::trace!("Trying to connect to the other peer: {peer}");
+                        for addr in info.listen_addrs {
+                            self.swarm.add_peer_address(peer, addr);
+                        }
                     }
                 }
 
