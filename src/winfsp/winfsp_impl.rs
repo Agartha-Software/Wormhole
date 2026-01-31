@@ -221,7 +221,7 @@ impl FileSystemContext for FSPController {
         let entry = if create_options & FILE_DIRECTORY_FILE != 0 {
             FsEntry::new_directory()
         } else {
-            FsEntry::new_file()
+            FsEntry::new_file(self.fs_interface.network_interface.id)
         };
         // thread::sleep(std::time::Duration::from_secs(2));
         log::info!(
