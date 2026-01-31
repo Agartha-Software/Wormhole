@@ -287,7 +287,7 @@ impl Filesystem for FuseController {
         };
 
         let entry = match kind {
-            SimpleFileType::File => FsEntry::new_file(),
+            SimpleFileType::File => FsEntry::new_file(self.fs_interface.network_interface.id),
             SimpleFileType::Directory => FsEntry::new_directory(),
             SimpleFileType::Symlink => return reply.error(libc::EINVAL),
         };

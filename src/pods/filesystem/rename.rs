@@ -111,7 +111,7 @@ impl FsInterface {
             self.set_meta_size(source_ino, meta)?;
             dest_ino
         } else {
-            let entry = FsEntry::new_file(); // 'special' files can only be regular files
+            let entry = FsEntry::new_file(self.network_interface.id); // 'special' files can only be regular files
             self.make_inode(new_parent, new_name, meta.perm, entry)
                 .map_err(|err| match err {
                     MakeInodeError::WhError { source } => RenameError::WhError { source },
