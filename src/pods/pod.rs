@@ -439,6 +439,7 @@ impl Pod {
             frozen: false,
             listen_addrs,
             name: self.name.clone(),
+            id: self.fs_interface.network_interface.id.to_base58(),
             connected_peers: peers_info,
             mount: self.mountpoint.clone(),
             disk_space: self.fs_interface.disk.size_info().ok(),

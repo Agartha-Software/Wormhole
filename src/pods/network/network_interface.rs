@@ -269,6 +269,7 @@ impl NetworkInterface {
         self.peers_info.write().insert(
             peer_id,
             network::PeerInfo {
+                id: peer_id,
                 nickname: info.agent_version,
                 listen_addrs: info.listen_addrs,
             },

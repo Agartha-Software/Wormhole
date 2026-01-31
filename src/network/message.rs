@@ -128,6 +128,7 @@ impl fmt::Debug for Request {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerInfoNet {
     pub nickname: String,
+    pub id: PeerId,
     pub listen_addrs: Vec<Multiaddr>,
 }
 
@@ -179,6 +180,7 @@ impl PeerInfoNet {
     pub fn to_ipc(&self) -> crate::ipc::PeerInfo {
         crate::ipc::PeerInfo {
             nickname: self.nickname.clone(),
+            id: self.id.to_base58(),
             listen_addrs: self
                 .listen_addrs
                 .iter()

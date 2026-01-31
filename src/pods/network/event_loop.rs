@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io, sync::Arc};
+use std::{collections::HashMap, io, ops::Deref, sync::Arc};
 
 use futures::StreamExt;
 use libp2p::{
