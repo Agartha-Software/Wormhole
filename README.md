@@ -36,7 +36,7 @@ For detailed use cases and technical details, see the [Technical Specification](
 ## Documentation
 
 - **Getting Started**
-  - [Installation Guide](docs/getting-started/install.md): How to install Wormhole on Linux, Windows, NixOS, etc.
+  - [Installation Guide](docs/getting-started/installation.md): How to install Wormhole on Linux, Windows, NixOS, etc.
   - [Getting Started](docs/getting-started/getting_started.md): Your first steps: starting the service, creating a pod, CLI commands.
   - [Docker Guide](docs/getting-started/docker_guide.md): Using the official image (ghcr.io/agartha-software/wormhole) and Docker Compose.
   - [Testing Environment](docs/getting-started/testing_environement_installation.md): Set up a local test mesh with multiple pods on a single machine.

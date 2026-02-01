@@ -11,7 +11,7 @@ Since the project is still under active development, you need to build it from s
 
 ## Installation
 
-See the [Installation Guide](./install.md) for system-specific instructions.
+See the [Installation Guide](./installation.md) for system-specific instructions.
 
 If you need to build manually:
 
