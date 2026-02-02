@@ -288,7 +288,6 @@ impl EventLoop {
                 .accept_file_changed(ino, meta)
                 .map_err(into_boxed_io),
             Request::Leave => {
-                self.swarm.close_connection(connection_id);
                 self.fs_interface
                     .network_interface
                     .disconnect_peer(peer)
