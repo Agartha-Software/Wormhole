@@ -335,6 +335,8 @@ impl EventLoop {
                 } => {
                     if !self.closing {
                         self.handle_request_message(request, channel, peer, connection_id)
+                    } else {
+                        log::trace!("Network Request: {:?} (ignored while closing)", request);
                     }
                 }
                 request_response::Message::Response {
@@ -346,6 +348,8 @@ impl EventLoop {
                     };
                     if !self.closing {
                         self.handle_response_message(response, peer);
+                    } else {
+                        log::trace!("Network Response: {:?} (ignored while closing)", response);
                     }
                 }
             },
