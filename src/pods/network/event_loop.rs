@@ -82,6 +82,12 @@ impl EventLoop {
 
     pub async fn run(mut self) {
         while !self.closing || !self.answers.is_empty() {
+            if self.closing {
+                log::trace!(
+                    "Closing but {:?} answers remain.",
+                    &self.answers.keys().collect::<Vec<_>>()
+                );
+            }
             tokio::select! {
                 biased; // This forces tokio to respect the order specified: we want to close only if no network event are pending
                 event = self.swarm.select_next_some() => if self.handle_event(event) {
@@ -111,11 +117,15 @@ impl EventLoop {
         status: oneshot::Sender<Option<Response>>,
         peer: PeerId,
     ) {
+        let log_msg = log::log_enabled!(log::Level::Trace).then_some(format!("{message}"));
         let answer = self
             .swarm
             .behaviour_mut()
             .request_response
             .send_request(&peer, message);
+        if let Some(log_msg) = log_msg {
+            log::trace!("send_with_answer {log_msg} to {peer} = {answer}");
+        }
         self.answers.insert(answer, status);
     }
 
@@ -129,23 +139,27 @@ impl EventLoop {
         // avoid cloning the message an extra time. put aside the first send
         if let Some(first) = to.next() {
             if log::log_enabled!(log::Level::Debug) {
-                    log_to.push(*first);
+                log_to.push(*first);
             }
             for peer in to {
                 self.swarm
-                .behaviour_mut()
-                .request_response
-                .send_request(peer.deref(), message.clone());
+                    .behaviour_mut()
+                    .request_response
+                    .send_request(peer.deref(), message.clone());
                 if log::log_enabled!(log::Level::Debug) {
                     log_to.push(*peer);
                 }
             }
 
-            log::debug!("Broadcasting {message} TO {log_to:?}");
+            if log_to.len() > 1 {
+                log::debug!("Broadcasting {message} to {:?}", &log_to[..]);
+            } else {
+                log::debug!("Sending {message} to {:?}", *first);
+            }
 
             // let it be moved in here
             self.swarm
-            .behaviour_mut()
+                .behaviour_mut()
                 .request_response
                 .send_request(first.deref(), message);
         }
@@ -182,7 +196,7 @@ impl EventLoop {
                     let mut peers_info = self.fs_interface.network_interface.peers_info.write();
                     for (peer, info) in peers {
                         peers_info.insert(peer.clone(), info.clone());
-                        log::trace!("Trying to connect to the other peer: {peer}");
+                        log::trace!("Registering address to the peer: {peer}: {:?}", info.listen_addrs);
                         for addr in info.listen_addrs {
                             self.swarm.add_peer_address(peer, addr);
                         }
