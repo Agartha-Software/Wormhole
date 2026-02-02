@@ -200,6 +200,10 @@ impl EventLoop {
                         for addr in info.listen_addrs {
                             self.swarm.add_peer_address(peer, addr);
                         }
+                        let dial = self.swarm.dial(DialOpts::peer_id(peer).build());
+                        if let Err(error) = dial {
+                            log::error!("Join:Failed to dial {peer}: {error:?}");
+                        }
                     }
                 }
 
