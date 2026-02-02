@@ -275,20 +275,20 @@ impl NetworkInterface {
         self.check_integrity();
     }
 
-    pub fn disconnect_peer(&self, addr: PeerId) -> WhResult<Response> {
-        log::debug!("Disconnecting peer: {addr}");
+    pub fn disconnect_peer(&self, peer: PeerId) -> WhResult<Response> {
+        log::debug!("Disconnecting peer: {peer}");
 
         self.peers_info
             .try_write_for(LOCK_TIMEOUT)
             .ok_or(WhError::WouldBlock {
                 called_from: "disconnect_peer: can't write lock peers".to_owned(),
             })?
-            .remove(&addr);
+            .remove(&peer);
 
-        log::debug!("Disconnecting {addr}. Removing from inodes hosts");
+        log::debug!("Disconnecting {peer}. Removing from inodes hosts");
         for inode in ITree::write_lock(&self.itree, "disconnect_peer")?.inodes_mut() {
             if let FsEntry::File(hosts) = &mut inode.entry {
-                hosts.retain(|h| *h != addr);
+                hosts.retain(|h| *h != peer);
             }
         }
         self.check_integrity();

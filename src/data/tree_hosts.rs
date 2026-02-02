@@ -31,12 +31,7 @@ impl FsEntryInfo {
             FsEntry::File(peer_ids) => Self::File(
                 peer_ids
                     .iter()
-                    .map(|s| {
-                        infos
-                            .get(s)
-                            .cloned()
-                            .unwrap_or_else(||s.to_base58())
-                    })
+                    .map(|s| infos.get(s).cloned().unwrap_or_else(|| s.to_base58()))
                     .collect(),
             ),
             FsEntry::Directory(_) => Self::Directory,

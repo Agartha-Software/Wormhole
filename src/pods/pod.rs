@@ -143,7 +143,8 @@ impl Pod {
                     .ok()
                     .map(|p| swarm.dial(p))
             })
-            .count() != 0;
+            .count()
+            != 0;
 
         let itree = if has_dialed {
             ITree::default()
@@ -186,7 +187,7 @@ impl Pod {
 
         let mut event_loop = EventLoop::new(swarm, fs_interface.clone(), senders_out, has_dialed);
 
-        let network_airport_handle = tokio::spawn(async move {event_loop.run().await});
+        let network_airport_handle = tokio::spawn(async move { event_loop.run().await });
 
         let redundancy_worker_handle = tokio::spawn(redundancy_worker(
             redundancy_rx,
@@ -326,7 +327,13 @@ impl Pod {
 
         let task = {
             let itree = ITree::read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
-            let peers: Vec<PeerId> = self.network_interface.peers_info.read().keys().copied().collect();
+            let peers: Vec<PeerId> = self
+                .network_interface
+                .peers_info
+                .read()
+                .keys()
+                .copied()
+                .collect();
             self.send_files_when_stopping(itree, peers)
         };
         task.await;

@@ -35,7 +35,7 @@ impl FsInterface {
     /// Non-tracking peers will always only get a 'FileChanged' message
     ///
     pub fn flush(&self, ino: Ino, handle: Option<&mut FileHandle>) -> Result<(), FlushError> {
-        let peers_info =  self.network_interface.peers_info.read();
+        let peers_info = self.network_interface.peers_info.read();
         let peers = peers_info.keys();
         let inode = self.network_interface.itree.read().get_inode(ino)?.clone();
         let tracking = match &inode.entry {
