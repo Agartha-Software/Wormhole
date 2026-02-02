@@ -12,7 +12,7 @@ use futures::StreamExt;
 use libp2p::{
     identify,
     request_response::{self, OutboundRequestId, ResponseChannel},
-    swarm::{dial_opts::DialOpts, ConnectionError, ConnectionId, SwarmEvent},
+    swarm::{dial_opts::DialOpts, ConnectionError, SwarmEvent},
     PeerId, Swarm,
 };
 use tokio::{
@@ -70,21 +70,23 @@ impl Drop for EventLoop {
 
         let maybe_unwinding = move || {
             tokio::task::block_in_place(move || {
-                log::trace!("EventLoop::Drop: Sending Leave to all peers; waiting {DROP_LEAVE_TIMEOUT} seconds...");
+                log::trace!(
+                    "Drop: Sending Leave to all peers; waiting {DROP_LEAVE_TIMEOUT} seconds..."
+                );
                 let res = Handle::current().block_on(tokio::time::timeout(
                     Duration::from_secs(DROP_LEAVE_TIMEOUT),
                     safe.run(),
                 ));
                 match res {
-                    Ok(()) => log::trace!("EventLoop::Drop: All peers acknowledged"),
-                    Err(_) => log::error!("EventLoop::Drop: Not peers acknowledged"),
+                    Ok(()) => log::trace!("Drop: All peers acknowledged"),
+                    Err(_) => log::error!("Drop: Not peers acknowledged"),
                 }
             });
         };
 
         let res = catch_unwind(maybe_unwinding);
         if let Err(e) = res {
-            log::error!("EventLoop::Drop: Double panic while dropping: {e:#?}");
+            log::error!("Drop: Double panic while dropping: {e:#?}");
         }
     }
 }
@@ -119,7 +121,11 @@ impl EventLoop {
     /// this pod will not recognize any peers,
     /// remotes will not recognize this peer after it has left,
     fn leave(&mut self) {
-        log::debug!("Closing Eventloop, ejecting all peers");
+        log::debug!("Leave: ejecting all peers");
+        log::trace!(
+            "Leave: {} requests pending at time of closing",
+            self.answers.len()
+        );
         self.closing = true;
 
         let drain = self
@@ -141,8 +147,12 @@ impl EventLoop {
         while !self.closing || !self.answers.is_empty() {
             if self.closing {
                 log::trace!(
-                    "Closing but {:?} answers remain.",
-                    &self.answers.keys().collect::<Vec<_>>()
+                    "Run: Closing but answers remain: {:?}",
+                    &self
+                        .answers
+                        .keys()
+                        .map(|id| format!("#{id}"))
+                        .collect::<Vec<_>>()
                 );
             }
             tokio::select! {
@@ -175,15 +185,15 @@ impl EventLoop {
         peer: PeerId,
     ) {
         let log_msg = log::log_enabled!(log::Level::Trace).then_some(format!("{message}"));
-        let answer = self
+        let request_id = self
             .swarm
             .behaviour_mut()
             .request_response
             .send_request(&peer, message);
         if let Some(log_msg) = log_msg {
-            log::trace!("send_with_answer {log_msg} to {peer} = {answer}");
+            log::trace!("Requesting {log_msg} to {peer}: #{request_id}");
         }
-        self.answers.insert(answer, status);
+        self.answers.insert(request_id, status);
     }
 
     fn send_to_multiple<I: IntoIterator<Item = impl Deref<Target = PeerId>> + std::fmt::Debug>(
@@ -196,7 +206,7 @@ impl EventLoop {
         // avoid cloning the message an extra time. put aside the first send
         if let Some(first) = to.next() {
             if log::log_enabled!(log::Level::Debug) {
-                log_to.push(*first);
+                log_to.push(first.to_base58());
             }
             for peer in to {
                 self.swarm
@@ -204,14 +214,14 @@ impl EventLoop {
                     .request_response
                     .send_request(peer.deref(), message.clone());
                 if log::log_enabled!(log::Level::Debug) {
-                    log_to.push(*peer);
+                    log_to.push(peer.to_base58());
                 }
             }
 
             if log_to.len() > 1 {
                 log::debug!("Broadcasting {message} to {:?}", &log_to[..]);
             } else {
-                log::debug!("Sending {message} to {:?}", *first);
+                log::debug!("Sending {message} to {:?}", first.to_base58());
             }
 
             // let it be moved in here
@@ -239,8 +249,6 @@ impl EventLoop {
     }
 
     fn handle_response_message(&mut self, response: Response, peer: PeerId) {
-        log::trace!("Network Response: {:?}", response);
-
         let result = match response {
             Response::DeltaRequest(ino, sig) => self
                 .fs_interface
@@ -254,7 +262,7 @@ impl EventLoop {
                     for (peer, info) in peers {
                         peers_info.insert(peer.clone(), info.clone());
                         log::trace!(
-                            "Registering address to the peer: {peer}: {:?}",
+                            "Join: Registering address to the peer: {peer}: {:?}",
                             info.listen_addrs
                         );
                         for addr in info.listen_addrs {
@@ -262,7 +270,7 @@ impl EventLoop {
                         }
                         let dial = self.swarm.dial(DialOpts::peer_id(peer).build());
                         if let Err(error) = dial {
-                            log::error!("Join:Failed to dial {peer}: {error:?}");
+                            log::error!("Join: Failed to dial {peer}: {error:?}");
                         }
                     }
                 }
@@ -274,7 +282,7 @@ impl EventLoop {
                 if let Err(err) =
                     initiate_itree(&current, &global_config, self.fs_interface.disk.as_ref())
                 {
-                    log::error!("New itree failed: {err}, asking for an other");
+                    log::error!("Join: New itree failed: {err}, asking for an other");
                     drop(current);
                     self.retry_fs_request(peer);
                 }
@@ -283,7 +291,7 @@ impl EventLoop {
             _ => Ok(()),
         };
         if let Err(err) = result {
-            log::trace!("Response Message Failed: {err}");
+            log::trace!("Response: Processing Failed: {err}");
         }
     }
 
@@ -292,9 +300,7 @@ impl EventLoop {
         request: Request,
         channel: ResponseChannel<Response>,
         peer: PeerId,
-        connection_id: ConnectionId,
     ) {
-        log::trace!("Network Request: {:?}", request);
         let result = match request {
             Request::RedundancyFile(id, binary) => self
                 .fs_interface
@@ -375,26 +381,28 @@ impl EventLoop {
                     .behaviour_mut()
                     .request_response
                     .send_response(channel, Response::Failed);
-                log::trace!("Request Message Failed: {err}")
+                log::trace!("Request: Processsing failed: {err}")
             }
         };
     }
 
     fn handle_rr_event(&mut self, event: request_response::Event<Request, Response>) {
         match event {
-            request_response::Event::Message {
-                peer,
-                message,
-                connection_id,
-                ..
-            } => match message {
+            request_response::Event::Message { peer, message, .. } => match message {
                 request_response::Message::Request {
-                    request, channel, ..
+                    request,
+                    channel,
+                    request_id,
                 } => {
                     if !self.closing {
-                        self.handle_request_message(request, channel, peer, connection_id)
+                        log::trace!("Got Request: {:?} : #{} ", request, request_id);
+                        self.handle_request_message(request, channel, peer)
                     } else {
-                        log::trace!("Network Request: {:?} (ignored while closing)", request);
+                        log::trace!(
+                            "Got Request: {:?} : #{} (ignored while closing)",
+                            request,
+                            request_id
+                        );
                     }
                 }
                 request_response::Message::Response {
@@ -405,14 +413,19 @@ impl EventLoop {
                         let _ = answer.send(Some(response.clone()));
                     };
                     if !self.closing {
+                        log::trace!("Got Response: {:?} : #{}", response, request_id);
                         self.handle_response_message(response, peer);
                     } else {
-                        log::trace!("Network Response: {:?} (ignored while closing)", response);
+                        log::trace!(
+                            "Got Response: {:?} : #{} (ignored while closing)",
+                            response,
+                            request_id
+                        );
                     }
                 }
             },
             request_response::Event::ResponseSent { request_id, .. } => {
-                log::trace!("Response sent: {request_id}")
+                log::trace!("Event: Response sent: #{request_id}")
             }
             request_response::Event::OutboundFailure {
                 peer,
@@ -420,7 +433,7 @@ impl EventLoop {
                 error,
                 ..
             } => {
-                log::error!("Outbout Failure: {error}");
+                log::error!("Event: Outbound Failure: #{request_id} : {error}");
                 if let Some(answer) = self.answers.remove(&request_id) {
                     let _ = answer.send(None);
                 }
@@ -431,18 +444,18 @@ impl EventLoop {
                     }
                 }
             }
-            e => log::trace!("rr: {e:?}"),
+            request_response::Event::InboundFailure {
+                request_id, error, ..
+            } => {
+                log::error!("Event: Inbound Failure:  #{request_id} : {error}");
+            }
         }
     }
 
     fn handle_identify_event(&mut self, event: identify::Event) {
         match event {
-            identify::Event::Received {
-                connection_id,
-                peer_id,
-                info,
-            } => {
-                log::trace!("id received!: {} {} {:?}", connection_id, peer_id, info);
+            identify::Event::Received { peer_id, info, .. } => {
+                log::trace!("Identify: {}: {:?}", peer_id, info);
                 if let Some(None) = self.need_initialisation {
                     let request_id = self
                         .swarm
@@ -456,7 +469,7 @@ impl EventLoop {
                     .connect_peer(peer_id, info);
             }
             identify::Event::Sent { .. } => {}
-            e => log::trace!("identify: {e:?}"),
+            e => log::trace!("Identify: {e:?}"),
         }
     }
 
@@ -474,7 +487,7 @@ impl EventLoop {
                     .listen_addrs
                     .write()
                     .insert(address.clone());
-                log::trace!("new listen address: {address:?}")
+                log::trace!("Event: new listen address: {address:?}")
             }
             SwarmEvent::ExpiredListenAddr { address, .. } => {
                 self.fs_interface
@@ -482,24 +495,29 @@ impl EventLoop {
                     .listen_addrs
                     .write()
                     .remove(&address);
-                log::trace!("expired listen address: {address:?}")
+                log::trace!("Event: expired listen address: {address:?}")
             }
-            SwarmEvent::ConnectionEstablished { .. } => {
-                // Peer interaction start at identify
-            }
-            SwarmEvent::IncomingConnection { connection_id, .. } => {
+            SwarmEvent::IncomingConnection {
+                connection_id,
+                send_back_addr,
+                ..
+            } => {
                 if self.closing {
-                    log::debug!("Incoming Connection while closing: re-closed {connection_id}");
+                    log::debug!("Event: Incoming Connection from {send_back_addr:?} while closing: re-closed");
                     self.swarm.close_connection(connection_id);
                 }
             }
             SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
                 log::debug!(
-                    "Connection closed with {peer_id}: {}",
+                    "Event: Connection closed with {peer_id}: {}",
                     cause.unwrap_or(ConnectionError::IO(io::Error::other("no cause given")))
                 );
             }
-            e => log::trace!("event: {e:?}"),
+            SwarmEvent::ConnectionEstablished { .. } => {
+                // Peer interaction start at identify
+            }
+            SwarmEvent::NewExternalAddrOfPeer { .. } => {}
+            e => log::trace!("Event: {e:?}"),
         };
         false
     }
