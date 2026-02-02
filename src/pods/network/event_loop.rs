@@ -328,7 +328,11 @@ impl EventLoop {
             } => match message {
                 request_response::Message::Request {
                     request, channel, ..
-                } => self.handle_request_message(request, channel, peer, connection_id),
+                } => {
+                    if !self.closing {
+                        self.handle_request_message(request, channel, peer, connection_id)
+                    }
+                }
                 request_response::Message::Response {
                     response,
                     request_id,
@@ -336,7 +340,9 @@ impl EventLoop {
                     if let Some(answer) = self.answers.remove(&request_id) {
                         let _ = answer.send(Some(response.clone()));
                     };
-                    self.handle_response_message(response, peer);
+                    if !self.closing {
+                        self.handle_response_message(response, peer);
+                    }
                 }
             },
             request_response::Event::ResponseSent { request_id, .. } => {
@@ -349,14 +355,14 @@ impl EventLoop {
                 ..
             } => {
                 log::error!("Outbout Failure: {error}");
+                if let Some(answer) = self.answers.remove(&request_id) {
+                    let _ = answer.send(None);
+                }
                 if let Some(Some(id)) = self.need_initialisation {
-                    if id == request_id {
+                    if id == request_id && !self.closing {
                         self.retry_fs_request(peer);
                         return;
                     }
-                }
-                if let Some(answer) = self.answers.remove(&request_id) {
-                    let _ = answer.send(None);
                 }
             }
             e => log::trace!("rr: {e:?}"),
@@ -391,14 +397,10 @@ impl EventLoop {
     pub fn handle_event(&mut self, event: SwarmEvent<BehaviourEvent>) -> bool {
         match event {
             SwarmEvent::Behaviour(BehaviourEvent::RequestResponse(event)) => {
-                if !self.closing {
-                    self.handle_rr_event(event)
-                }
+                self.handle_rr_event(event)
             }
             SwarmEvent::Behaviour(BehaviourEvent::Identify(event)) => {
-                if !self.closing {
-                    self.handle_identify_event(event)
-                }
+                self.handle_identify_event(event)
             }
             SwarmEvent::NewListenAddr { address, .. } => {
                 self.fs_interface
