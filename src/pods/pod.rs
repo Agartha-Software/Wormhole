@@ -342,6 +342,11 @@ impl Pod {
             ..
         } = self;
 
+        #[cfg(target_os = "linux")]
+        drop(fuse_handle);
+        #[cfg(target_os = "windows")]
+        drop(fsp_host);
+
         self.network_interface
             .to_network_message_tx
             .send(ToNetworkMessage::LeaveNetwork)
@@ -350,11 +355,6 @@ impl Pod {
         if let Err(err) = network_airport_handle.await {
             log::error!("await error: network_airport_handle: {err}");
         }
-
-        #[cfg(target_os = "linux")]
-        drop(fuse_handle);
-        #[cfg(target_os = "windows")]
-        drop(fsp_host);
 
         redundancy_worker_handle.abort();
         let _ = redundancy_worker_handle
