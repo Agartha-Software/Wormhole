@@ -1,10 +1,10 @@
 use std::{collections::HashMap, io, ops::Deref, sync::Arc};
 
-use futures::{StreamExt};
+use futures::StreamExt;
 use libp2p::{
     identify,
     request_response::{self, OutboundRequestId, ResponseChannel},
-    swarm::{ConnectionError, ConnectionId, SwarmEvent},
+    swarm::{dial_opts::DialOpts, ConnectionError, ConnectionId, SwarmEvent},
     PeerId, Swarm,
 };
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
