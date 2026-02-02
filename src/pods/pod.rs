@@ -184,9 +184,9 @@ impl Pod {
             proto.mountpoint.clone(),
         ));
 
-        let event_loop = EventLoop::new(swarm, fs_interface.clone(), senders_out, has_dialed);
+        let mut event_loop = EventLoop::new(swarm, fs_interface.clone(), senders_out, has_dialed);
 
-        let network_airport_handle = tokio::spawn(event_loop.run());
+        let network_airport_handle = tokio::spawn(async move {event_loop.run().await});
 
         let redundancy_worker_handle = tokio::spawn(redundancy_worker(
             redundancy_rx,

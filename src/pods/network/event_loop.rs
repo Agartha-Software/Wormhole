@@ -1,4 +1,12 @@
-use std::{collections::HashMap, io, ops::Deref, sync::Arc};
+use std::{
+    collections::HashMap,
+    io,
+    ops::Deref,
+    panic::{catch_unwind, AssertUnwindSafe},
+    sync::Arc,
+    thread::panicking,
+    time::Duration,
+};
 
 use futures::StreamExt;
 use libp2p::{
@@ -7,7 +15,10 @@ use libp2p::{
     swarm::{dial_opts::DialOpts, ConnectionError, ConnectionId, SwarmEvent},
     PeerId, Swarm,
 };
-use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
+use tokio::{
+    runtime::Handle,
+    sync::{mpsc::UnboundedReceiver, oneshot},
+};
 
 use crate::{
     network::message::{Request, Response, ToNetworkMessage},
@@ -30,6 +41,52 @@ pub struct EventLoop {
     answers: HashMap<OutboundRequestId, oneshot::Sender<Option<Response>>>,
     closing: bool,
     need_initialisation: Option<Option<OutboundRequestId>>,
+}
+
+/// Ensure that when panicking, this pod tells other peers that it's leaving the network
+///
+/// REVIEW: Should we set a specif Request::Crashing message ? I don't see what peers could do about it,
+///  but it feels underhanded to say simply 'Leaving' when in fact, it's not fine
+///
+/// This is a bit of a risky operation because we don't have access to our async context,
+/// panicking again will break the natural unwind process,
+/// and we don't want to hang this thread.
+/// We've wrapped the sensitive part in a catch_unwind to protect against double panicking
+/// We're blocking for at most 5 seconds to ensure the messages are sent.
+impl Drop for EventLoop {
+    fn drop(&mut self) {
+        const DROP_LEAVE_TIMEOUT: u64 = 5;
+        if !panicking() {
+            return;
+        }
+        if !self.closing {
+            self.leave();
+        }
+
+        // Safety: We don't observe any invariants on self after the caught panic
+        // All we're doing afterwards is dropping Self and its components,
+        // which is a natural thing to do and already guaranteed to be safe
+        let mut safe = AssertUnwindSafe(self);
+
+        let maybe_unwinding = move || {
+            tokio::task::block_in_place(move || {
+                log::trace!("EventLoop::Drop: Sending Leave to all peers; waiting {DROP_LEAVE_TIMEOUT} seconds...");
+                let res = Handle::current().block_on(tokio::time::timeout(
+                    Duration::from_secs(DROP_LEAVE_TIMEOUT),
+                    safe.run(),
+                ));
+                match res {
+                    Ok(()) => log::trace!("EventLoop::Drop: All peers acknowledged"),
+                    Err(_) => log::error!("EventLoop::Drop: Not peers acknowledged"),
+                }
+            });
+        };
+
+        let res = catch_unwind(maybe_unwinding);
+        if let Err(e) = res {
+            log::error!("EventLoop::Drop: Double panic while dropping: {e:#?}");
+        }
+    }
 }
 
 impl EventLoop {
@@ -80,7 +137,7 @@ impl EventLoop {
         }
     }
 
-    pub async fn run(mut self) {
+    pub async fn run(&mut self) {
         while !self.closing || !self.answers.is_empty() {
             if self.closing {
                 log::trace!(
@@ -196,7 +253,10 @@ impl EventLoop {
                     let mut peers_info = self.fs_interface.network_interface.peers_info.write();
                     for (peer, info) in peers {
                         peers_info.insert(peer.clone(), info.clone());
-                        log::trace!("Registering address to the peer: {peer}: {:?}", info.listen_addrs);
+                        log::trace!(
+                            "Registering address to the peer: {peer}: {:?}",
+                            info.listen_addrs
+                        );
                         for addr in info.listen_addrs {
                             self.swarm.add_peer_address(peer, addr);
                         }
@@ -287,12 +347,11 @@ impl EventLoop {
                 .fs_interface
                 .accept_file_changed(ino, meta)
                 .map_err(into_boxed_io),
-            Request::Leave => {
-                self.fs_interface
-                    .network_interface
-                    .disconnect_peer(peer)
-                    .map_err(into_boxed_io)
-            }
+            Request::Leave => self
+                .fs_interface
+                .network_interface
+                .disconnect_peer(peer)
+                .map_err(into_boxed_io),
             Request::Bannish(peer_id) => {
                 let _ = self.swarm.disconnect_peer_id(peer_id);
                 self.fs_interface
