@@ -14,13 +14,13 @@ pub mod config;
 pub mod data;
 pub mod error;
 pub mod ipc;
+pub mod logging;
 pub mod network;
 pub mod pods;
 pub mod service;
 pub mod signals;
 #[cfg(target_os = "windows")]
 pub mod winfsp;
-pub mod logging;
 
 #[cfg(target_os = "windows")]
 pub const INSTANCE_PATH: &str = "%APPDATA%/local/wormhole";
