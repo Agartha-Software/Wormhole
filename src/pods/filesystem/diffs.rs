@@ -40,6 +40,61 @@ pub trait Sig: Sized + PartialEq /* for<'a> TryFrom<&'a File> */ {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// Implementation without compression
+////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct UnSig {}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct UnDelta {
+    data: Vec<u8>,
+}
+
+impl TryFrom<&File> for UnSig {
+    type Error = ();
+    fn try_from(_file: &File) -> Result<Self, Self::Error> {
+        Ok(Self {})
+    }
+}
+
+impl Sig for UnSig {
+    type Error = ();
+
+    fn new(file: &File) -> Result<Self, <Self as Sig>::Error> {
+        TryFrom::try_from(file)
+    }
+
+    #[allow(refining_impl_trait)]
+    fn diff(&self, with: &File) -> Result<UnDelta, <Self as Sig>::Error> {
+        UnDelta::diff(self, with)
+    }
+
+    fn size(&self) -> usize {
+        0
+    }
+}
+
+impl Dlt for UnDelta {
+    type Error = ();
+    fn patch(&self, _file: &File) -> Result<File, ()> {
+        Ok(File(Arc::new(self.data.clone())))
+    }
+
+    fn size(&self) -> usize {
+        self.data.len()
+    }
+}
+
+impl UnDelta {
+    fn diff(_sig: &UnSig, with: &File) -> Result<Self, <UnSig as Sig>::Error> {
+        Ok(Self {
+            data: Arc::unwrap_or_clone(with.0.clone()),
+        })
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // Implementation with librsync
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -73,7 +128,7 @@ impl Sig for RSyncSig {
     fn diff(&self, with: &File) -> Result<RSyncDelta, <Self as Sig>::Error> {
         RSyncDelta::diff(self, with)
     }
-    
+
     fn size(&self) -> usize {
         self.data.len()
     }
@@ -90,7 +145,7 @@ impl Dlt for RSyncDelta {
         .read_to_end(&mut data)?;
         Ok(File(Arc::new(data)))
     }
-    
+
     fn size(&self) -> usize {
         self.data.len()
     }
@@ -112,7 +167,8 @@ impl RSyncDelta {
 custom_error! {
     #[derive(Clone)]
     pub DiffError
-    RSyncError{rsync: Arc<librsync::Error>} = "{rsync}"
+    RSyncError{rsync: Arc<librsync::Error>} = "{rsync}",
+    UnError = ""
 }
 
 impl From<librsync::Error> for DiffError {
@@ -123,30 +179,41 @@ impl From<librsync::Error> for DiffError {
     }
 }
 
+impl From<()> for DiffError {
+    fn from(_: ()) -> Self {
+        Self::UnError
+    }
+}
+
 pub enum Implementors {
     RSync,
+    UnDelta,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Signature {
     RSyncSig(RSyncSig),
+    UnSig(UnSig),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Delta {
     RSyncDelta(RSyncDelta),
+    UnDelta(UnDelta),
 }
 
 impl Signature {
     pub fn new_using(file: &File, i: Implementors) -> Result<Self, DiffError> {
         match i {
             Implementors::RSync => Ok(Self::RSyncSig(RSyncSig::try_from(file)?)),
+            Implementors::UnDelta => Ok(Self::UnSig(UnSig::try_from(file)?)),
         }
     }
 
     pub fn implementor(&self) -> Implementors {
         match self {
             Signature::RSyncSig(_) => Implementors::RSync,
+            Signature::UnSig(_) => Implementors::UnDelta,
         }
     }
 }
@@ -163,12 +230,14 @@ impl Sig for Signature {
     fn diff(&self, with: &File) -> Result<Delta, <Self as Sig>::Error> {
         match self {
             Signature::RSyncSig(sig) => Ok(Delta::RSyncDelta(sig.diff(with)?)),
+            Signature::UnSig(sig) => Ok(Delta::UnDelta(sig.diff(with)?)),
         }
     }
-    
+
     fn size(&self) -> usize {
         match self {
-            Signature::RSyncSig(sig) => sig.size()
+            Signature::RSyncSig(sig) => sig.size(),
+            Signature::UnSig(sig) => sig.size(),
         }
     }
 }
@@ -179,12 +248,14 @@ impl Dlt for Delta {
     fn patch(&self, file: &File) -> Result<File, Self::Error> {
         match self {
             Delta::RSyncDelta(delta) => Ok(delta.patch(file)?),
+            Delta::UnDelta(delta) => Ok(delta.patch(file)?),
         }
     }
-    
+
     fn size(&self) -> usize {
         match self {
             Delta::RSyncDelta(rsync_delta) => rsync_delta.size(),
+            Delta::UnDelta(delta) => delta.size(),
         }
     }
 }

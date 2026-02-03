@@ -29,6 +29,7 @@ use windows::Win32::{
         STATUS_INVALID_PARAMETER, STATUS_NETWORK_UNREACHABLE, STATUS_NOT_A_DIRECTORY,
         STATUS_NO_MEMORY, STATUS_OBJECT_NAME_EXISTS, STATUS_OBJECT_NAME_NOT_FOUND,
         STATUS_OBJECT_PATH_NOT_FOUND, STATUS_PENDING, STATUS_POSSIBLE_DEADLOCK,
+        STATUS_UNHANDLED_EXCEPTION,
     },
     Storage::FileSystem::{
         FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_DIRECTORY, FILE_WRITE_ATTRIBUTES, SYNCHRONIZE,
@@ -191,6 +192,7 @@ impl From<FlushError> for FspError {
 impl From<DiffError> for FspError {
     fn from(value: DiffError) -> Self {
         match value {
+            DiffError::UnError => STATUS_UNHANDLED_EXCEPTION.into(),
             DiffError::RSyncError { rsync } => match rsync.as_ref() {
                 librsync::Error::Io(error) => io2fsp(error),
                 librsync::Error::Mem => STATUS_NO_MEMORY.into(),
