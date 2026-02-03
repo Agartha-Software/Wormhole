@@ -20,6 +20,7 @@ pub mod service;
 pub mod signals;
 #[cfg(target_os = "windows")]
 pub mod winfsp;
+pub mod logging;
 
 #[cfg(target_os = "windows")]
 pub const INSTANCE_PATH: &str = "%APPDATA%/local/wormhole";
