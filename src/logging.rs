@@ -1,5 +1,8 @@
 use std::io::Write;
 
+use log::Level;
+use owo_colors::{OwoColorize, Style};
+
 pub fn custom_format(
     fmt: &mut env_logger::fmt::Formatter,
     record: &log::Record<'_>,
@@ -11,22 +14,27 @@ pub fn custom_format(
         .and_then(|t| t.split("Z").next())
         .unwrap_or(&time);
 
-    let subtle_style = anstyle::AnsiColor::BrightBlack.on_default();
-
     let level = record.level();
-    let level_style = fmt.default_level_style(level);
-
+    let level_str = level.as_str();
+    let level = match level {
+        Level::Trace => level_str.style(Style::new().cyan()),
+        Level::Debug => level_str.style(Style::new().blue()),
+        Level::Info => level_str.style(Style::new().green()),
+        Level::Warn => level_str.style(Style::new().yellow()),
+        Level::Error => level_str.style(Style::new().red().bold()),
+    };
     let module = record
         .module_path()
         .and_then(|m| m.rsplit("::").next())
         .unwrap_or("");
-    let module_style = anstyle::AnsiColor::BrightBlue.on_default();
 
-    write!(fmt, "{subtle_style}[{subtle_style:#}")?;
-    write!(fmt, "{time}")?;
-    write!(fmt, " {level_style}{level}{level_style:#}")?;
-    write!(fmt, " {module_style}{module}{module_style:#}")?;
-    write!(fmt, "{subtle_style}] {subtle_style:#}")?;
+    let module = module.bright_blue();
+    let left = "[".bright_black();
+    let right = "]".bright_black();
 
-    writeln!(fmt, "{}", record.args())
+    writeln!(
+        fmt,
+        "{left}{time} {level} {module}{right} {}",
+        record.args()
+    )
 }
