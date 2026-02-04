@@ -2,7 +2,6 @@
 // In code we trust
 // AgarthaSoftware - 2024
 
-use clap::Parser;
 /**DOC
  * Important variables to know :
  * nfa_rx - nfa_tx
@@ -18,9 +17,11 @@ use clap::Parser;
  *  reads a message (supposely emitted by a peer) related to files actions
  *  and execute instructions on the disk
  */
+use clap::Parser;
 use std::io::IsTerminal;
 use std::process::ExitCode;
 use tokio::sync::mpsc::{self, UnboundedSender};
+use wormhole::logging::custom_format;
 use wormhole::service::clap::ServiceArgs;
 use wormhole::service::Service;
 
@@ -30,7 +31,9 @@ use wormhole::signals::handle_signals;
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    env_logger::init();
+    env_logger::Builder::from_default_env()
+        .format(custom_format)
+        .init();
 
     let (interrupt_tx, interrupt_rx) = mpsc::unbounded_channel::<()>();
     let (signals_tx, signals_rx) = mpsc::unbounded_channel::<()>();

@@ -5,11 +5,14 @@
 use clap::Parser;
 use std::process::ExitCode;
 use wormhole::cli::{command_network, print_err, start_local_socket, Cli};
+use wormhole::logging::custom_format;
 use wormhole::service::socket::SOCKET_DEFAULT_NAME;
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    env_logger::init();
+    env_logger::Builder::from_default_env()
+        .format(custom_format)
+        .init();
     log::trace!("Starting cli!");
     let cmd = Cli::parse();
     log::debug!("Command found: {cmd:?}");
