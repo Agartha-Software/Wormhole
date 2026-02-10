@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use futures::{stream::Peekable, StreamExt as _};
+use futures::{FutureExt, StreamExt as FutStreamEx};
 use libp2p::{
     identify,
     request_response::{self, OutboundRequestId, ResponseChannel},
@@ -17,7 +17,7 @@ use libp2p::{
 };
 use tokio::{
     runtime::Handle,
-    sync::{mpsc::UnboundedReceiver, oneshot, OwnedSemaphorePermit},
+    sync::{mpsc::UnboundedReceiver, oneshot, OwnedSemaphorePermit, Semaphore},
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
@@ -29,6 +29,8 @@ use crate::{
         network::behaviour::{Behaviour, BehaviourEvent},
     },
 };
+
+use tokio_stream::adapters::Peekable;
 
 // We use a function here because we need templates, but we don't want to leak this kind of weird function to anywhere else
 fn into_boxed_io<T: std::error::Error>(err: T) -> io::Error {
@@ -42,6 +44,7 @@ pub struct EventLoop {
     answers: HashMap<OutboundRequestId, oneshot::Sender<Option<Response>>>,
     closing: bool,
     need_initialisation: Option<Option<OutboundRequestId>>,
+    concurrent_streams: Arc<Semaphore>,
 }
 
 /// Ensure that when panicking, this pod tells other peers that it's leaving the network
@@ -100,8 +103,9 @@ impl EventLoop {
         need_initialisation: bool,
     ) -> Self {
         EventLoop {
+            concurrent_streams: swarm.behaviour().request_response.semaphore(),
             swarm,
-            to_network: futures::StreamExt::peekable(UnboundedReceiverStream::new(to_network)),
+            to_network: tokio_stream::StreamExt::peekable(UnboundedReceiverStream::new(to_network)),
             fs_interface,
             answers: HashMap::new(),
             closing: false,
@@ -146,7 +150,7 @@ impl EventLoop {
     }
 
     pub async fn run(&mut self) {
-        while !self.closing || !self.answers.is_empty() {
+        'run: while !self.closing || !self.answers.is_empty() {
             if self.closing {
                 log::trace!(
                     "Run: Closing but answers remain: {:?}",
@@ -162,7 +166,7 @@ impl EventLoop {
                 event = self.swarm.select_next_some() => if self.handle_event(event) {
                     return
                 },
-                to_network = Peekable::<UnboundedReceiverStream<ToNetworkMessage>>::peek(Pin::new(&mut self.to_network)), if !self.closing => {
+                to_network = self.concurrent_streams.acquire().then(|_| self.to_network.peek()), if !self.closing => {
                     let peers = self
                         .fs_interface
                         .network_interface
@@ -172,35 +176,36 @@ impl EventLoop {
                         .copied()
                         .collect::<Vec<_>>();
                     let permits = match to_network {
-                        Some(ToNetworkMessage::AnswerMessage(..)) => 0,
+                        Some(ToNetworkMessage::AnswerMessage(..)) => 1,
                         Some(ToNetworkMessage::SpecificMessage(_, to)) => to.len() as u32,
                         Some(ToNetworkMessage::BroadcastMessage(_)) => peers.len() as u32,
                         _ => 0,
                     };
 
-                    if let Some(mut permits) = self.swarm.behaviour_mut().request_response.permits(permits) {
-                        let next = self.to_network.next().await;
+                    let Some(mut permits) = self.swarm.behaviour_mut().request_response.permits(permits) else {
+                        continue 'run;
+                    };
+                    let next = self.to_network.next().await;
 
-                        match next {
-                            Some(ToNetworkMessage::AnswerMessage(message, status, peer)) => self
-                                .send_with_answer(
-                                    permits.pop().expect("permits is non-empty"),
-                                    message,
-                                    status,
-                                    peer,
-                                ),
-                            Some(ToNetworkMessage::SpecificMessage(message, to)) => {
-                                self.send_to_multiple(permits, message, &to)
-                            }
-                            Some(ToNetworkMessage::BroadcastMessage(message)) => {
-                                self.send_to_multiple(permits, message, &peers)
-                            }
-                            Some(ToNetworkMessage::LeaveNetwork) => {
-                                self.leave();
-                            }
-                            None => {
-                                self.leave();
-                            }
+                    match next {
+                        Some(ToNetworkMessage::AnswerMessage(message, status, peer)) => self
+                            .send_with_answer(
+                                permits.pop().expect("permits is non-empty"),
+                                message,
+                                status,
+                                peer,
+                            ),
+                        Some(ToNetworkMessage::SpecificMessage(message, to)) => {
+                            self.send_to_multiple(permits, message, &to)
+                        }
+                        Some(ToNetworkMessage::BroadcastMessage(message)) => {
+                            self.send_to_multiple(permits, message, &peers)
+                        }
+                        Some(ToNetworkMessage::LeaveNetwork) => {
+                            self.leave();
+                        }
+                        None => {
+                            self.leave();
                         }
                     }
                 }

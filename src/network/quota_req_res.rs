@@ -194,6 +194,10 @@ where
                 .collect(),
         )
     }
+    
+    pub fn semaphore(&self) -> Arc<Semaphore> {
+        self.semaphore.clone()
+    }
 }
 
 impl<TCodec> Behaviour<TCodec>

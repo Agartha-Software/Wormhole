@@ -5,7 +5,7 @@ use crate::{
     pods::{
         filesystem::{fs_interface::FsInterface, File},
         itree::{FsEntry, ITree, Ino},
-        network::swarm::MAX_CONCURRENT_STREAMS,
+        network::swarm::MAX_CONCURRENT_CONNECTIONS,
         pod::Pod,
     },
 };
@@ -68,7 +68,7 @@ impl RedundancyTracker {
             fs_interface,
             tasks: Default::default(),
             pending: Default::default(),
-            concurrent_streams: Arc::new(Semaphore::new(MAX_CONCURRENT_STREAMS)),
+            concurrent_streams: Arc::new(Semaphore::new(MAX_CONCURRENT_CONNECTIONS)),
         }
     }
 
