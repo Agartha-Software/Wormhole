@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use futures::StreamExt;
+use futures::{stream::Peekable, StreamExt as _};
 use libp2p::{
     identify,
     request_response::{self, OutboundRequestId, ResponseChannel},
@@ -17,8 +17,9 @@ use libp2p::{
 };
 use tokio::{
     runtime::Handle,
-    sync::{mpsc::UnboundedReceiver, oneshot},
+    sync::{mpsc::UnboundedReceiver, oneshot, OwnedSemaphorePermit},
 };
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::{
     network::message::{Request, Response, ToNetworkMessage},
@@ -37,7 +38,7 @@ fn into_boxed_io<T: std::error::Error>(err: T) -> io::Error {
 pub struct EventLoop {
     swarm: Swarm<Behaviour>,
     fs_interface: Arc<FsInterface>,
-    to_network: UnboundedReceiver<ToNetworkMessage>,
+    to_network: Peekable<UnboundedReceiverStream<ToNetworkMessage>>,
     answers: HashMap<OutboundRequestId, oneshot::Sender<Option<Response>>>,
     closing: bool,
     need_initialisation: Option<Option<OutboundRequestId>>,
@@ -100,7 +101,7 @@ impl EventLoop {
     ) -> Self {
         EventLoop {
             swarm,
-            to_network,
+            to_network: futures::StreamExt::peekable(UnboundedReceiverStream::new(to_network)),
             fs_interface,
             answers: HashMap::new(),
             closing: false,
@@ -138,7 +139,8 @@ impl EventLoop {
 
         for (peer, _) in drain {
             let (status, recv) = oneshot::channel();
-            self.send_with_answer(Request::Leave, status, peer);
+            let permit = self.swarm.behaviour_mut().request_response.nopermit();
+            self.send_with_answer(permit, Request::Leave, status, peer);
             drop(recv); // we don't care about the answer, we just want it to be created;
         }
     }
@@ -160,19 +162,47 @@ impl EventLoop {
                 event = self.swarm.select_next_some() => if self.handle_event(event) {
                     return
                 },
-                to_network = self.to_network.recv(), if !self.closing => match to_network {
-                    Some(ToNetworkMessage::AnswerMessage(message, status, peer)) => self.send_with_answer(message, status, peer),
-                    Some(ToNetworkMessage::SpecificMessage(message, to)) => self.send_to_multiple(message, &to),
-                    Some(ToNetworkMessage::BroadcastMessage(message)) => {
-                        let peers = self.fs_interface.network_interface.peers_info.read().keys().copied().collect::<Vec<_>>();
-                        self.send_to_multiple(message, &peers)
-                    },
-                    Some(ToNetworkMessage::LeaveNetwork) => {
-                        self.leave();
+                to_network = Peekable::<UnboundedReceiverStream<ToNetworkMessage>>::peek(Pin::new(&mut self.to_network)), if !self.closing => {
+                    let peers = self
+                        .fs_interface
+                        .network_interface
+                        .peers_info
+                        .read()
+                        .keys()
+                        .copied()
+                        .collect::<Vec<_>>();
+                    let permits = match to_network {
+                        Some(ToNetworkMessage::AnswerMessage(..)) => 0,
+                        Some(ToNetworkMessage::SpecificMessage(_, to)) => to.len() as u32,
+                        Some(ToNetworkMessage::BroadcastMessage(_)) => peers.len() as u32,
+                        _ => 0,
+                    };
+
+                    if let Some(mut permits) = self.swarm.behaviour_mut().request_response.permits(permits) {
+                        let next = self.to_network.next().await;
+
+                        match next {
+                            Some(ToNetworkMessage::AnswerMessage(message, status, peer)) => self
+                                .send_with_answer(
+                                    permits.pop().expect("permits is non-empty"),
+                                    message,
+                                    status,
+                                    peer,
+                                ),
+                            Some(ToNetworkMessage::SpecificMessage(message, to)) => {
+                                self.send_to_multiple(permits, message, &to)
+                            }
+                            Some(ToNetworkMessage::BroadcastMessage(message)) => {
+                                self.send_to_multiple(permits, message, &peers)
+                            }
+                            Some(ToNetworkMessage::LeaveNetwork) => {
+                                self.leave();
+                            }
+                            None => {
+                                self.leave();
+                            }
+                        }
                     }
-                    None => {
-                        self.leave();
-                    },
                 }
             }
         }
@@ -180,6 +210,7 @@ impl EventLoop {
 
     fn send_with_answer(
         &mut self,
+        permit: OwnedSemaphorePermit,
         message: Request,
         status: oneshot::Sender<Option<Response>>,
         peer: PeerId,
@@ -189,7 +220,7 @@ impl EventLoop {
             .swarm
             .behaviour_mut()
             .request_response
-            .send_request(&peer, message);
+            .send_request(permit, &peer, message);
         if let Some(log_msg) = log_msg {
             log::trace!("Requesting {log_msg} to {peer}: #{request_id}");
         }
@@ -198,21 +229,26 @@ impl EventLoop {
 
     fn send_to_multiple<I: IntoIterator<Item = impl Deref<Target = PeerId>> + std::fmt::Debug>(
         &mut self,
+        permits: impl IntoIterator<Item = OwnedSemaphorePermit>,
         message: Request,
         to: I,
     ) {
         let mut log_to = vec![];
-        let mut to = to.into_iter();
+        let to = to.into_iter();
+        let permits = permits.into_iter();
+
+        let mut zip = to.zip(permits);
         // avoid cloning the message an extra time. put aside the first send
-        if let Some(first) = to.next() {
+        if let Some((first, first_permit)) = zip.next() {
             if log::log_enabled!(log::Level::Debug) {
                 log_to.push(first.to_base58());
             }
-            for peer in to {
-                self.swarm
-                    .behaviour_mut()
-                    .request_response
-                    .send_request(peer.deref(), message.clone());
+            for (peer, permit) in zip {
+                self.swarm.behaviour_mut().request_response.send_request(
+                    permit,
+                    peer.deref(),
+                    message.clone(),
+                );
                 if log::log_enabled!(log::Level::Debug) {
                     log_to.push(peer.to_base58());
                 }
@@ -225,10 +261,11 @@ impl EventLoop {
             }
 
             // let it be moved in here
-            self.swarm
-                .behaviour_mut()
-                .request_response
-                .send_request(first.deref(), message);
+            self.swarm.behaviour_mut().request_response.send_request(
+                first_permit,
+                first.deref(),
+                message,
+            );
         }
     }
 
@@ -238,12 +275,12 @@ impl EventLoop {
             .connected_peers()
             .find(|peer| **peer != failing_host)
             .unwrap_or(&failing_host);
-
-        let request_id = self
-            .swarm
-            .behaviour_mut()
-            .request_response
-            .send_request(&retry_peer, Request::RequestFs);
+        let permit = self.swarm.behaviour_mut().request_response.nopermit();
+        let request_id = self.swarm.behaviour_mut().request_response.send_request(
+            permit,
+            &retry_peer,
+            Request::RequestFs,
+        );
 
         self.need_initialisation = Some(Some(request_id));
     }
@@ -457,11 +494,12 @@ impl EventLoop {
             identify::Event::Received { peer_id, info, .. } => {
                 log::trace!("Identify: {}: {:?}", peer_id, info);
                 if let Some(None) = self.need_initialisation {
-                    let request_id = self
-                        .swarm
-                        .behaviour_mut()
-                        .request_response
-                        .send_request(&peer_id, Request::RequestFs);
+                    let permit = self.swarm.behaviour_mut().request_response.nopermit();
+                    let request_id = self.swarm.behaviour_mut().request_response.send_request(
+                        permit,
+                        &peer_id,
+                        Request::RequestFs,
+                    );
                     self.need_initialisation = Some(Some(request_id));
                 };
                 self.fs_interface
