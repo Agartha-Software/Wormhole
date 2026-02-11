@@ -14,6 +14,7 @@ pub mod config;
 pub mod data;
 pub mod error;
 pub mod ipc;
+pub mod logging;
 pub mod network;
 pub mod pods;
 pub mod service;
