@@ -1,7 +1,7 @@
 use libp2p::{identify, swarm};
 
-use crate::pods::network::codec::BincodeCodec;
 use crate::network::quota_req_res;
+use crate::pods::network::codec::BincodeCodec;
 
 #[derive(swarm::NetworkBehaviour)]
 pub struct Behaviour {

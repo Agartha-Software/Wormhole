@@ -26,7 +26,7 @@ pub async fn create_swarm(nickname: String) -> Result<Swarm<Behaviour>, Box<dyn 
             Behaviour {
                 request_response: quota_req_res::Behaviour::new(
                     [(StreamProtocol::new(PROTOCOL_VERSION), ProtocolSupport::Full)],
-                    request_response::Config::default()
+                    request_response::Config::default(),
                 ),
                 identify: identify::Behaviour::new(cfg),
             }

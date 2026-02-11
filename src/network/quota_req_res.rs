@@ -194,7 +194,7 @@ where
                 .collect(),
         )
     }
-    
+
     pub fn semaphore(&self) -> Arc<Semaphore> {
         self.semaphore.clone()
     }
