@@ -40,6 +40,7 @@ impl PodPrototype {
             frozen: true,
             listen_addrs,
             name: self.name.clone(),
+            id: "".to_owned(),
             connected_peers: vec![],
             mount: self.mountpoint.clone(),
             disk_space: None,
