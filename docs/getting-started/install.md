@@ -50,7 +50,7 @@ This repository provides a flake for you that can install Wormhole.
 nix shell --experimental-features 'nix-command flakes' github:Agartha-Software/Wormhole/#default
 ```
 
-You will then have access to Wormhole in the current shell.
+You will then have access to Wormhole in this new shell.
 
 ### To install
 
@@ -110,9 +110,9 @@ This will install both `wormhole` and `wormholed`.
 
 **Requirements:**
 
-- Install the [Rust toolchain](https://www.rust-lang.org/tools/install).
-- Install fuse and other dependancies must be installed on your system:
-  - **Linux:** `sudo apt install pkg-config libfuse3-dev libfuse-dev`  
+- The [Rust toolchain](https://www.rust-lang.org/tools/install).
+- Fuse and other dependancies must be installed on your system:
+  - **Linux:** `sudo apt install pkg-config libfuse3-dev libfuse-dev`
   (Debian/Ubuntu) or equivalent for your distro
   - **Windows:** [WinFsp](https://github.com/winfsp/winfsp/releases)
 - Clone and build:
