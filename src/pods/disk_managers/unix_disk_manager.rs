@@ -102,7 +102,7 @@ impl DiskManager for UnixDiskManager {
 
     fn set_permisions(&self, path: &WhPath, permissions: u16) -> std::io::Result<()> {
         let raw_fd: RawFd = self.handle.as_raw_fd();
-        let c_string_path = path.is_empty().then_some(CString::new::<&str>(path.as_ref()).expect("panics if there are internal null bytes"));
+        let c_string_path = (!path.is_empty()).then_some(CString::new::<&str>(path.as_ref()).expect("panics if there are internal null bytes"));
            
 
         let result = unsafe {
