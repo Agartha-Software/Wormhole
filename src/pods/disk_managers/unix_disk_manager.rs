@@ -102,15 +102,19 @@ impl DiskManager for UnixDiskManager {
 
     fn set_permisions(&self, path: &WhPath, permissions: u16) -> std::io::Result<()> {
         let raw_fd: RawFd = self.handle.as_raw_fd();
-        let c_string_path =
-            CString::new::<&str>(path.as_ref()).expect("panics if there are internal null bytes");
+        let c_string_path = path.is_empty().then_some(CString::new::<&str>(path.as_ref()).expect("panics if there are internal null bytes"));
+           
 
-        let ptr: *const i8 = c_string_path.as_ptr();
         let result = unsafe {
             // If we just self.handle.open_file...set_permission, the open flags
             // don't allow to modify the permission on a file where we don't have the permission like a 000
             // This is the only convincing way we found
-            libc::fchmodat(raw_fd, ptr, permissions.into(), libc::AT_EMPTY_PATH)
+            if let Some(c_string_path) = c_string_path {
+                let ptr: *const i8 = c_string_path.as_ptr();
+                libc::fchmodat(raw_fd, ptr, permissions.into(), 0)
+            } else {
+                libc::fchmod(raw_fd, permissions.into())
+            }
         };
         if result != 0 {
             Err(std::io::Error::last_os_error())

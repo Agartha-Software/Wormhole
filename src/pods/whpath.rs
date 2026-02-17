@@ -214,6 +214,10 @@ impl WhPath {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.inner.as_str().is_empty()
+    }
+
     /// Allows for a easy path.typed_ref<T>() instead of a heavy rust type notation of AsRef
     pub fn typed_ref<T>(&self) -> &T
     where
