@@ -1,6 +1,7 @@
 use interprocess::local_socket::tokio::Stream;
 use std::io;
 
+use crate::ipc::answers::MetricsAnswer;
 use crate::ipc::{self, answers::InspectAnswer};
 
 use crate::{
@@ -68,6 +69,23 @@ pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String
                 .map_or("Error".to_owned(), |s| s.total_size.to_string()),
         )),
         InspectAnswer::PodNotFound => Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "The given pod couldn't be found.",
+        )),
+    }
+}
+
+pub async fn metrics(args: IdentifyPodArgs, mut stream: Stream) -> Result<String, io::Error> {
+    let id = PodId::from(args);
+
+    send_command(Command::Metrics(id), &mut stream).await?;
+    match recieve_answer::<MetricsAnswer>(&mut stream).await? {
+        MetricsAnswer::Metrics(data) => Ok(data.show()),
+        MetricsAnswer::NetworkError => Err(io::Error::new(
+            io::ErrorKind::ConnectionAborted,
+            "The given pod couldn't be reached (likely in the middle of shutting down)",
+        )),
+        MetricsAnswer::PodNotFound => Err(io::Error::new(
             io::ErrorKind::NotFound,
             "The given pod couldn't be found.",
         )),

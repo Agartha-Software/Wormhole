@@ -37,6 +37,8 @@ pub enum CliCommand {
     Config(ConfigCommand),
     /// Inspect the basic informations of a given pod
     Inspect(IdentifyPodArgs),
+    // Show metrics for pods,
+    Metrics(IdentifyPodArgs),
     /// Get the hosts of a given file
     GetHosts(GetHostsArgs),
     /// Display the file tree at a given pod or path and show the hosts for each files

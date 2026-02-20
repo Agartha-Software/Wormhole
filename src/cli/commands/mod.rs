@@ -17,6 +17,7 @@ pub use config::show::show;
 pub use freeze::freeze;
 pub use gethosts::gethosts;
 pub use inspect::inspect;
+pub use inspect::metrics;
 pub use list_pods::list_pods;
 pub use new::new;
 pub use redundancy_status::redundancy_status;
