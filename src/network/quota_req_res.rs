@@ -77,28 +77,25 @@ impl<TCodec: Codec + Clone + Send + 'static> NetworkBehaviour for Behaviour<TCod
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<swarm::ToSwarm<Self::ToSwarm, swarm::THandlerInEvent<Self>>> {
         let poll = self.request_response.poll(cx);
-        if let Poll::Ready(to_swarm) = &poll {
-            match to_swarm {
-                swarm::ToSwarm::GenerateEvent(event) => match event {
-                    request_response::Event::Message { message, .. } => match message {
-                        request_response::Message::Request { request_id, .. } => {
-                            self.inbound.insert(*request_id);
-                        }
-                        request_response::Message::Response { request_id, .. } => {
-                            self.permits.remove(request_id);
-                        }
-                    },
-                    request_response::Event::OutboundFailure { request_id, .. } => {
+        if let Poll::Ready(swarm::ToSwarm::GenerateEvent(event)) = &poll {
+            match event {
+                request_response::Event::Message { message, .. } => match message {
+                    request_response::Message::Request { request_id, .. } => {
+                        self.inbound.insert(*request_id);
+                    }
+                    request_response::Message::Response { request_id, .. } => {
                         self.permits.remove(request_id);
                     }
-                    request_response::Event::InboundFailure { request_id, .. } => {
-                        self.inbound.remove(request_id);
-                    }
-                    request_response::Event::ResponseSent { request_id, .. } => {
-                        self.inbound.remove(request_id);
-                    }
                 },
-                _ => {}
+                request_response::Event::OutboundFailure { request_id, .. } => {
+                    self.permits.remove(request_id);
+                }
+                request_response::Event::InboundFailure { request_id, .. } => {
+                    self.inbound.remove(request_id);
+                }
+                request_response::Event::ResponseSent { request_id, .. } => {
+                    self.inbound.remove(request_id);
+                }
             }
         }
         poll
@@ -184,12 +181,9 @@ where
     }
 
     pub fn permits(&mut self, n: u32) -> Option<Vec<OwnedSemaphorePermit>> {
-        let Some(mut p) = Semaphore::try_acquire_many_owned(self.semaphore.clone(), n).ok() else {
-            return None;
-        };
+        let mut p = Semaphore::try_acquire_many_owned(self.semaphore.clone(), n).ok()?;
         Some(
             (0..n)
-                .into_iter()
                 .map(|_| p.split(1).expect("known to be enough"))
                 .collect(),
         )
