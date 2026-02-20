@@ -73,7 +73,7 @@ impl Sig for RSyncSig {
     fn diff(&self, with: &File) -> Result<RSyncDelta, <Self as Sig>::Error> {
         RSyncDelta::diff(self, with)
     }
-    
+
     fn size(&self) -> usize {
         self.data.len()
     }
@@ -90,7 +90,7 @@ impl Dlt for RSyncDelta {
         .read_to_end(&mut data)?;
         Ok(File(Arc::new(data)))
     }
-    
+
     fn size(&self) -> usize {
         self.data.len()
     }
@@ -165,10 +165,10 @@ impl Sig for Signature {
             Signature::RSyncSig(sig) => Ok(Delta::RSyncDelta(sig.diff(with)?)),
         }
     }
-    
+
     fn size(&self) -> usize {
         match self {
-            Signature::RSyncSig(sig) => sig.size()
+            Signature::RSyncSig(sig) => sig.size(),
         }
     }
 }
@@ -181,7 +181,7 @@ impl Dlt for Delta {
             Delta::RSyncDelta(delta) => Ok(delta.patch(file)?),
         }
     }
-    
+
     fn size(&self) -> usize {
         match self {
             Delta::RSyncDelta(rsync_delta) => rsync_delta.size(),
