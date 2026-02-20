@@ -74,6 +74,7 @@ impl Service {
             Command::New(request) => self.new_command(request, stream).await,
             Command::GetHosts(request) => self.gethosts(request, stream).await,
             Command::Inspect(pod_id) => self.inspect(pod_id, stream).await,
+            Command::Metrics(pod_id) => self.metrics(pod_id, stream).await,
             Command::Remove(request) => self.remove(request, stream).await,
             Command::Tree(pod_id) => self.tree(pod_id, stream).await,
             Command::GenerateConfig(pod_id, overwrite, config_type) => {

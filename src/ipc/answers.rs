@@ -8,6 +8,7 @@ use crate::{
     cli::ConfigType,
     data::tree_hosts::TreeData,
     ipc::error::IoError,
+    network::metrics::MetricsData,
     pods::{disk_managers::DiskSizeInfo, itree::Hosts, network::redundancy::RedundancyStatus},
 };
 
@@ -143,6 +144,13 @@ pub struct InspectInfo {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum InspectAnswer {
     Information(InspectInfo),
+    PodNotFound,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum MetricsAnswer {
+    Metrics(Box<MetricsData>),
+    NetworkError,
     PodNotFound,
 }
 
