@@ -5,7 +5,7 @@ use crate::ipc::{self, answers::InspectAnswer};
 
 use crate::{
     cli::connection::{recieve_answer, send_command},
-    cli::IdentifyPodArgs,
+    cli::InspectPodArgs,
     ipc::commands::{Command, PodId},
 };
 
@@ -27,16 +27,15 @@ fn display_peers(peers: Vec<ipc::PeerInfo>) -> String {
     }
 }
 
-pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String, io::Error> {
-    let id = PodId::from(args);
+pub async fn inspect(args: InspectPodArgs, mut stream: Stream) -> Result<String, io::Error> {
+    let id = PodId::from(args.group);
 
     send_command(Command::Inspect(id), &mut stream).await?;
     match recieve_answer::<InspectAnswer>(&mut stream).await? {
         InspectAnswer::Information(info) => Ok(format!(
             "Pod informations: {}\n\
             \x20  Name:\t\t{}\n\
-            \x20  Mount:\t\t{:#?}\n\
-            \x20  Id:\t\t{:#?}\n\
+            \x20  Mount:\t\t{:#?}\n{}\
             \x20  Listen Addresses:\t[ {} ]\n\
             \x20  Connected peers:\t{}\n\
             \x20  Free space:\t{}\n\
@@ -45,7 +44,11 @@ pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String
             if info.frozen { "Frozen" } else { "Running" },
             info.name,
             info.mount,
-            info.id,
+            if args.long {
+                format!("\x20  Id:\t\t{:#?}\n", info.id)
+            } else {
+                "".to_string()
+            },
             info.listen_addrs
                 .iter()
                 .map(|addr| addr.to_string())

@@ -36,7 +36,7 @@ pub enum CliCommand {
     #[command(subcommand)]
     Config(ConfigCommand),
     /// Inspect the basic informations of a given pod
-    Inspect(IdentifyPodArgs),
+    Inspect(InspectPodArgs),
     /// Get the hosts of a given file
     GetHosts(GetHostsArgs),
     /// Display the file tree at a given pod or path and show the hosts for each files
@@ -106,6 +106,15 @@ pub struct IdentifyNewPodGroup {
 pub struct IdentifyPodArgs {
     #[clap(flatten)]
     pub group: IdentifyPodGroup,
+}
+
+#[derive(Debug, Args, Clone)]
+pub struct InspectPodArgs {
+    #[clap(flatten)]
+    pub group: IdentifyPodGroup,
+    /// Display additional information about the pod
+    #[arg(long, short)]
+    pub long: bool,
 }
 
 #[derive(Debug, Args, Clone)]
