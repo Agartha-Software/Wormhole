@@ -8,6 +8,7 @@ use std::{
     time::Duration,
 };
 
+use either::Either;
 use futures::{FutureExt, StreamExt as FutStreamEx};
 use libp2p::{
     identify,
@@ -22,9 +23,15 @@ use tokio::{
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::{
-    network::message::{Request, Response, ToNetworkMessage},
+    network::{
+        message::{Request, Response, ToNetworkMessage},
+        metrics::Metrics,
+    },
     pods::{
-        filesystem::fs_interface::FsInterface,
+        filesystem::{
+            diffs::{Dlt, Sig},
+            fs_interface::FsInterface,
+        },
         itree::creation::initiate_itree,
         network::behaviour::{Behaviour, BehaviourEvent},
     },
@@ -45,6 +52,7 @@ pub struct EventLoop {
     closing: bool,
     need_initialisation: Option<Option<OutboundRequestId>>,
     concurrent_streams: Arc<Semaphore>,
+    metrics: Metrics,
 }
 
 /// Ensure that when panicking, this pod tells other peers that it's leaving the network
@@ -95,6 +103,25 @@ impl Drop for EventLoop {
     }
 }
 
+#[inline]
+fn meter_upload_callback(
+    metrics: &mut Metrics,
+    message: &Either<&Request, &Response>,
+    peers: impl IntoIterator<Item = impl Deref<Target = PeerId>>,
+) {
+    if let Some(size) = match message {
+        Either::Left(Request::RedundancyFile(_, file)) => Some(file.len()),
+        Either::Left(Request::FileDelta(_, _, sig, delta)) => Some(delta.size() + sig.size()),
+        Either::Right(Response::DeltaRequest(_, sig)) => Some(sig.size()),
+        Either::Right(Response::RequestedFile(file)) => Some(file.len()),
+        _ => None,
+    } {
+        for peer in peers.into_iter() {
+            metrics.inc_upload(*peer, size);
+        }
+    }
+}
+
 impl EventLoop {
     pub fn new(
         swarm: Swarm<Behaviour>,
@@ -114,6 +141,7 @@ impl EventLoop {
             } else {
                 None
             },
+            metrics: Default::default(),
         }
     }
 
@@ -204,6 +232,9 @@ impl EventLoop {
                         Some(ToNetworkMessage::LeaveNetwork) => {
                             self.leave();
                         }
+                        Some(ToNetworkMessage::Metrics(sender)) => {
+                            let _ = sender.send(self.metrics.export(Some(&self.fs_interface.network_interface.peers_info.read())));
+                        }
                         None => {
                             self.leave();
                         }
@@ -220,6 +251,7 @@ impl EventLoop {
         status: oneshot::Sender<Option<Response>>,
         peer: PeerId,
     ) {
+        meter_upload_callback(&mut self.metrics, &Either::Left(&message), &[peer]);
         let log_msg = log::log_enabled!(log::Level::Trace).then_some(format!("{message}"));
         let request_id = self
             .swarm
@@ -232,12 +264,15 @@ impl EventLoop {
         self.answers.insert(request_id, status);
     }
 
-    fn send_to_multiple<I: IntoIterator<Item = impl Deref<Target = PeerId>> + std::fmt::Debug>(
+    fn send_to_multiple<
+        I: IntoIterator<Item = impl Deref<Target = PeerId>> + std::fmt::Debug + Clone,
+    >(
         &mut self,
         permits: impl IntoIterator<Item = OwnedSemaphorePermit>,
         message: Request,
         to: I,
     ) {
+        meter_upload_callback(&mut self.metrics, &Either::Left(&message), to.clone());
         let mut log_to = vec![];
         let to = to.into_iter();
         let permits = permits.into_iter();
@@ -302,7 +337,7 @@ impl EventLoop {
                 {
                     let mut peers_info = self.fs_interface.network_interface.peers_info.write();
                     for (peer, info) in peers {
-                        peers_info.insert(peer.clone(), info.clone());
+                        peers_info.insert(peer, info.clone());
                         log::trace!(
                             "Join: Registering address to the peer: {peer}: {:?}",
                             info.listen_addrs
@@ -344,10 +379,12 @@ impl EventLoop {
         peer: PeerId,
     ) {
         let result = match request {
-            Request::RedundancyFile(id, binary) => self
-                .fs_interface
-                .recept_redundancy(id, binary)
-                .map_err(into_boxed_io),
+            Request::RedundancyFile(id, binary) => {
+                self.metrics.inc_download(peer, binary.len());
+                self.fs_interface
+                    .recept_redundancy(id, binary)
+                    .map_err(into_boxed_io)
+            }
             Request::Inode(inode) => self.fs_interface.recept_inode(inode).map_err(into_boxed_io),
             Request::AddHosts(id, hosts) => self
                 .fs_interface
@@ -387,10 +424,12 @@ impl EventLoop {
                 .network_interface
                 .recept_remove_inode_xattr(ino, &key)
                 .map_err(into_boxed_io),
-            Request::FileDelta(ino, meta, sig, delta) => self
-                .fs_interface
-                .accept_delta(ino, meta, sig, delta)
-                .map_err(into_boxed_io),
+            Request::FileDelta(ino, meta, sig, delta) => {
+                self.metrics.inc_download(peer, delta.size());
+                self.fs_interface
+                    .accept_delta(ino, meta, sig, delta)
+                    .map_err(into_boxed_io)
+            }
             Request::FileChanged(ino, meta) => self
                 .fs_interface
                 .accept_file_changed(ino, meta)
@@ -411,6 +450,7 @@ impl EventLoop {
 
         match result {
             Ok(response) => {
+                meter_upload_callback(&mut self.metrics, &Either::Right(&response), &[peer]);
                 let _ = self
                     .swarm
                     .behaviour_mut()
@@ -482,7 +522,6 @@ impl EventLoop {
                 if let Some(Some(id)) = self.need_initialisation {
                     if id == request_id && !self.closing {
                         self.retry_fs_request(peer);
-                        return;
                     }
                 }
             }

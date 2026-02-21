@@ -10,6 +10,7 @@ use tokio::sync::oneshot;
 
 use crate::{
     config::GlobalConfig,
+    network::metrics::MetricsData,
     pods::{
         filesystem::diffs::{Delta, Signature},
         itree::{ITree, Ino, Inode, Metadata},
@@ -246,6 +247,7 @@ pub enum ToNetworkMessage {
     BroadcastMessage(Request),
     SpecificMessage(Request, Vec<PeerId>),
     AnswerMessage(Request, oneshot::Sender<Option<Response>>, PeerId),
+    Metrics(oneshot::Sender<MetricsData>),
     LeaveNetwork,
 }
 
@@ -268,6 +270,9 @@ impl fmt::Display for ToNetworkMessage {
                     "ToNetworkMessage::AnswerMessage({}, to: {:?}) with callback",
                     content, peer
                 )
+            }
+            ToNetworkMessage::Metrics(_) => {
+                write!(f, "ToNetworkMessage::Metrics",)
             }
             ToNetworkMessage::LeaveNetwork => write!(f, "ToNetworkMessage::LeaveNetwork"),
         }
