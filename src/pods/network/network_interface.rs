@@ -32,8 +32,7 @@ pub struct NetworkInterface {
     pub to_redundancy_tx: UnboundedSender<RedundancyMessage>,
     pub global_config: Arc<RwLock<GlobalConfig>>,
     pub listen_addrs: Arc<RwLock<HashSet<Multiaddr>>>,
-    pub peers: Arc<RwLock<Vec<PeerId>>>,
-    pub peers_info: Arc<RwLock<HashMap<PeerId, network::PeerInfo>>>, // Only used to store state for restart and inspect
+    pub peers_info: Arc<RwLock<HashMap<PeerId, network::PeerInfo>>>,
 }
 
 impl NetworkInterface {
@@ -42,7 +41,6 @@ impl NetworkInterface {
         id: PeerId,
         to_network_message_tx: UnboundedSender<ToNetworkMessage>,
         to_redundancy_tx: UnboundedSender<RedundancyMessage>,
-        peers: Arc<RwLock<Vec<PeerId>>>,
         global_config: Arc<RwLock<GlobalConfig>>,
     ) -> Self {
         Self {
@@ -50,7 +48,6 @@ impl NetworkInterface {
             id,
             to_network_message_tx,
             to_redundancy_tx,
-            peers,
             global_config,
             listen_addrs: Arc::new(RwLock::new(HashSet::new())),
             peers_info: Arc::new(RwLock::new(HashMap::new())),
@@ -266,29 +263,32 @@ impl NetworkInterface {
     }
 
     pub fn connect_peer(&self, peer_id: PeerId, info: Info) {
+        log::debug!("Connecting peer: {peer_id} {info:?}");
         self.peers_info.write().insert(
             peer_id,
             network::PeerInfo {
+                id: peer_id,
                 nickname: info.agent_version,
                 listen_addrs: info.listen_addrs,
             },
         );
-        self.peers.write().push(peer_id);
         self.check_integrity();
     }
 
-    pub fn disconnect_peer(&self, addr: PeerId) -> WhResult<Response> {
-        self.peers
+    pub fn disconnect_peer(&self, peer: PeerId) -> WhResult<Response> {
+        log::debug!("Disconnecting peer: {peer}");
+
+        self.peers_info
             .try_write_for(LOCK_TIMEOUT)
             .ok_or(WhError::WouldBlock {
                 called_from: "disconnect_peer: can't write lock peers".to_owned(),
             })?
-            .retain(|p| p != &addr);
+            .remove(&peer);
 
-        log::debug!("Disconnecting {addr}. Removing from inodes hosts");
+        log::debug!("Disconnecting {peer}. Removing from inodes hosts");
         for inode in ITree::write_lock(&self.itree, "disconnect_peer")?.inodes_mut() {
             if let FsEntry::File(hosts) = &mut inode.entry {
-                hosts.retain(|h| *h != addr);
+                hosts.retain(|h| *h != peer);
             }
         }
         self.check_integrity();

@@ -36,6 +36,7 @@ pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String
             "Pod informations: {}\n\
             \x20  Name:\t\t{}\n\
             \x20  Mount:\t\t{:#?}\n\
+            \x20  Id:\t\t{:#?}\n\
             \x20  Listen Addresses:\t[ {} ]\n\
             \x20  Connected peers:\t{}\n\
             \x20  Free space:\t{}\n\
@@ -44,6 +45,7 @@ pub async fn inspect(args: IdentifyPodArgs, mut stream: Stream) -> Result<String
             if info.frozen { "Frozen" } else { "Running" },
             info.name,
             info.mount,
+            info.id,
             info.listen_addrs
                 .iter()
                 .map(|addr| addr.to_string())

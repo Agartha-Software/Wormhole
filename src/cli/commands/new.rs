@@ -44,7 +44,7 @@ pub async fn new(args: NewArgs, mut stream: Stream) -> io::Result<String> {
 
     match recieve_answer::<NewAnswer>(&mut stream).await? {
         NewAnswer::Success(_, true) => Ok(format!(
-            "Pod '{name}' successfully created and connected."
+            "Pod '{name}' successfully created, trying to connect..."
         )),
         NewAnswer::Success(listen_url, false) => Ok(format!(
             "Pod '{name}' created with success, listening to '{listen_url}'."
