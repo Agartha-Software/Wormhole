@@ -114,7 +114,7 @@ pub struct InspectPodArgs {
     pub group: IdentifyPodGroup,
     /// Display additional information about the pod
     #[arg(long, short)]
-    pub verbose: bool,
+    pub long: bool,
 }
 
 #[derive(Debug, Args, Clone)]

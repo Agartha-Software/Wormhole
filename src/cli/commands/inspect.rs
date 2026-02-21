@@ -44,7 +44,7 @@ pub async fn inspect(args: InspectPodArgs, mut stream: Stream) -> Result<String,
             if info.frozen { "Frozen" } else { "Running" },
             info.name,
             info.mount,
-            if args.verbose {
+            if args.long {
                 format!("\x20  Id:\t\t{:#?}\n", info.id)
             } else {
                 "".to_string()
