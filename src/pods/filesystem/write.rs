@@ -76,11 +76,11 @@ impl FsInterface {
         let new_size = offset + data.len();
         let written = self.disk.write_file(&path, data, offset)?;
 
-        self.affect_write_locally(id, new_size)?;
+        self.affect_write_locally(id, new_size, Some(SystemTime::now()))?;
         Ok(written)
     }
 
-    fn affect_write_locally(&self, id: Ino, new_size: usize) -> WhResult<Metadata> {
+    pub fn affect_write_locally(&self, id: Ino, new_size: usize, mtime: Option<SystemTime>) -> WhResult<Metadata> {
         let mut itree = ITree::write_lock(
             &self.network_interface.itree,
             "network_interface.affect_write_locally",
@@ -90,7 +90,9 @@ impl FsInterface {
         inode.meta.size = new_size;
         inode.meta.blocks = new_size.div_ceil(BLOCK_SIZE);
 
-        inode.meta.mtime = SystemTime::now();
+        if let Some(mtime) = mtime {
+            inode.meta.mtime = mtime;
+        }
 
         Ok(inode.meta.clone())
     }

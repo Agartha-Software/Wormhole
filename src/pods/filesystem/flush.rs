@@ -135,6 +135,7 @@ impl FsInterface {
                 AcknoledgeSetAttrError::WhError { source } => FlushError::from(source),
                 AcknoledgeSetAttrError::SetPermIoError { io } => WriteError::from(io).into(),
             })?;
+            self.affect_write_locally(ino, patched.0.len(), None)?;
         } else {
             log::warn!("accept_delta: signature does not match local sig!");
             return Ok(Response::DeltaRequest(ino, local_sig));
