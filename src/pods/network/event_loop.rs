@@ -305,7 +305,7 @@ impl EventLoop {
                 {
                     let mut peers_info = self.fs_interface.network_interface.peers_info.write();
                     for (peer, info) in peers {
-                        peers_info.insert(peer.clone(), info.clone());
+                        peers_info.insert(peer, info.clone());
                         log::trace!(
                             "Join: Registering address to the peer: {peer}: {:?}",
                             info.listen_addrs
@@ -485,7 +485,6 @@ impl EventLoop {
                 if let Some(Some(id)) = self.need_initialisation {
                     if id == request_id && !self.closing {
                         self.retry_fs_request(peer);
-                        return;
                     }
                 }
             }
