@@ -117,10 +117,7 @@ impl FsInterface {
             }
         };
         let local_sig = Signature::new_using(&file, sig.implementor())?;
-        log::trace!(
-            "signing ({ino}) = {:?}",
-            local_sig
-        );
+        log::trace!("signing ({ino}) = {:?}", local_sig);
         if local_sig == sig {
             let patched = delta.patch(&file)?;
 

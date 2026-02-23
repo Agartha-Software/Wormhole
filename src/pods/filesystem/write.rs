@@ -80,7 +80,12 @@ impl FsInterface {
         Ok(written)
     }
 
-    pub fn affect_write_locally(&self, id: Ino, new_size: usize, mtime: Option<SystemTime>) -> WhResult<Metadata> {
+    pub fn affect_write_locally(
+        &self,
+        id: Ino,
+        new_size: usize,
+        mtime: Option<SystemTime>,
+    ) -> WhResult<Metadata> {
         let mut itree = ITree::write_lock(
             &self.network_interface.itree,
             "network_interface.affect_write_locally",

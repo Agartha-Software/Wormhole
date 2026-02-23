@@ -260,7 +260,6 @@ impl EventLoop {
                 }
             }
 
-
             // let it be moved in here
             let first_id = self.swarm.behaviour_mut().request_response.send_request(
                 first_permit,
