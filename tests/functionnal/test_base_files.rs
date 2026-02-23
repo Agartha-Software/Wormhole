@@ -1,10 +1,7 @@
 use crate::{
-    functionnal::{
-        environment_manager::{
-            types::{StartupFiles, SLEEP_TIME},
-            utilities::{assert_dirs_are_equal, tree_command},
-        },
-        start_log,
+    functionnal::environment_manager::{
+        types::{StartupFiles, SLEEP_TIME},
+        utilities::{assert_dirs_are_equal, tree_command},
     },
     test_data,
 };
@@ -17,9 +14,8 @@ use serial_test::serial;
 #[serial]
 #[test]
 fn base_files_before_mount() {
-    start_log();
-    log::info!("vvvvvv base_files_before_mount vvvvvv");
     let mut env = EnvironmentManager::new("base_files_before_mount");
+    log::info!("vvvvvv base_files_before_mount vvvvvv");
     env.add_service().unwrap();
     env.add_service().unwrap();
     env.add_service().unwrap();
