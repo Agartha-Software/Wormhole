@@ -133,7 +133,7 @@ impl FsInterface {
                 .map_err(WriteError::from)?;
             self.acknowledge_metadata(ino, meta).map_err(|e| match e {
                 AcknoledgeSetAttrError::WhError { source } => FlushError::from(source),
-                AcknoledgeSetAttrError::SetFileSizeIoError { io } => WriteError::from(io).into(),
+                AcknoledgeSetAttrError::SetPermIoError { io } => WriteError::from(io).into(),
             })?;
         } else {
             log::warn!("accept_delta: signature does not match local sig!");
@@ -146,7 +146,7 @@ impl FsInterface {
     pub fn accept_file_changed(&self, ino: Ino, meta: Metadata) -> Result<Response, FlushError> {
         self.acknowledge_metadata(ino, meta).map_err(|e| match e {
             AcknoledgeSetAttrError::WhError { source } => FlushError::from(source),
-            AcknoledgeSetAttrError::SetFileSizeIoError { io } => WriteError::from(io).into(),
+            AcknoledgeSetAttrError::SetPermIoError { io } => WriteError::from(io).into(),
         })?;
         let file = match self.get_local_file(ino)? {
             Some(file) => file,
