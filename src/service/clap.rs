@@ -7,7 +7,7 @@ pub struct ServiceArgs {
     pub nodeamon: bool,
     #[arg(short)]
     pub ip: Option<String>,
-    #[arg(short)]
+    #[arg(short = 'H', long)]
     pub socket: Option<String>,
     #[arg(short, long)]
     pub clean: bool,

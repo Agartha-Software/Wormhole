@@ -1,26 +1,37 @@
 use interprocess::local_socket::tokio::Listener;
-use interprocess::local_socket::{GenericFilePath, Name, NameType, ToFsName, ToNsName};
-use interprocess::local_socket::{GenericNamespaced, ListenerOptions};
+use interprocess::local_socket::{ListenerOptions, Name};
 use std::io;
 
 use crate::ipc::error::SocketListenerError;
 
+#[cfg(target_os = "linux")]
+use interprocess::local_socket::{GenericFilePath, ToFsName};
+
+#[cfg(target_os = "windows")]
+use interprocess::local_socket::{GenericNamespaced, ToNsName};
+
+#[cfg(target_os = "linux")]
+pub static SOCKET_DEFAULT_NAME: &str = "/tmp/wormhole.sock";
+
+#[cfg(target_os = "windows")]
 pub static SOCKET_DEFAULT_NAME: &str = "wormhole.sock";
 
-fn name_from_string<'n>(name: &String) -> Result<Name<'n>, SocketListenerError> {
-    if GenericNamespaced::is_supported() {
-        name.clone().to_ns_name::<GenericNamespaced>()
-    } else {
-        format!("/tmp/{name}").to_fs_name::<GenericFilePath>()
+pub fn name_from_string<'n>(name: &str) -> io::Result<Name<'n>> {
+    #[cfg(target_os = "linux")]
+    {
+        name.to_owned().to_fs_name::<GenericFilePath>()
     }
-    .map_err(|io| SocketListenerError::InvalidAddr { io })
+    #[cfg(target_os = "windows")]
+    {
+        name.to_owned().to_ns_name::<GenericNamespaced>()
+    }
 }
 
 pub fn new_socket_listener(
     specific_socket: Option<String>,
 ) -> Result<(Listener, String), SocketListenerError> {
     let name = specific_socket.unwrap_or(SOCKET_DEFAULT_NAME.to_string());
-    let ns_name = name_from_string(&name)?;
+    let ns_name = name_from_string(&name).map_err(|io| SocketListenerError::InvalidAddr { io })?;
     let listener = match ListenerOptions::new().name(ns_name).create_tokio() {
         Err(e) if e.kind() == io::ErrorKind::AddrInUse => {
             return Err(SocketListenerError::AddrInUse { name })

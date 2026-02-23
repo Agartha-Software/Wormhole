@@ -4,19 +4,18 @@ use ts_rs::TS;
 use crate::{
     cli::config_clap::ConfigCommand,
     pods::itree::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
-    service::socket::SOCKET_DEFAULT_NAME,
 };
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None, name="wormhole")]
-pub struct Cli {
+pub struct CliArgs {
     #[command(subcommand)]
     pub command: CliCommand,
     /// Specify a specific service socket in case of multiple services running
-    #[arg(short, long, default_value = SOCKET_DEFAULT_NAME)]
-    pub socket: String,
+    #[arg(short = 'H', long)]
+    pub socket: Option<String>,
 }
 
 #[derive(Debug, Subcommand)]
