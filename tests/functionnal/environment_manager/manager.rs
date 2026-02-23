@@ -28,7 +28,7 @@ impl EnvironmentManager {
     }
 
     pub fn socket_from_id(&self, id: u16) -> String {
-        format!("{}{id}.sock", self.test)
+        format!("/tmp/{}{id}.sock", self.test)
     }
 
     pub fn reserve_socket_id(&mut self) -> u16 {
@@ -41,26 +41,23 @@ impl EnvironmentManager {
         log::info!("trying service on {socket_id}");
 
         // checks that no service is running on this socket
-        let (mut status, _, _) = cli_command(["-s", &self.socket_from_id(socket_id), "status"]);
+        let (mut status, _, _) = cli_command(["-H", &self.socket_from_id(socket_id), "status"]);
         while status.success() {
             log::warn!(
                 "\nA service is already running on socket {socket_id}. Trying next socket..."
             );
             socket_id = self.reserve_socket_id();
-            (status, _, _) = cli_command(["-s", &self.socket_from_id(socket_id), "status"]);
+            (status, _, _) = cli_command(["-H", &self.socket_from_id(socket_id), "status"]);
         }
         assert!(
             socket_id < MAX_SOCKET_ID,
             "service socket upper limit ({MAX_SOCKET_ID}) exceeded"
         );
+        let socket = self.socket_from_id(socket_id);
 
         let mut instance = std::process::Command::new(SERVICE_BIN)
-            .args([
-                "-s",
-                &self.socket_from_id(socket_id),
-                "--nodeamon",
-                "--clean",
-            ])
+            // .env("RUST_LOG", "wormhole=debug")
+            .args(["-H", &socket, "--nodeamon", "--clean"])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .stdin(Stdio::piped())
@@ -68,10 +65,9 @@ impl EnvironmentManager {
             .unwrap();
 
         std::thread::sleep(*SLEEP_TIME);
-        let socket = self.socket_from_id(socket_id);
 
         // checks the service viability
-        let (status, _, _) = cli_command(["-s", &socket, "status"]);
+        let (status, _stdout, _stderr) = cli_command(["-H", &socket, "status"]);
         if !status.success() {
             log::error!("\nCan't reach service on {}", &socket);
 
