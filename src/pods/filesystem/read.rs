@@ -74,7 +74,7 @@ impl FsInterface {
                 buf,
             )?),
             Some(data) => {
-                let size = data.len().saturating_sub(offset);
+                let size = buf.len().min(data.len().saturating_sub(offset));
                 if size > 0 {
                     buf[..size].copy_from_slice(&data[offset..offset + size]);
                 }
