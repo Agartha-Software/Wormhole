@@ -118,16 +118,11 @@ impl FsInterface {
         };
         let local_sig = Signature::new_using(&file, sig.implementor())?;
         log::trace!(
-            "signing <<\n{}\n>> = {:?}",
-            file.0.escape_ascii(),
+            "signing ({ino}) = {:?}",
             local_sig
         );
         if local_sig == sig {
             let patched = delta.patch(&file)?;
-            log::trace!(
-                "accept_delta: patched = {}",
-                String::from_utf8_lossy(&patched.0)
-            );
 
             let itree = ITree::read_lock(&self.network_interface.itree, "fs_interface.write")?;
             let path = itree.get_path_from_inode_id(ino)?;
