@@ -1,10 +1,9 @@
+use crate::functionnal::environment_manager::types::{
+    Service, MAX_SOCKET_ID, MIN_SOCKET_ID, SERVICE_BIN, SLEEP_TIME,
+};
 use crate::functionnal::environment_manager::types::{StartupFiles, StopMethod, MIN_POD_PORT};
 use crate::functionnal::environment_manager::utilities::{
     cli_command, cli_pod_creation_command, copy_dir_all, service_filter,
-};
-use crate::functionnal::{
-    environment_manager::types::{Service, MAX_SOCKET_ID, MIN_SOCKET_ID, SERVICE_BIN, SLEEP_TIME},
-    start_log,
 };
 use std::process::Stdio;
 
@@ -17,7 +16,11 @@ pub struct EnvironmentManager {
 
 impl EnvironmentManager {
     pub fn new(test: &str) -> Self {
-        start_log();
+        let _ = env_logger::builder()
+            .format(crate::wormhole::logging::custom_format)
+            .is_test(true)
+            .try_init();
+
         log::trace!("SLEEP_TIME for this test is {:?}", *SLEEP_TIME);
         EnvironmentManager {
             socket_id: MIN_SOCKET_ID..,
