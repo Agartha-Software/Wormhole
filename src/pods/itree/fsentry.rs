@@ -192,8 +192,8 @@ pub enum FsEntry {
 }
 
 impl FsEntry {
-    pub fn new_file() -> Self {
-        FsEntry::File(vec![])
+    pub fn new_file(id: PeerId) -> Self {
+        FsEntry::File(vec![id])
     }
 
     pub fn new_directory() -> Self {

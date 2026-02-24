@@ -133,20 +133,20 @@ impl Pod {
                 .map_err(|err| PodCreationError::TransportError(err.to_string()))?;
         }
 
-        let dialed_success = proto
+        let has_dialed = proto
             .global_config
             .general
             .entrypoints
             .iter()
-            .cloned()
-            .find_map(|peer| {
+            .filter_map(|peer| {
                 multiaddr::from_url(&format!("ws://{peer}"))
                     .ok()
-                    .and_then(|p| swarm.dial(p).ok())
+                    .map(|p| swarm.dial(p))
             })
-            .is_some();
+            .count()
+            != 0;
 
-        let itree = if dialed_success {
+        let itree = if has_dialed {
             ITree::default()
         } else {
             generate_itree(&proto.mountpoint, &swarm.local_peer_id().clone())
@@ -176,7 +176,6 @@ impl Pod {
             *swarm.local_peer_id(),
             senders_in.clone(),
             redundancy_tx.clone(),
-            Arc::new(RwLock::new(swarm.connected_peers().cloned().collect())),
             global.clone(),
         ));
 
@@ -186,9 +185,9 @@ impl Pod {
             proto.mountpoint.clone(),
         ));
 
-        let event_loop = EventLoop::new(swarm, fs_interface.clone(), senders_out, dialed_success);
+        let mut event_loop = EventLoop::new(swarm, fs_interface.clone(), senders_out, has_dialed);
 
-        let network_airport_handle = tokio::spawn(event_loop.run());
+        let network_airport_handle = tokio::spawn(async move { event_loop.run().await });
 
         let redundancy_worker_handle = tokio::spawn(redundancy_worker(
             redundancy_rx,
@@ -227,7 +226,7 @@ impl Pod {
                 should_restart: proto.should_restart,
                 allow_other_users: proto.allow_other_users,
             },
-            dialed_success,
+            has_dialed,
         ))
     }
 
@@ -328,7 +327,13 @@ impl Pod {
 
         let task = {
             let itree = ITree::read_lock(&self.network_interface.itree, "Pod::Pod::stop(1)")?;
-            let peers: Vec<PeerId> = self.network_interface.peers.read().to_vec();
+            let peers: Vec<PeerId> = self
+                .network_interface
+                .peers_info
+                .read()
+                .keys()
+                .copied()
+                .collect();
             self.send_files_when_stopping(itree, peers)
         };
         task.await;
@@ -344,19 +349,19 @@ impl Pod {
             ..
         } = self;
 
+        #[cfg(target_os = "linux")]
+        drop(fuse_handle);
+        #[cfg(target_os = "windows")]
+        drop(fsp_host);
+
         self.network_interface
             .to_network_message_tx
-            .send(ToNetworkMessage::CloseNetwork)
+            .send(ToNetworkMessage::LeaveNetwork)
             .expect("to_network_message_tx closed.");
 
         if let Err(err) = network_airport_handle.await {
             log::error!("await error: network_airport_handle: {err}");
         }
-
-        #[cfg(target_os = "linux")]
-        drop(fuse_handle);
-        #[cfg(target_os = "windows")]
-        drop(fsp_host);
 
         redundancy_worker_handle.abort();
         let _ = redundancy_worker_handle
@@ -439,6 +444,7 @@ impl Pod {
             frozen: false,
             listen_addrs,
             name: self.name.clone(),
+            id: self.fs_interface.network_interface.id.to_base58(),
             connected_peers: peers_info,
             mount: self.mountpoint.clone(),
             disk_space: self.fs_interface.disk.size_info().ok(),

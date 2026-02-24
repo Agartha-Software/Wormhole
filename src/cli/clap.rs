@@ -4,19 +4,18 @@ use ts_rs::TS;
 use crate::{
     cli::config_clap::ConfigCommand,
     pods::itree::{GLOBAL_CONFIG_FNAME, LOCAL_CONFIG_FNAME},
-    service::socket::SOCKET_DEFAULT_NAME,
 };
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None, name="wormhole")]
-pub struct Cli {
+pub struct CliArgs {
     #[command(subcommand)]
     pub command: CliCommand,
     /// Specify a specific service socket in case of multiple services running
-    #[arg(short, long, default_value = SOCKET_DEFAULT_NAME)]
-    pub socket: String,
+    #[arg(short = 'H', long)]
+    pub socket: Option<String>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -36,7 +35,7 @@ pub enum CliCommand {
     #[command(subcommand)]
     Config(ConfigCommand),
     /// Inspect the basic informations of a given pod
-    Inspect(IdentifyPodArgs),
+    Inspect(InspectPodArgs),
     /// Get the hosts of a given file
     GetHosts(GetHostsArgs),
     /// Display the file tree at a given pod or path and show the hosts for each files
@@ -106,6 +105,15 @@ pub struct IdentifyNewPodGroup {
 pub struct IdentifyPodArgs {
     #[clap(flatten)]
     pub group: IdentifyPodGroup,
+}
+
+#[derive(Debug, Args, Clone)]
+pub struct InspectPodArgs {
+    #[clap(flatten)]
+    pub group: IdentifyPodGroup,
+    /// Display additional information about the pod
+    #[arg(long, short)]
+    pub long: bool,
 }
 
 #[derive(Debug, Args, Clone)]

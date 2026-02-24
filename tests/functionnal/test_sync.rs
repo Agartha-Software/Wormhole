@@ -1,4 +1,4 @@
-use crate::functionnal::{environment_manager::types::SLEEP_TIME, start_log};
+use crate::functionnal::environment_manager::types::SLEEP_TIME;
 
 use super::environment_manager;
 
@@ -8,9 +8,8 @@ use serial_test::serial;
 #[serial]
 #[test]
 fn sync_start_state() {
-    start_log();
-    log::info!("vvvvvv sync start state vvvvvv");
     let mut env = EnvironmentManager::new("sync_start_state");
+    log::info!("vvvvvv sync start state vvvvvv");
     env.add_service().unwrap();
     std::thread::sleep(*SLEEP_TIME);
     env.create_network("default".to_owned(), None).unwrap();

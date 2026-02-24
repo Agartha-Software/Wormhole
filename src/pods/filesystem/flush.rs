@@ -35,7 +35,8 @@ impl FsInterface {
     /// Non-tracking peers will always only get a 'FileChanged' message
     ///
     pub fn flush(&self, ino: Ino, handle: Option<&mut FileHandle>) -> Result<(), FlushError> {
-        let peers = self.network_interface.peers.read();
+        let peers_info = self.network_interface.peers_info.read();
+        let peers = peers_info.keys();
         let inode = self.network_interface.itree.read().get_inode(ino)?.clone();
         let tracking = match &inode.entry {
             FsEntry::File(tracking) => tracking,
@@ -54,7 +55,7 @@ impl FsInterface {
             *signature = Signature::new(&file)?;
             *dirty = false;
 
-            for peer in peers.iter() {
+            for peer in peers {
                 if tracking.contains(peer) {
                     self.network_interface
                         .to_network_message_tx
@@ -116,17 +117,9 @@ impl FsInterface {
             }
         };
         let local_sig = Signature::new_using(&file, sig.implementor())?;
-        log::trace!(
-            "signing <<\n{}\n>> = {:?}",
-            file.0.escape_ascii(),
-            local_sig
-        );
+        log::trace!("signing ({ino}) = {:?}", local_sig);
         if local_sig == sig {
             let patched = delta.patch(&file)?;
-            log::trace!(
-                "accept_delta: patched = {}",
-                String::from_utf8_lossy(&patched.0)
-            );
 
             let itree = ITree::read_lock(&self.network_interface.itree, "fs_interface.write")?;
             let path = itree.get_path_from_inode_id(ino)?;
@@ -137,8 +130,9 @@ impl FsInterface {
                 .map_err(WriteError::from)?;
             self.acknowledge_metadata(ino, meta).map_err(|e| match e {
                 AcknoledgeSetAttrError::WhError { source } => FlushError::from(source),
-                AcknoledgeSetAttrError::SetFileSizeIoError { io } => WriteError::from(io).into(),
+                AcknoledgeSetAttrError::SetPermIoError { io } => WriteError::from(io).into(),
             })?;
+            self.affect_write_locally(ino, patched.0.len(), None)?;
         } else {
             log::warn!("accept_delta: signature does not match local sig!");
             return Ok(Response::DeltaRequest(ino, local_sig));
@@ -150,7 +144,7 @@ impl FsInterface {
     pub fn accept_file_changed(&self, ino: Ino, meta: Metadata) -> Result<Response, FlushError> {
         self.acknowledge_metadata(ino, meta).map_err(|e| match e {
             AcknoledgeSetAttrError::WhError { source } => FlushError::from(source),
-            AcknoledgeSetAttrError::SetFileSizeIoError { io } => WriteError::from(io).into(),
+            AcknoledgeSetAttrError::SetPermIoError { io } => WriteError::from(io).into(),
         })?;
         let file = match self.get_local_file(ino)? {
             Some(file) => file,

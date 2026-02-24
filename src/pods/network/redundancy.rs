@@ -5,7 +5,7 @@ use crate::{
     pods::{
         filesystem::{fs_interface::FsInterface, File},
         itree::{FsEntry, ITree, Ino},
-        network::swarm::MAX_CONCURRENT_STREAMS,
+        network::swarm::MAX_CONCURRENT_CONNECTIONS,
         pod::Pod,
     },
 };
@@ -68,7 +68,7 @@ impl RedundancyTracker {
             fs_interface,
             tasks: Default::default(),
             pending: Default::default(),
-            concurrent_streams: Arc::new(Semaphore::new(MAX_CONCURRENT_STREAMS)),
+            concurrent_streams: Arc::new(Semaphore::new(MAX_CONCURRENT_CONNECTIONS)),
         }
     }
 
@@ -276,7 +276,7 @@ pub async fn redundancy_worker(
                     Some(Ok(Ok((ino, peer)))) => tracker.resolve(ino, peer),
                     Some(Ok(Err(ino))) => {
                         let r_count = nw_interface.global_config.read().redundancy.number as usize;
-                        let peers = nw_interface.peers.read().clone();
+                        let peers = nw_interface.peers_info.read().keys().copied().collect::<Vec<_>>();
                         if let Err(RedundancyError::InsufficientHosts) = tracker.retry(ino, &peers, r_count).await {
                             tracker.forget(ino)
                         }
@@ -287,7 +287,7 @@ pub async fn redundancy_worker(
             },
             message = reception.recv() => {
                 let r_count = nw_interface.global_config.read().redundancy.number as usize;
-                let peers = nw_interface.peers.read().clone();
+                let peers = nw_interface.peers_info.read().keys().copied().collect::<Vec<_>>();
 
                 match message {
                     Some(RedundancyMessage::ApplyTo(ino)) => {

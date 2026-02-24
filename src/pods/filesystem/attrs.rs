@@ -25,7 +25,7 @@ custom_error! {pub SetAttrError
 
 custom_error! {pub AcknoledgeSetAttrError
     WhError{source: WhError} = "{source}",
-    SetFileSizeIoError {io: std::io::Error } = "Set file size disk side failed: {io}"
+    SetPermIoError {io: std::io::Error } = "Set file size disk side failed: {io}"
 }
 
 impl FsInterface {
@@ -34,7 +34,7 @@ impl FsInterface {
     pub fn acknowledge_metadata(
         &self,
         ino: Ino,
-        meta: Metadata,
+        mut meta: Metadata,
     ) -> Result<Response, AcknoledgeSetAttrError> {
         let mut itree = ITree::write_lock(&self.network_interface.itree, "acknowledge_metadata")?;
         let path = itree.get_path_from_inode_id(ino)?;
@@ -49,30 +49,11 @@ impl FsInterface {
                 }
                 FsEntry::File(hosts) => {
                     if hosts.contains(&self.network_interface.id) {
-                        let created = match &inode.entry {
-                            FsEntry::File(old_hosts) => {
-                                !old_hosts.contains(&self.network_interface.id)
-                            }
-                            _ => false,
-                        };
-                        if created {
-                            self.disk.new_file(&path, meta.perm).or_else(|io| {
-                                if io.kind() == std::io::ErrorKind::AlreadyExists {
-                                    Ok(())
-                                } else {
-                                    Err(AcknoledgeSetAttrError::SetFileSizeIoError { io })
-                                }
-                            })?;
-                        }
-                        if meta.size != inode.meta.size {
-                            self.disk
-                                .set_file_size(&path, meta.size as usize)
-                                .map_err(|io| AcknoledgeSetAttrError::SetFileSizeIoError { io })?;
-                        }
+                        meta.size = inode.meta.size;
                         if meta.perm != inode.meta.perm {
                             self.disk
                                 .set_permisions(&path, meta.perm)
-                                .map_err(|io| AcknoledgeSetAttrError::SetFileSizeIoError { io })?;
+                                .map_err(|io| AcknoledgeSetAttrError::SetPermIoError { io })?;
                         }
                     }
                 }
@@ -80,7 +61,7 @@ impl FsInterface {
                     if meta.perm != inode.meta.perm {
                         self.disk
                             .set_permisions(&path, meta.perm)
-                            .map_err(|io| AcknoledgeSetAttrError::SetFileSizeIoError { io })?;
+                            .map_err(|io| AcknoledgeSetAttrError::SetPermIoError { io })?;
                     }
                 }
             }

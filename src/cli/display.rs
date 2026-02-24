@@ -1,13 +1,13 @@
-use colored::{ColoredString, Colorize};
 use std::io::IsTerminal;
+
+use owo_colors::OwoColorize;
 
 pub fn print_err<D>(err: D)
 where
     D: std::fmt::Display,
-    ColoredString: From<D>,
 {
     if std::io::stderr().is_terminal() {
-        eprintln!("{}", ColoredString::from(err).red().bold());
+        eprintln!("{}", err.red().bold());
     } else {
         eprintln!("{err}");
     }

@@ -108,6 +108,7 @@ pub enum ListPodsAnswer {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerInfoIPC {
     pub nickname: String,
+    pub id: String,
     pub listen_addrs: Vec<String>,
 }
 
@@ -133,6 +134,7 @@ pub struct InspectInfo {
     pub frozen: bool,
     pub listen_addrs: Vec<String>,
     pub name: String,
+    pub id: String,
     pub connected_peers: Vec<PeerInfoIPC>,
     pub mount: PathBuf,
     pub disk_space: Option<DiskSizeInfo>,

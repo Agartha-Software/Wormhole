@@ -4,17 +4,23 @@
 
 use clap::Parser;
 use std::process::ExitCode;
-use wormhole::cli::{command_network, print_err, start_local_socket, Cli};
+use wormhole::cli::{command_network, print_err, start_local_socket, CliArgs};
+use wormhole::logging::custom_format;
 use wormhole::service::socket::SOCKET_DEFAULT_NAME;
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    env_logger::init();
+    env_logger::Builder::from_default_env()
+        .format(custom_format)
+        .init();
     log::trace!("Starting cli!");
-    let cmd = Cli::parse();
+    let cmd = CliArgs::parse();
     log::debug!("Command found: {cmd:?}");
 
-    let stream = match start_local_socket(&cmd.socket).await {
+    let default_socket = cmd.socket.is_none();
+    let socket = cmd.socket.unwrap_or(SOCKET_DEFAULT_NAME.to_owned());
+
+    let stream = match start_local_socket(&socket).await {
         //TODO: don't open stream on local cmd
         Ok(stream) => stream,
         Err(err) => {
@@ -22,12 +28,12 @@ async fn main() -> ExitCode {
                 "Connection to the service failed: {}: {err}",
                 err.kind()
             ));
-            if cmd.socket.as_str() == SOCKET_DEFAULT_NAME {
+            if default_socket {
                 print_err("Check if the service is running.");
             } else {
                 print_err(format!(
                     "Check if a service listening to '{}' is running.",
-                    cmd.socket,
+                    socket,
                 ));
             }
             return ExitCode::FAILURE;

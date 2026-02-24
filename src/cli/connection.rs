@@ -1,21 +1,13 @@
 use std::io;
 
-use crate::ipc::commands::Command;
-use interprocess::local_socket::{
-    tokio::{prelude::*, Stream},
-    GenericFilePath, GenericNamespaced,
-};
+use crate::{ipc::commands::Command, service::socket::name_from_string};
+use interprocess::local_socket::tokio::{prelude::*, Stream};
 use serde::Deserialize;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 pub async fn start_local_socket(socket: &str) -> io::Result<Stream> {
-    let name = if GenericNamespaced::is_supported() {
-        socket.to_ns_name::<GenericNamespaced>()?
-    } else {
-        //TODO: /tmp/ shouldn't be used, maybe use /var/run/ or /var/run/wormhole/
-        format!("/tmp/{socket}").to_fs_name::<GenericFilePath>()?
-    };
+    let name = name_from_string(socket)?;
     Stream::connect(name).await
 }
 

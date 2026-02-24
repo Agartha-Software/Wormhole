@@ -50,7 +50,7 @@ pub fn cli_pod_creation_command(
     connect_to: Option<&u16>,
 ) -> u16 {
     // let (status, _, _) = cli_command(&[
-    //     "-s".to_string(),
+    //     "-H".to_string(),
     //     socket_from_id(service_id),
     //     "template",
     //     "-m",
@@ -64,7 +64,7 @@ pub fn cli_pod_creation_command(
         log::info!("trying pod on {port}");
         let (status, _, stderr) = cli_command({
             let mut args = vec![
-                "-s".to_string(),
+                "-H".to_string(),
                 socket.clone(),
                 "new".to_string(),
                 network_name.clone(),
