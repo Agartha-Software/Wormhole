@@ -101,7 +101,7 @@ impl FsInterface {
                 file.as_ref().and_then(|f| {
                     Signature::new(f)
                         .ok()
-                        .inspect(|sig| log::trace!("signing <<\n{:?}\n>> = {:?}", f, sig))
+                        .inspect(|sig| log::trace!("signing ({}) = {:?}", ino, sig))
                 })
             } else {
                 None

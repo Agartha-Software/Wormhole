@@ -220,14 +220,14 @@ impl EventLoop {
         status: oneshot::Sender<Option<Response>>,
         peer: PeerId,
     ) {
-        let log_msg = log::log_enabled!(log::Level::Trace).then_some(format!("{message}"));
+        let log_msg = log::log_enabled!(log::Level::Debug).then_some(format!("{message}"));
         let request_id = self
             .swarm
             .behaviour_mut()
             .request_response
             .send_request(permit, &peer, message);
         if let Some(log_msg) = log_msg {
-            log::trace!("Requesting {log_msg} to {peer}: #{request_id}");
+            log::debug!("Requesting {log_msg} to {peer}: #{request_id}");
         }
         self.answers.insert(request_id, status);
     }
@@ -238,6 +238,7 @@ impl EventLoop {
         message: Request,
         to: I,
     ) {
+        let log_msg = log::log_enabled!(log::Level::Debug).then_some(format!("{message}"));
         let mut log_to = vec![];
         let to = to.into_iter();
         let permits = permits.into_iter();
@@ -259,18 +260,20 @@ impl EventLoop {
                 }
             }
 
-            if log_to.len() > 1 {
-                log::debug!("Broadcasting {message} to {:?}", &log_to[..]);
-            } else {
-                log::debug!("Sending {message} to {:?}", first.to_base58());
-            }
-
             // let it be moved in here
-            self.swarm.behaviour_mut().request_response.send_request(
+            let first_id = self.swarm.behaviour_mut().request_response.send_request(
                 first_permit,
                 first.deref(),
                 message,
             );
+
+            if let Some(log_msg) = log_msg {
+                if log_to.len() > 1 {
+                    log::debug!("Broadcasting {log_msg} to {:?}", &log_to[..]);
+                } else {
+                    log::debug!("Sending {log_msg} to {:?}: #{first_id}", first.to_base58());
+                }
+            }
         }
     }
 
@@ -302,7 +305,7 @@ impl EventLoop {
                 {
                     let mut peers_info = self.fs_interface.network_interface.peers_info.write();
                     for (peer, info) in peers {
-                        peers_info.insert(peer.clone(), info.clone());
+                        peers_info.insert(peer, info.clone());
                         log::trace!(
                             "Join: Registering address to the peer: {peer}: {:?}",
                             info.listen_addrs
@@ -482,7 +485,6 @@ impl EventLoop {
                 if let Some(Some(id)) = self.need_initialisation {
                     if id == request_id && !self.closing {
                         self.retry_fs_request(peer);
-                        return;
                     }
                 }
             }
