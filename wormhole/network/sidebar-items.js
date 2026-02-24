@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["ip","message"]};
+window.SIDEBAR_ITEMS = {"mod":["ip","message","quota_req_res"]};

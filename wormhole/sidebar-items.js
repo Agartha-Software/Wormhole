@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["INSTANCE_PATH"],"mod":["cli","config","data","error","fuse","ipc","network","pods","service","signals"]};
+window.SIDEBAR_ITEMS = {"constant":["INSTANCE_PATH"],"mod":["cli","config","data","error","fuse","ipc","logging","network","pods","service","signals"]};

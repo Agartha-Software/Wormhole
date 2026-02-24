@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["MAX_CONCURRENT_STREAMS"],"fn":["create_swarm"]};
+window.SIDEBAR_ITEMS = {"constant":["MAX_CONCURRENT_CONNECTIONS","MAX_CONCURRENT_STREAMS_OVERHEAD"],"fn":["create_swarm"]};
