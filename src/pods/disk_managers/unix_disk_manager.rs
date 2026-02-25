@@ -102,15 +102,28 @@ impl DiskManager for UnixDiskManager {
 
     fn set_permisions(&self, path: &WhPath, permissions: u16) -> std::io::Result<()> {
         let raw_fd: RawFd = self.handle.as_raw_fd();
-        let c_string_path =
-            CString::new::<&str>(path.as_ref()).expect("panics if there are internal null bytes");
+
+        // Either create a relative path within the wh backing
+        // or an absolute path pointing to the 'magic link' of the aliased mountpoint
+        // at functions treat absolute paths transparently
+        let c_string_path = if path.is_empty() {
+            CString::new(format!("/proc/self/fd/{raw_fd}"))
+        } else {
+            CString::new::<&str>(path.as_ref())
+        }
+        .map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Path contains internal null bytes is unsupported",
+            )
+        })?;
 
         let ptr: *const i8 = c_string_path.as_ptr();
         let result = unsafe {
             // If we just self.handle.open_file...set_permission, the open flags
             // don't allow to modify the permission on a file where we don't have the permission like a 000
             // This is the only convincing way we found
-            libc::fchmodat(raw_fd, ptr, permissions.into(), libc::AT_EMPTY_PATH)
+            libc::fchmodat(raw_fd, ptr, permissions.into(), 0)
         };
         if result != 0 {
             Err(std::io::Error::last_os_error())
